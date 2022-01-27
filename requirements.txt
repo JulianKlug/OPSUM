@@ -1,0 +1,6 @@
+pandas~=1.3.2
+numpy~=1.21.2
+seaborn~=0.11.2
+matplotlib~=3.4.2
+
+git+git://github.com/Jimmy2027/MODUN#egg=modun

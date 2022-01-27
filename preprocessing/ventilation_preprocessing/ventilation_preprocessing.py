@@ -2,6 +2,8 @@ import pandas as pd
 import os
 import numpy as np
 
+from preprocessing.utils import create_case_identification_column
+
 
 def restrict_variable_to_possible_ranges(df, variable_name, possible_value_ranges, verbose=False):
     """
@@ -20,9 +22,8 @@ def restrict_variable_to_possible_ranges(df, variable_name, possible_value_range
 
 
 def preprocess_ventilation(ventilation_df, verbose=False):
-    ventilation_df['patient_admission_id'] = ventilation_df['patient_id'].astype(str) + '_' + ventilation_df[
-        'begin_date'].apply(
-        lambda bd: ''.join(bd.split(' ')[0].split('.')))
+    ventilation_df['case_admission_id'] = create_case_identification_column(ventilation_df)
+
     columns_to_drop = ['nr', 'patient_id', 'eds_end_4digit', 'eds_manual', 'DOB', 'begin_date',
                        'end_date', 'death_date', 'death_hosp', 'eds_final_id',
                        'eds_final_begin', 'eds_final_end', 'eds_final_patient_id',
@@ -64,8 +65,12 @@ def preprocess_ventilation(ventilation_df, verbose=False):
                          'slop_unit', 'ti_max', 'ti_max_unit', 'ti_min', 'ti_min_unit',
                          'trigger_insp', 'trigger_insp_unit', 'duration', 'duration_unit']
     ventilation_df.drop(variables_to_drop, axis=1, inplace=True)
-    fio2_df = ventilation_df[['patient_admission_id', 'FIO2', 'FIO2_unit', 'datetime']].dropna()
-    spo2_df = ventilation_df[['patient_admission_id', 'spo2', 'spo2_unit', 'datetime']].dropna()
+    fio2_df = ventilation_df[['case_admission_id', 'FIO2', 'FIO2_unit', 'datetime']].dropna()
+    spo2_df = ventilation_df[['case_admission_id', 'spo2', 'spo2_unit', 'datetime']].dropna()
+
+    # convert to numeric
+    fio2_df['FIO2'] = pd.to_numeric(fio2_df['FIO2'], errors='coerce')
+    spo2_df['spo2'] = pd.to_numeric(spo2_df['spo2'], errors='coerce')
 
     if verbose:
         print('FIO2:')

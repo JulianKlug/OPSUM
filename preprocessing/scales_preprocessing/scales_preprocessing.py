@@ -18,13 +18,25 @@ def restrict_variable_to_possible_ranges(df, variable_name, possible_value_range
     clean_df = clean_df.dropna()
     return clean_df, excluded_df
 
-def preprocess_scales(scales_df, verbose=False):
-    scales_df['patient_admission_id'] = scales_df['patient_id'].astype(str) + '_' + scales_df['begin_date'].apply(
-        lambda bd: ''.join(bd.split(' ')[0].split('.')))
+def preprocess_scales(scales_df, eds_df, verbose=False):
+    """
+    Preprocesses the scales dataframe.
+    eds_df is necessary as patient_id in scales_df was overwritten by eds_final_patient_id
+    :param scales_df:
+    :param eds_df:
+    :param verbose:
+    :return:
+    """
+
+    scales_df['original_patient_id'] = scales_df['patient_id'].apply(lambda x: eds_df[eds_df['eds_final_patient_id'] == x]['patient_id'].iloc[0])
+
+    scales_df['case_admission_id'] = scales_df['original_patient_id'].astype(str) \
+                                     + scales_df['eds_end_4digit'].astype(str) \
+                                     + '_' + scales_df['begin_date'].apply(lambda bd: ''.join(bd.split(' ')[0].split('.')))
 
     columns_to_drop = ['nr', 'patient_id', 'eds_end_4digit', 'eds_manual', 'DOB', 'begin_date',
                        'end_date', 'death_date', 'death_hosp', 'eds_final_id',
-                       'eds_final_begin', 'eds_final_end', 'eds_final_patient_id',
+                       'eds_final_begin', 'eds_final_end', 'eds_final_patient_id', 'original_patient_id',
                        'eds_final_birth', 'eds_final_death', 'eds_final_birth_str',
                        'date_from', 'date_to']
     scales_df.drop(columns_to_drop, axis=1, inplace=True)
@@ -45,6 +57,9 @@ def preprocess_scales(scales_df, verbose=False):
     scales_df.loc[scales_df['scale'].isin(pain_scale_equivalents), 'scale'] = 'pain scale'
     # drop rows with scale = 'Douleur - h - CPOT' as not comparable with other scales
     scales_df.drop(scales_df[scales_df['scale'].str.contains('CPOT')].index, inplace=True)
+
+    # convert score to float
+    scales_df['score'] = pd.to_numeric(scales_df['score'], errors='coerce')
 
     if verbose:
         print('Preprocessing NIHSS')

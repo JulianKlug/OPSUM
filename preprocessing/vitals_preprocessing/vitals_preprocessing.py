@@ -2,6 +2,8 @@ import numpy as np
 import os
 import pandas as pd
 
+from preprocessing.utils import create_case_identification_column
+
 
 def restrict_variable_to_possible_ranges(df, variable_name, possible_value_ranges, verbose=False):
     """
@@ -24,8 +26,7 @@ def preprocess_vitals(vitals_df, verbose=False):
                                               'possible_ranges_for_variables.xlsx')
     possible_value_ranges = pd.read_excel(possible_value_ranges_file)
 
-    vitals_df['patient_admission_id'] = vitals_df['patient_id'].astype(str) + '_' + vitals_df['begin_date'].apply(
-        lambda bd: ''.join(bd.split(' ')[0].split('.')))
+    vitals_df['case_admission_id'] = create_case_identification_column(vitals_df)
 
     columns_to_drop = ['nr', 'patient_id', 'eds_end_4digit', 'eds_manual', 'DOB', 'begin_date',
                        'end_date', 'death_date', 'death_hosp', 'eds_final_id',
@@ -37,7 +38,7 @@ def preprocess_vitals(vitals_df, verbose=False):
     # Preprocessing  temperature
     if verbose:
         print('Preprocessing temperature')
-    temperature_df = vitals_df[['patient_admission_id', 'datetime', 'temperature', 'temp_unit']].dropna()
+    temperature_df = vitals_df[['case_admission_id', 'datetime', 'temperature', 'temp_unit']].dropna()
     # convert ',' to '.' in temperature column
     temperature_df['temperature'] = temperature_df['temperature'].astype(str).apply(lambda t: t.replace(',', '.'))
     # remove trailing '.'
@@ -51,7 +52,8 @@ def preprocess_vitals(vitals_df, verbose=False):
     # Preprocessing    systolic    blood    pressure
     if verbose:
         print('Preprocessing systolic blood pressure')
-    sys_bp_df = vitals_df[['patient_admission_id', 'datetime', 'sys', 'sys_unit']].dropna()
+    sys_bp_df = vitals_df[['case_admission_id', 'datetime', 'sys', 'sys_unit']].dropna()
+    sys_bp_df['sys'] = pd.to_numeric(sys_bp_df['sys'], errors='coerce')
     sys_bp_df, _ = restrict_variable_to_possible_ranges(sys_bp_df, 'sys', possible_value_ranges,
                                                                          verbose=verbose)
     sys_bp_df = sys_bp_df.rename(columns={'sys': 'vital_value', 'sys_unit': 'vital_unit'})
@@ -60,7 +62,8 @@ def preprocess_vitals(vitals_df, verbose=False):
     # Preprocessing    diastolic blood    pressure
     if verbose:
         print('Preprocessing diastolic blood pressure')
-    dia_bp_df = vitals_df[['patient_admission_id', 'datetime', 'dia', 'dia_unit']].dropna()
+    dia_bp_df = vitals_df[['case_admission_id', 'datetime', 'dia', 'dia_unit']].dropna()
+    dia_bp_df['dia'] = pd.to_numeric(dia_bp_df['dia'], errors='coerce')
     dia_bp_df, _ = restrict_variable_to_possible_ranges(dia_bp_df, 'dia', possible_value_ranges,
                                                                          verbose=verbose)
     dia_bp_df = dia_bp_df.rename(columns={'dia': 'vital_value', 'dia_unit': 'vital_unit'})
@@ -69,7 +72,8 @@ def preprocess_vitals(vitals_df, verbose=False):
     # Preprocessing    mean blood    pressure
     if verbose:
         print('Preprocessing mean blood pressure')
-    mean_bp_df = vitals_df[['patient_admission_id', 'datetime', 'mean', 'mean_unit']].dropna()
+    mean_bp_df = vitals_df[['case_admission_id', 'datetime', 'mean', 'mean_unit']].dropna()
+    mean_bp_df['mean'] = pd.to_numeric(mean_bp_df['mean'], errors='coerce')
     mean_bp_df, _ = restrict_variable_to_possible_ranges(mean_bp_df, 'mean', possible_value_ranges,
                                                                            verbose=verbose)
     mean_bp_df = mean_bp_df.rename(columns={'mean': 'vital_value', 'mean_unit': 'vital_unit'})
@@ -78,7 +82,7 @@ def preprocess_vitals(vitals_df, verbose=False):
     # Preprocessing    heart rate
     if verbose:
         print('Preprocessing heart rate')
-    pulse_df = vitals_df[['patient_admission_id', 'datetime', 'pulse', 'pulse_unit']].dropna()
+    pulse_df = vitals_df[['case_admission_id', 'datetime', 'pulse', 'pulse_unit']].dropna()
     pulse_df['pulse'] = pulse_df['pulse'].astype(str).apply(lambda p: p.replace(',', '.'))
     pulse_df = pulse_df[pulse_df['pulse'] != '.']
     pulse_df['pulse'] = pulse_df['pulse'].astype(float)
@@ -91,7 +95,7 @@ def preprocess_vitals(vitals_df, verbose=False):
     # Preprocessing    respiratory rate
     if verbose:
         print('Preprocessing respiratory rate')
-    resp_rate_df = vitals_df[['patient_admission_id', 'datetime', 'fr', 'fr_unit']].dropna()
+    resp_rate_df = vitals_df[['case_admission_id', 'datetime', 'fr', 'fr_unit']].dropna()
     resp_rate_df['fr'] = resp_rate_df['fr'].astype(str).apply(lambda r: r.replace(',', '.'))
     resp_rate_df = resp_rate_df[resp_rate_df['fr'] != '.']
     resp_rate_df['fr'] = resp_rate_df['fr'].astype(float)
@@ -104,7 +108,8 @@ def preprocess_vitals(vitals_df, verbose=False):
     # Preprocessing    oxygen    saturation
     if verbose:
         print('Preprocessing oxygen saturation')
-    spo2_df = vitals_df[['patient_admission_id', 'datetime', 'spo2', 'spo2_unit']].dropna()
+    spo2_df = vitals_df[['case_admission_id', 'datetime', 'spo2', 'spo2_unit']].dropna()
+    spo2_df['spo2'] = pd.to_numeric(spo2_df['spo2'], errors='coerce')
     spo2_df, _ = restrict_variable_to_possible_ranges(spo2_df, 'spo2', possible_value_ranges,
                                                                      verbose=verbose)
     spo2_df = spo2_df.rename(columns={'spo2': 'vital_value', 'spo2_unit': 'vital_unit'})
@@ -113,7 +118,8 @@ def preprocess_vitals(vitals_df, verbose=False):
     # Preprocessing    weight
     if verbose:
         print('Preprocessing weight')
-    weight_df = vitals_df[['patient_admission_id', 'datetime', 'weight', 'weight_unit']].dropna()
+    weight_df = vitals_df[['case_admission_id', 'datetime', 'weight', 'weight_unit']].dropna()
+    weight_df['weight'] = pd.to_numeric(weight_df['weight'], errors='coerce')
     weight_df, _ = restrict_variable_to_possible_ranges(weight_df, 'weight', possible_value_ranges,
                                                                          verbose=verbose)
     weight_df = weight_df.rename(columns={'weight': 'vital_value', 'weight_unit': 'vital_unit'})
