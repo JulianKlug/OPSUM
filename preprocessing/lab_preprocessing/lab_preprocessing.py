@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from preprocessing.utils import remove_french_accents_and_cedillas_from_dataframe
+from preprocessing.utils import remove_french_accents_and_cedillas_from_dataframe, create_case_identification_column
 
 columns_to_drop = ['nr', 'patient_id', 'eds_end_4digit', 'eds_manual', 'DOB', 'begin_date',
                    'end_date', 'death_date', 'death_hosp', 'eds_final_id',
@@ -11,7 +11,7 @@ columns_to_drop = ['nr', 'patient_id', 'eds_end_4digit', 'eds_manual', 'DOB', 'b
                    'eds_final_birth', 'eds_final_death', 'eds_final_birth_str',
                    'date_from', 'date_to']
 
-identification_columns = ['patient_admission_id', 'sample_date']
+identification_columns = ['case_admission_id', 'sample_date']
 
 # defining equivalent dosage labels
 fibrinogen_equivalent_dosage_labels = ['fibrinogène', 'fibrinogène, antigène']
@@ -91,8 +91,7 @@ def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_bloo
     :return:
     """
     lab_df = lab_df.copy()
-    lab_df['patient_admission_id'] = lab_df['patient_id'].astype(str) + '_' + lab_df['begin_date'].apply(
-        lambda bd: ''.join(bd.split(' ')[0].split('.')))
+    lab_df['case_admission_id'] = create_case_identification_column(lab_df)
 
     lab_df.drop(columns_to_drop, axis=1, inplace=True)
 
@@ -196,11 +195,11 @@ def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_bloo
 
 
     # get mean number of values per dosage label patient admission id
-    median_observations_per_patient_admission_id = \
-        equalized_reorganised_lab_df.groupby(['patient_admission_id', 'dosage_label'])['value'].count().reset_index()
+    median_observations_per_case_admission_id = \
+        equalized_reorganised_lab_df.groupby(['case_admission_id', 'dosage_label'])['value'].count().reset_index()
 
     if verbose:
-        print(median_observations_per_patient_admission_id.groupby('dosage_label').median())
+        print(median_observations_per_case_admission_id.groupby('dosage_label').median())
         print(equalized_reorganised_lab_df.groupby('dosage_label')['value'].describe())
 
     return equalized_reorganised_lab_df
