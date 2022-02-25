@@ -278,7 +278,7 @@ def correct_non_numerical_values(equalized_reorganised_lab_df: pd.DataFrame) -> 
 
 
 if __name__ == '__main__':
-    import os, argparse
+    import argparse
 
     parser = argparse.ArgumentParser(description='Preprocess labs from separate lab files in data folder')
     parser.add_argument('data_path')

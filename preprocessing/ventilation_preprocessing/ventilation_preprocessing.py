@@ -21,8 +21,9 @@ def restrict_variable_to_possible_ranges(df, variable_name, possible_value_range
     return clean_df, excluded_df
 
 
-def preprocess_ventilation(ventilation_df, verbose=False):
+def preprocess_ventilation(ventilation_df, eds_df, verbose=False):
     ventilation_df['case_admission_id'] = create_case_identification_column(ventilation_df)
+    eds_df['case_admission_id'] = create_case_identification_column(eds_df)
 
     columns_to_drop = ['nr', 'patient_id', 'eds_end_4digit', 'eds_manual', 'DOB', 'begin_date',
                        'end_date', 'death_date', 'death_hosp', 'eds_final_id',
@@ -76,6 +77,20 @@ def preprocess_ventilation(ventilation_df, verbose=False):
         print('FIO2:')
     fio2_df, _ = restrict_variable_to_possible_ranges(fio2_df, 'FIO2', possible_value_ranges,
                                                                      verbose=verbose)
+
+    # Set fIo2 to 21% if no value exists for a specific case_admission_id
+    case_admission_ids_with_no_fio2 = set(eds_df['case_admission_id']) - set(fio2_df['case_admission_id'])
+    room_air_fio2_df = pd.DataFrame(columns=['case_admission_id', 'FIO2', 'FIO2_unit', 'datetime', 'no_recorded_FIO2'])
+    room_air_fio2_df['case_admission_id'] = eds_df['case_admission_id']
+    room_air_fio2_df['no_recorded_FIO2'] = room_air_fio2_df['case_admission_id'].isin(case_admission_ids_with_no_fio2)
+    room_air_fio2_df['FIO2'] = 21
+    room_air_fio2_df['FIO2_unit'] = '%'
+    room_air_fio2_df['datetime'] = eds_df['begin_date']
+    room_air_fio2_df.loc[room_air_fio2_df['no_recorded_FIO2'] == False, 'FIO2'] = np.nan
+    room_air_fio2_df.dropna(inplace=True)
+    room_air_fio2_df.drop(['no_recorded_FIO2'], axis=1, inplace=True)
+    fio2_df = pd.concat([fio2_df, room_air_fio2_df])
+
     if verbose:
         print('SPO2:')
     spo2_df, _ = restrict_variable_to_possible_ranges(spo2_df, 'spo2', possible_value_ranges,
