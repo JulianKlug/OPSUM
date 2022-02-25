@@ -5,7 +5,6 @@ import os
 selected_admission_data_columns = [
     "Age (calc.)",
     "Sex",
-    "Time of symptom onset known",
     "Referral",
     "Prestroke disability (Rankin)",
     "NIH on admission",
@@ -34,10 +33,8 @@ selected_admission_data_columns = [
     "1st creatinine",
 ]
 
-# dropping some columns because of insufficient data
+# dropping some columns because of insufficient data / irrelevant features
 admission_data_to_drop = [
-    '1st cholesterol total',
-    '1st cholesterol LDL',
     'MedHist Prost. heart valves',
     'Hormone repl. or contracept.'
 ]
@@ -59,32 +56,21 @@ def restrict_variable_to_possible_ranges(df, variable_name, possible_value_range
     return clean_df, excluded_df
 
 
-def preprocess_admission_data(stroke_db_df: pd.DataFrame, patient_selection_df: pd.DataFrame,
-                              verbose=False) -> pd.DataFrame:
-    stroke_db_df['patient_id'] = stroke_db_df['Case ID'].apply(lambda x: x[8:-4])
-    stroke_db_df['EDS_last_4_digits'] = stroke_db_df['Case ID'].apply(lambda x: x[-4:])
+def preprocess_admission_data(stroke_registry_df: pd.DataFrame, verbose=False) -> pd.DataFrame:
+    stroke_registry_df['patient_id'] = stroke_registry_df['Case ID'].apply(lambda x: x[8:-4])
+    stroke_registry_df['EDS_last_4_digits'] = stroke_registry_df['Case ID'].apply(lambda x: x[-4:])
 
-    patient_selection_df['case_id'] = patient_selection_df['patient_id'].astype(str) + patient_selection_df[
-        'EDS_last_4_digits'].astype(str)
-    selected_stroke_db_df = stroke_db_df[
-        stroke_db_df['Case ID'].apply(lambda x: x[8:]).isin(patient_selection_df['case_id'].tolist())]
-    selected_stroke_db_df['begin_date'] = pd.to_datetime(selected_stroke_db_df['Arrival at hospital'],
+    stroke_registry_df['begin_date'] = pd.to_datetime(stroke_registry_df['Arrival at hospital'],
                                                          format='%Y%m%d').dt.strftime('%d.%m.%Y') + ' ' + \
-                                          selected_stroke_db_df['Arrival time']
-    selected_stroke_db_df['case_admission_id'] = selected_stroke_db_df['patient_id'].astype(str) \
-                                                 + selected_stroke_db_df['EDS_last_4_digits'].astype(str) + '_' +  \
-                                                        selected_stroke_db_df['begin_date'].apply(
+                                          stroke_registry_df['Arrival time']
+    stroke_registry_df['case_admission_id'] = stroke_registry_df['patient_id'].astype(str) \
+                                                 + stroke_registry_df['EDS_last_4_digits'].astype(str) + '_' +  \
+                                                        stroke_registry_df['begin_date'].apply(
                                                         lambda bd: ''.join(bd.split(' ')[0].split('.')))
 
-    admission_data_df = selected_stroke_db_df[selected_admission_data_columns
+    admission_data_df = stroke_registry_df[selected_admission_data_columns
                                               + ['case_admission_id', 'begin_date']]
     admission_data_df = admission_data_df.drop(admission_data_to_drop, axis=1)
-
-    # reducing categorical variable space
-    admission_data_df.loc[
-        admission_data_df['Referral'] == 'Other Stroke Unit or Stroke Center', 'Referral'] = 'Other hospital'
-    admission_data_df.loc[
-        admission_data_df['Referral'] == 'General Practitioner', 'Referral'] = 'Other hospital'
 
     # restricting to plausible range
     possible_value_ranges_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -122,6 +108,42 @@ def preprocess_admission_data(stroke_db_df: pd.DataFrame, patient_selection_df: 
     admission_data_df, excluded_creatinine_df = restrict_variable_to_possible_ranges(
         admission_data_df, 'creatinine', possible_value_ranges, verbose=verbose)
 
+    # reducing categorical variable space
+    admission_data_df.loc[
+        admission_data_df['Referral'] == 'Other Stroke Unit or Stroke Center', 'Referral'] = 'Other hospital'
+    admission_data_df.loc[
+        admission_data_df['Referral'] == 'General Practitioner', 'Referral'] = 'Self referral or GP'
+    admission_data_df.loc[
+        admission_data_df['Referral'] == 'Self referral', 'Referral'] = 'Self referral or GP'
+
+    # fusion of similar variable categories
+    admission_data_df['MedHist cerebrovascular_event'] = (
+                admission_data_df[['MedHist Stroke', 'MedHist TIA', 'MedHist ICH']] == 'yes').any(axis=1)
+    admission_data_df.drop(columns=['MedHist Stroke', 'MedHist TIA', 'MedHist ICH'], inplace=True)
+
+    # Rename columns for EHR correspondence
+    admission_data_df.rename(columns={'1st cholesterol total': 'cholesterol total',
+                                      '1st cholesterol LDL':'LDL cholesterol calcule',
+                                      'NIH on admission':'NIHSS'}, inplace=True)
+
+    # dealing with missing values
+    # - for variables with DPI overlap -> leave NaN for now (should be dealt with after fusion)
+    # - for variables with no DPI overlap -> fill with median
+    variables_with_dpi_overlap = ['case_admission_id', 'systolic_blood_pressure', 'diastolic_blood_pressure', 'glucose',
+                                  'creatinine', 'NIHSS', 'weight', 'cholesterol total', 'LDL cholesterol calcule']
+    continuous_variables = ['age']
+    for variable in admission_data_df.columns:
+        print(variable)
+        if variable in variables_with_dpi_overlap:
+            continue
+        if variable in continuous_variables:
+            admission_data_df[variable].fillna(admission_data_df[variable].median(skipna=True),
+                                                        inplace=True)
+        else:
+            admission_data_df[variable].fillna(admission_data_df[variable].mode(dropna=True)[0],
+                                                        inplace=True)
+
+
     # melt dataframe keeping patient_id and begin_date constant into two columns for sample_label and value
     admission_data_df = pd.melt(admission_data_df, id_vars=['case_admission_id', 'begin_date'], var_name='sample_label')
 
@@ -129,4 +151,3 @@ def preprocess_admission_data(stroke_db_df: pd.DataFrame, patient_selection_df: 
     admission_data_df = admission_data_df.dropna()
 
     return admission_data_df
-

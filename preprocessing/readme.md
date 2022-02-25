@@ -8,3 +8,21 @@
    - Path: ./patient_selection/patient_selection.ipynb
    - Inclusion criteria: > 17y, ischemic stroke, inpatient/non-transferred, not refusing to participate
 
+3. Select variables
+   - Path: ./variable_assembly/selected_variables.xlsx
+
+4. Preprocessing & database creation
+   - Path: ./variable_assembly/variable_database_assembly.py
+   - Preprocessing involves restriction to plausible ranges: ./possible_ranges_for_variables.xlsx
+
+5. Transform timestamps to relative timestamps from first measure
+   - Path: ./variable_assembly/relative_timestamps.py
+
+6. Restrict to desired time range 
+   - Chosen time range: 72h
+   - Path: ./variable_assembly/relative_timestamps.py
+
+TODO:
+- Normalisation
+- Partition to hourly values
+- Fill missing values
