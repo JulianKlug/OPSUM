@@ -22,7 +22,13 @@
    - Chosen time range: 72h
    - Path: ./variable_assembly/relative_timestamps.py
 
+7. Normalisation
+   - For continuous variables:
+      - Winsorize values outside the upper and lower bounds of 1⋅5 times the IQR are set to the upper and lower limits of the range
+      - Scale to a mean of 0 with an SD of 1
+   - Path: ./normalisation/normalisation.py
+
 TODO:
-- Normalisation
+- complete normalisation
 - Partition to hourly values
 - Fill missing values
