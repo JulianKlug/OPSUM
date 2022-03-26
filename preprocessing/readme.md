@@ -32,7 +32,10 @@
    - Categorical variables are one hot encoded 
    - Path: ./encoding_categorical_variables/encoding_categorical_variables.py
    
-
+9. Resampling to selected frequency: _hourly_
+   - Downsampling selected features to hourly median/max/min values: ['NIHSS', 'oxygen_saturation', 'systolic_blood_pressure', 'diastolic_blood_pressure', 'mean_blood_pressure', 'heart_rate', 'respiratory_rate']
+   - All other features are downsampled to hourly median
+   - Path: ./resample_to_time_bins/resample_to_hourly_features.py
+   
 TODO:
-- Partition to hourly values
 - Fill missing values
