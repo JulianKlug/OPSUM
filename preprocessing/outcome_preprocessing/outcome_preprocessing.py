@@ -45,6 +45,7 @@ def preprocess_outcomes(outcome_df, patient_selection_df):
     patient_selection_df['case_id'] = patient_selection_df['patient_id'].astype(str) + patient_selection_df[
         'EDS_last_4_digits'].astype(str)
 
+    # TODO use restrict to patient slection function
     selected_full_data_df = outcome_df[
         outcome_df['Case ID'].apply(lambda x: x[8:]).isin(patient_selection_df['case_id'].tolist())]
 
