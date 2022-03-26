@@ -28,7 +28,11 @@
       - Scale to a mean of 0 with an SD of 1
    - Path: ./normalisation/normalisation.py
 
+8. Encoding categorical variables
+   - Categorical variables are one hot encoded 
+   - Path: ./encoding_categorical_variables/encoding_categorical_variables.py
+   
+
 TODO:
-- complete normalisation
 - Partition to hourly values
 - Fill missing values

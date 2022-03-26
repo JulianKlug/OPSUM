@@ -91,12 +91,15 @@ def assemble_variable_database(raw_data_path:str, stroke_registry_data_path:str,
         restricted_stroke_registry_df = restrict_to_patient_selection(stroke_registry_df, patient_selection_path, verbose=verbose)
         admission_data_df = preprocess_admission_data(restricted_stroke_registry_df, verbose=verbose)
         admission_data_df.rename(columns={'begin_date': 'sample_date'}, inplace=True)
+        admission_data_df['source'] = 'stroke_registry'
 
         timings_df = preprocess_timing_params(restricted_stroke_registry_df)
         timings_df.rename(columns={'begin_date': 'sample_date'}, inplace=True)
+        timings_df['source'] = 'stroke_registry'
 
         treatment_data_df = treatment_params_preprocessing(restricted_stroke_registry_df)
         treatment_data_df.rename(columns={'begin_date': 'sample_date'}, inplace=True)
+        treatment_data_df['source'] = 'stroke_registry'
 
         feature_database = pd.concat([feature_database, admission_data_df, timings_df, treatment_data_df], ignore_index=True)
 
