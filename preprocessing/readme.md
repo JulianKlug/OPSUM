@@ -22,20 +22,22 @@
    - Chosen time range: 72h
    - Path: ./variable_assembly/relative_timestamps.py
 
-7. Normalisation
-   - For continuous variables:
-      - Winsorize values outside the upper and lower bounds of 1⋅5 times the IQR are set to the upper and lower limits of the range
-      - Scale to a mean of 0 with an SD of 1
-   - Path: ./normalisation/normalisation.py
-
-8. Encoding categorical variables
+7. Encoding categorical variables
    - Categorical variables are one hot encoded 
    - Path: ./encoding_categorical_variables/encoding_categorical_variables.py
    
-9. Resampling to selected frequency: _hourly_
+8. Resampling to selected frequency: _hourly_
    - Downsampling selected features to hourly median/max/min values: ['NIHSS', 'oxygen_saturation', 'systolic_blood_pressure', 'diastolic_blood_pressure', 'mean_blood_pressure', 'heart_rate', 'respiratory_rate']
    - All other features are downsampled to hourly median
    - Path: ./resample_to_time_bins/resample_to_hourly_features.py
-   
-TODO:
-- Fill missing values
+
+9. Imputation of missing values
+    - Missing values are imputed by last observation carried forward (LOCF). 
+    - Population medians in the datasets are used for missing values occurring before the first actual measurement.
+    - Path: ./handling_missing_values/impute_missing_values.py
+
+11. Normalisation
+    - For continuous variables:
+       - Winsorize values outside the upper and lower bounds of 1⋅5 times the IQR are set to the upper and lower limits of the range
+       - Scale to a mean of 0 with an SD of 1
+    - Path: ./normalisation/normalisation.py
