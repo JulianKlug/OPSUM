@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import os
 
+from preprocessing.patient_selection.restrict_to_patient_selection import restrict_to_patient_selection
+
 outcome_columns = ["Symptomatic ICH",
 "Symptomatic ICH date",
 "Recurrent stroke",
@@ -38,30 +40,23 @@ outcome_columns = ["Symptomatic ICH",
        '3M Epileptic seizure', '3M Epileptic seizure date', '3M delta mRS']
 
 
-def preprocess_outcomes(outcome_df, patient_selection_df):
-    outcome_df['patient_id'] = outcome_df['Case ID'].apply(lambda x: x[8:-4])
-    outcome_df['EDS_last_4_digits'] = outcome_df['Case ID'].apply(lambda x: x[-4:])
+def preprocess_outcomes(stroke_registry_data_path, patient_selection_path, verbose:bool=True):
+    stroke_registry_df = pd.read_excel(stroke_registry_data_path)
 
-    patient_selection_df['case_id'] = patient_selection_df['patient_id'].astype(str) + patient_selection_df[
-        'EDS_last_4_digits'].astype(str)
+    stroke_registry_df['patient_id'] = stroke_registry_df['Case ID'].apply(lambda x: x[8:-4])
+    stroke_registry_df['EDS_last_4_digits'] = stroke_registry_df['Case ID'].apply(lambda x: x[-4:])
 
-    # TODO use restrict to patient slection function
-    selected_full_data_df = outcome_df[
-        outcome_df['Case ID'].apply(lambda x: x[8:]).isin(patient_selection_df['case_id'].tolist())]
+    stroke_registry_df['case_admission_id'] = stroke_registry_df['patient_id'].astype(str) \
+                                              + stroke_registry_df['EDS_last_4_digits'].astype(str) \
+                                              + '_' + pd.to_datetime(stroke_registry_df['Arrival at hospital'],
+                                                                     format='%Y%m%d').dt.strftime('%d%m%Y').astype(str)
+    restricted_stroke_registry_df = restrict_to_patient_selection(stroke_registry_df, patient_selection_path,
+                                                                  verbose=verbose)
 
-    selected_full_data_df['begin_date'] = pd.to_datetime(selected_full_data_df['Arrival at hospital'],
-                                                         format='%Y%m%d').dt.strftime('%d.%m.%Y') + ' ' + \
-                                          selected_full_data_df['Arrival time']
-
-    selected_full_data_df['patient_admission_id'] = selected_full_data_df['patient_id'].astype(str) + \
-                                                    selected_full_data_df['EDS_last_4_digits'].astype(str) + '_' + \
-                                                    selected_full_data_df['begin_date'].apply(
-                                                        lambda bd: ''.join(bd.split(' ')[0].split('.')))
-
-    selected_full_data_df['3M delta mRS'] = selected_full_data_df['3M mRS'] - selected_full_data_df[
+    restricted_stroke_registry_df['3M delta mRS'] = restricted_stroke_registry_df['3M mRS'] - restricted_stroke_registry_df[
         'Prestroke disability (Rankin)']
 
-    outcome_df = selected_full_data_df[["patient_admission_id"] + outcome_columns]
+    outcome_df = restricted_stroke_registry_df[["case_admission_id"] + outcome_columns]
 
     # restrict to plausible ranges
     outcome_df.loc[outcome_df['3M delta mRS'] < 0, '3M delta mRS'] = 0

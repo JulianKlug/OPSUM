@@ -4,9 +4,14 @@
    - Path: ./stroke_registry_post_hoc_modifications/stroke_registry_post_hoc_modifications.ipynb
    - Correct any mistakes in stroke registry file
 
+   
 2. Select patients from stroke registry data
    - Path: ./patient_selection/patient_selection.ipynb
    - Inclusion criteria: > 17y, ischemic stroke, inpatient/non-transferred, not refusing to participate
+
+
+
+### A. Feature preprocessing
 
 3. Select variables
    - Path: ./variable_assembly/selected_variables.xlsx
@@ -41,3 +46,13 @@
        - Winsorize values outside the upper and lower bounds of 1⋅5 times the IQR are set to the upper and lower limits of the range
        - Scale to a mean of 0 with an SD of 1
     - Path: ./normalisation/normalisation.py
+    
+### B. Outcome preprocessing
+
+12. Outcome preprocessing
+   - Path: ./outcome_preprocessing/outcome_preprocesing.py
+
+
+## Complete pipeline
+
+Path: ./preprocessing_pipeline

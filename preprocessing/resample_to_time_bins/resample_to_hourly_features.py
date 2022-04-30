@@ -90,8 +90,12 @@ def resample_to_hourly_features(df: pd.DataFrame, verbose=True,
             'relative_sample_date_hourly_cat'
         ])['value'].median().reset_index()
         median_variable_df['sample_label'] = f'{variable}'
+
         median_variable_df['source'] = df[
             df.sample_label == variable]['source'].mode()[0]
+        # Using mode as source leads to errors for the following labels: LDL cholesterol calcule, weight, cholesterol total
+        # (they are wrongly labeled as coming from the storke registry
+
         # drop old rows of the variable
         resampled_df = \
             resampled_df[
