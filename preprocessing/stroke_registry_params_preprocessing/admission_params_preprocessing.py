@@ -133,7 +133,6 @@ def preprocess_admission_data(stroke_registry_df: pd.DataFrame, verbose=False) -
                                   'creatinine', 'NIHSS', 'weight', 'cholesterol total', 'LDL cholesterol calcule']
     continuous_variables = ['age']
     for variable in admission_data_df.columns:
-        print(variable)
         if variable in variables_with_dpi_overlap:
             continue
         if variable in continuous_variables:

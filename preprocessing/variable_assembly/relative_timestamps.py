@@ -27,4 +27,7 @@ def transform_to_relative_timestamps(df: pd.DataFrame, drop_old_columns:bool = T
     if restrict_to_time_range:
         df = df[df['relative_sample_date'] <= desired_time_range]
 
+    # ensure stroke registry data is inserted in to timepoint 0
+    df.loc[df.source == 'stroke_registry', 'relative_sample_date'] = 0.0
+
     return df

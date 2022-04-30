@@ -65,6 +65,8 @@ def impute_missing_values(df:pd.DataFrame, verbose:bool=True) -> pd.DataFrame:
 
     # Handle first missing values (timebin 0)
     # -> fill with population median/mode
+    if verbose:
+        print('Fill fist missing values via population mean/median.')
     for sample_label in tqdm(imputed_missing_df.sample_label.unique()):
         # find case_admission_ids with no value for sample_label in first timebin
         patients_with_no_sample_label_tp0 = set(imputed_missing_df.case_admission_id.unique()).difference(set(
@@ -86,10 +88,13 @@ def impute_missing_values(df:pd.DataFrame, verbose:bool=True) -> pd.DataFrame:
             print(
                 f'{len(patients_with_no_sample_label_tp0)} patients with no {sample_label} in first timebin for which {imputed_tp0_value} was imputed')
 
+        sample_label_original_source = \
+            imputed_missing_df[imputed_missing_df.sample_label == sample_label].source.mode(dropna=True)[0]
+
         imputed_sample_label = pd.DataFrame({'case_admission_id': list(patients_with_no_sample_label_tp0),
                                              'sample_label': sample_label,
                                              'relative_sample_date_hourly_cat': 0,
-                                             'source': 'EHR_imputed',
+                                             'source': f'{sample_label_original_source}_pop_imputed',
                                              'value': imputed_tp0_value})
 
         # impute missing values for sample_label in first timebin
@@ -97,16 +102,19 @@ def impute_missing_values(df:pd.DataFrame, verbose:bool=True) -> pd.DataFrame:
 
     # following missing values (timebin > 0)
     # -> Fill missing timebin values by last observation carried forward
-    locf_imputed_missing_df = imputed_sample_label.groupby(['case_admission_id', 'sample_label']).apply(
+    if verbose:
+        print('Fill missing values via LOCF.')
+
+    locf_imputed_missing_df = imputed_missing_df.groupby(['case_admission_id', 'sample_label']).apply(
         lambda x: x.set_index('relative_sample_date_hourly_cat').reindex(range(0, 72)))
     locf_imputed_missing_df.value = locf_imputed_missing_df.value.fillna(method='ffill')
     locf_imputed_missing_df.sample_label = locf_imputed_missing_df.sample_label.fillna(method='ffill')
     locf_imputed_missing_df.case_admission_id = locf_imputed_missing_df.case_admission_id.fillna(method='ffill')
-    for sample_label in imputed_sample_label.sample_label.unique():
+    for sample_label in tqdm(imputed_missing_df.sample_label.unique()):
         sample_label_original_source = \
-        imputed_sample_label[imputed_sample_label.sample_label == sample_label].source.mode(dropna=True)[0]
+        imputed_missing_df[imputed_missing_df.sample_label == sample_label].source.mode(dropna=True)[0]
         locf_imputed_missing_df.loc[(locf_imputed_missing_df.sample_label == sample_label) & (
-            locf_imputed_missing_df.source.isna()), 'source'] = f'{sample_label_original_source}_imputed'
+            locf_imputed_missing_df.source.isna()), 'source'] = f'{sample_label_original_source}_locf_imputed'
     # reset relative_sample_date_hourly_cat as column
     locf_imputed_missing_df.reset_index(level=2, inplace=True)
     # drop groupby index

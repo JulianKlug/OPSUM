@@ -20,16 +20,30 @@ variables_to_normalize = [
 'proteine C-reactive',
 'ALAT',
 'FIO2',
-'oxygen_saturation',
-'systolic_blood_pressure',
-'diastolic_blood_pressure',
-'mean_blood_pressure',
-'heart_rate',
-'respiratory_rate',
+'max_NIHSS',
+'max_diastolic_blood_pressure',
+'max_heart_rate',
+'max_mean_blood_pressure',
+'max_oxygen_saturation',
+'max_respiratory_rate',
+'max_systolic_blood_pressure',
+'min_NIHSS',
+'min_diastolic_blood_pressure',
+'min_heart_rate',
+'min_mean_blood_pressure',
+'min_oxygen_saturation',
+'min_respiratory_rate',
+'min_systolic_blood_pressure',
+'median_NIHSS',
+'median_diastolic_blood_pressure',
+'median_heart_rate',
+'median_mean_blood_pressure',
+'median_oxygen_saturation',
+'median_respiratory_rate',
+'median_systolic_blood_pressure',
 'temperature',
 'weight',
 'age',
-'NIHSS',
 'triglycerides',
 'ASAT',
 'cholesterol HDL',
@@ -60,6 +74,9 @@ def normalise_data(df: pd.DataFrame, verbose:bool = True) -> pd.DataFrame:
     winsorized_restricted_feature_df = df.copy()
     for variable in variables_to_normalize:
         temp = winsorized_restricted_feature_df[winsorized_restricted_feature_df.sample_label == variable].value.copy()
+        # skip variables with insufficient range (FiO2, GCS)
+        if temp.quantile(0.75) == temp.quantile(0.25):
+            continue
         temp = temp.clip(lower=temp.quantile(0.25) - 1.5 * (temp.quantile(0.75) - temp.quantile(0.25)),
                          upper=temp.quantile(0.75) + 1.5 * (temp.quantile(0.75) - temp.quantile(0.25)))
         winsorized_restricted_feature_df.loc[winsorized_restricted_feature_df.sample_label == variable, 'value'] = temp
