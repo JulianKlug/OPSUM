@@ -19,7 +19,7 @@ def preprocess(ehr_data_path:str, stroke_registry_data_path:str, patient_selecti
     :param ehr_data_path: path to EHR data
     :param stroke_registry_data_path: path to stroke registry (admission) data
     :param patient_selection_path: path to patient selection file
-    :return: preprocessed feature Dataframe, preprocessed outcome datadrame
+    :return: preprocessed feature Dataframe, preprocessed outcome dataframe
     """
 
     # 1. Restrict to patient selection

@@ -62,4 +62,8 @@ def preprocess_outcomes(stroke_registry_data_path, patient_selection_path, verbo
     outcome_df.loc[outcome_df['3M delta mRS'] < 0, '3M delta mRS'] = 0
     outcome_df.loc[outcome_df['Duration of hospital stay (days)'] > 365, 'Duration of hospital stay (days)'] = np.nan
 
+    # add binarised outcomes
+    outcome_df['3M mRS 0-1'] = outcome_df['3M mRS'] <= 1
+    outcome_df['3M mRS 0-2'] = outcome_df['3M mRS'] <= 2
+
     return outcome_df
