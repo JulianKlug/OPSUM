@@ -2,10 +2,9 @@ from keras.models import Model
 from keras.layers import Dense, LSTM, Input, Masking
 
 
-def lstm_generator(x_time_shape, x_channels_shape, masking, n_units, activation, dropout, n_layers)
+def lstm_generator(x_time_shape, x_channels_shape, masking, n_units, activation, dropout, n_layers) -> Model:
     ### MODEL ARCHITECTURE ###
     n_hidden = 1
-    # TODO
     input_layer = Input(shape=(x_time_shape, x_channels_shape))
     if masking:
         # masking layer
@@ -37,3 +36,5 @@ def lstm_generator(x_time_shape, x_channels_shape, masking, n_units, activation,
     output_layer = Dense(1, activation='sigmoid')(lstm)
 
     model = Model(inputs=input_layer, outputs=output_layer)
+
+    return model
