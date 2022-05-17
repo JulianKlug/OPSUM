@@ -11,147 +11,22 @@ from sklearn.metrics import roc_auc_score, matthews_corrcoef
 import argparse
 
 # turn off warnings from Tensorflow
-from prediction.mrs_outcome_prediction.LSTM.utils import initiate_log_files
-from prediction.mrs_outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
-    link_patient_id_to_outcome, features_to_numpy, numpy_to_lookup_table
+from prediction.mrs_outcome_prediction.LSTM.LSTM import lstm_generator
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
+from prediction.mrs_outcome_prediction.LSTM.utils import initiate_log_files
+from prediction.mrs_outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
+    link_patient_id_to_outcome, features_to_numpy, numpy_to_lookup_table
 from prediction.utils.scoring import precision, matthews, recall
 from prediction.utils.utils import generate_balanced_arrays, check_data, ensure_dir, save_json
 
-parser = argparse.ArgumentParser(description='LSTM model for predicting outcome')
-# parser.add_argument('--date_string', required=True, type=str, help='datestring')
-parser.add_argument('--activation', required=True, type=str, help='activation function')
-parser.add_argument('--batch', required=True, type=str, help='batch size')
-parser.add_argument('--data', required=True, type=str, help='data to use')
-parser.add_argument('--dropout', required=True, type=float, help='dropout fraction')
-parser.add_argument('--layers', required=True, type=int, help='number of LSTM layers')
-parser.add_argument('--masking', required=True, type=bool, help='masking true/false')
-parser.add_argument('--optimizer', required=True, type=str, help='optimizer function')
-parser.add_argument('--outcome', required=True, type=str, help='outcome (ex. 3M mRS 0-2)')
-parser.add_argument('--units', required=True, type=int, help='number of units in each LSTM layer')
-args = parser.parse_args()
 
-output_dir = '/Users/jk1/temp/opsum_prediction_output/LSTM_72h'
-# define constants
-seed = 42
-# n_splits = 5
-n_splits = 3
-# n_epochs = 1000
-n_epochs = 1
-test_size = 0.20
-# checkpoint
-save_checkpoint = True
-
-monitor_checkpoint = ['val_matthews', 'max']
-# early_stopping
-early_stopping = True
-monitor_early_stopping = ['val_matthews', 'max']
-patience = 200
-
-# load metadata file
-# TODO fix paths
-# metadata = pd.read_csv('<PATH_TO_METADATA>', sep='\t',
-#                        usecols=['id_unique', 'pid', 'admdatetime', 'dead90'],
-#                        parse_dates=['admdatetime'])
-
-# load the dataset
-# TODO fix paths
-features_df_path = '/Users/jk1/temp/opsum_prepro_output/preprocessed_features_14052022_123333.csv'
-outcome_df_path = '/Users/jk1/temp/opsum_prepro_output/preprocessed_outcomes_14052022_123333.csv'
-outcome = '3M mRS 0-2'
-X, y = format_to_2d_table_with_time(feature_df_path=features_df_path, outcome_df_path=outcome_df_path, outcome=outcome)
-
-n_time_steps = X.relative_sample_date_hourly_cat.max() + 1
-n_channels = X.sample_label.unique().shape[0]
-
-# dataset = np.load('<PATH_TO_DATASET>')
-
-# # split data in X, y
-# X = dataset[:, :, 2:-2]  # [id_unique, rel_time, ..., discharged, dead90]
-# y = dataset[:, 0, -1]
-
-# test if data is corrupted
-check_data(X)
-
-# # keep last admission per patient
-# metadata_latest_adm = metadata.sort_values('admdatetime', ascending=False).drop_duplicates(['pid'])
-
-"""
-SPLITTING DATA
-Splitting is done by patient id (and not admission id) as in case of the rare multiple admissions per patient there
-would be a risk of data leakage otherwise split 'pid' in TRAIN and TEST pid = unique patient_id
-"""
-# Reduce every patient to a single outcome (to avoid duplicates)
-all_pids_with_outcome = link_patient_id_to_outcome(y, outcome)
-pid_train, pid_test, y_pid_train, y_pid_test = train_test_split(all_pids_with_outcome.patient_id.tolist(),
-                                                                all_pids_with_outcome.outcome.tolist(),
-                                                                stratify=all_pids_with_outcome.outcome.tolist(),
-                                                                test_size=test_size,
-                                                                random_state=seed)
-
-test_X = X[X.patient_id.isin(pid_test)]
-test_y = y[y.patient_id.isin(pid_test)]
-
-# TODO check if this is necessary
-# find case_admission_id for train/test admissions
-# cid = case_admission_id
-# train_cidx = y.loc[y.patient_id.isin(pid_train)].case_admission_id.tolist()
-# test_cidx = y.loc[y.patient_id.isin(pid_test)].case_admission_id.tolist()
-
-# train_cid_list_of_lists = [metadata.index[metadata['pid'] == x].tolist() for x in pid_train]
-# train_idx = [item for sublist in train_idx_list_of_lists for item in sublist]
-# test_idx_list_of_lists = [metadata.index[metadata['pid'] == x].tolist() for x in pid_test]
-# test_idx = [item for sublist in test_idx_list_of_lists for item in sublist]
-
-# split in TRAIN and TEST
-# X_train = X.loc[X.case_admission_id.isin(train_cidx)]
-# X_test = X.loc[X.case_admission_id.isin(test_cidx)]
-# y_train = y.loc[y.case_admission_id.isin(train_cidx)]
-# y_test = y.loc[y.case_admission_id.isin(test_cidx)]
-# X_train, X_test, y_train, y_test = X[train_idx], X[test_idx], y[train_idx], y[test_idx]
-
-# define K fold
-kfold = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
-
-
-# define 'create_model'
-def create_model(activation, batch, data, dropout, layers, masking, optimizer, outcome, units):
-    ### MODEL ARCHITECTURE ###
-    n_hidden = 1
-    # input_layer = Input(shape=(X_train.shape[1], X_train.shape[2]))
+# define 'train_model'
+def train_model(activation, batch, data, dropout, layers, masking, optimizer, outcome, units):
     input_layer = Input(shape=(n_time_steps, n_channels))
-    if masking:
-        # masking layer
-        masking_layer = Masking(mask_value=0.)(input_layer)
-        if layers == 1:
-            # add first LSTM layer
-            lstm = LSTM(units, activation=activation, recurrent_dropout=dropout)(masking_layer)
-        else:
-            # add first LSTM layer
-            lstm = LSTM(units, activation=activation, recurrent_dropout=dropout,
-                        return_sequences=True)(masking_layer)
-    else:
-        if layers == 1:
-            # add first LSTM layer
-            lstm = LSTM(units, activation=activation, recurrent_dropout=dropout)(input_layer)
-        else:
-            lstm = LSTM(units, activation=activation, recurrent_dropout=dropout,
-                        return_sequences=True)(input_layer)
-    while n_hidden < layers:
-        n_hidden += 1
-        if n_hidden == layers:
-            # add additional hidden layers
-            lstm = LSTM(units, activation=activation, recurrent_dropout=dropout)(lstm)
-        else:
-            lstm = LSTM(units, activation=activation, recurrent_dropout=dropout,
-                        return_sequences=True)(lstm)
-
-    # add output layer
-    output_layer = Dense(1, activation='sigmoid')(lstm)
-
-    model = Model(inputs=input_layer, outputs=output_layer)
+    model = lstm_generator(x_time_shape=n_time_steps, x_channels_shape=n_channels, masking=masking, n_units=units,
+                        activation=activation, dropout=dropout, n_layers=layers)
 
     model.compile(loss='binary_crossentropy', optimizer=optimizer,
                   metrics=['accuracy', precision, recall, matthews])
@@ -168,7 +43,6 @@ def create_model(activation, batch, data, dropout, layers, masking, optimizer, o
     #################
     ### RUN MODEL ###
     #################
-
     i = 0
     for fold_pid_train_idx, fold_pid_val_idx in kfold.split(pid_train, y_pid_train):
         i += 1
@@ -178,25 +52,13 @@ def create_model(activation, batch, data, dropout, layers, masking, optimizer, o
         # find indexes for train/val admissions
         fold_train_pidx = np.array(pid_train)[fold_pid_train_idx]
 
-        # fold_pid_train = [pid_train[idx] for idx in fold_pid_train_idx]
-        # train_idx_list_of_lists = [metadata.index[metadata['pid'] == x].tolist() for x in
-        #                            fold_pid_train]
-        # fold_train_idx = [item for sublist in train_idx_list_of_lists for item in sublist]
-
         fold_val_pidx = np.array(pid_train)[fold_pid_val_idx]
-
-        # fold_pid_val = [pid_train[idx] for idx in fold_pid_val_idx]
-        # val_idx_list_of_lists = [metadata.index[metadata['pid'] == x].tolist() for x in fold_pid_val]
-        # fold_val_idx = [item for sublist in val_idx_list_of_lists for item in sublist]
 
         # split in TRAIN and VALIDATION sets
         fold_X_train_df = X.loc[X.patient_id.isin(fold_train_pidx)]
         fold_y_train_df = y.loc[y.patient_id.isin(fold_train_pidx)]
         fold_X_val_df = X.loc[X.patient_id.isin(fold_val_pidx)]
         fold_y_val_df = y.loc[y.patient_id.isin(fold_val_pidx)]
-
-        # fold_X_train, fold_X_val, fold_y_train, fold_y_val = X[fold_train_idx], X[fold_val_idx], y[fold_train_idx], y[
-        #     fold_val_idx]
 
         # TODO Remove this check (it is only for debugging purposes and slows down the code)
         # check that case_admission_ids are different in train, test, validation sets
@@ -245,7 +107,7 @@ def create_model(activation, batch, data, dropout, layers, masking, optimizer, o
         if save_checkpoint:
             callbacks_list.append(checkpoint)
 
-            # TRAIN MODEL
+        # TRAIN MODEL
         if data == "balanced":
             train_hist = model.fit_generator(generate_balanced_arrays(fold_X_train, fold_y_train),
                                              callbacks=callbacks_list,
@@ -316,39 +178,95 @@ def create_model(activation, batch, data, dropout, layers, masking, optimizer, o
                            sep='\t', mode='a', columns=errorHeader)
 
 
-# TODO To be adapted
-### RUN MODEL ###
-# args = {'activation': 'sigmoid', 'batch': 'all', 'data': 'balanced', 'dropout': 0.0,
-#         'layers': 1, 'masking': True, 'optimizer': 'RMSprop',
-#         'outcome': '3M mRS 0-2', 'units': 1}
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='LSTM model for predicting outcome')
+    # parser.add_argument('--date_string', required=True, type=str, help='datestring')
+    parser.add_argument('--activation', required=True, type=str, help='activation function')
+    parser.add_argument('--batch', required=True, type=str, help='batch size')
+    parser.add_argument('--data', required=True, type=str, help='data to use')
+    parser.add_argument('--dropout', required=True, type=float, help='dropout fraction')
+    parser.add_argument('--layers', required=True, type=int, help='number of LSTM layers')
+    parser.add_argument('--masking', required=True, type=bool, help='masking true/false')
+    parser.add_argument('--optimizer', required=True, type=str, help='optimizer function')
+    parser.add_argument('--outcome', required=True, type=str, help='outcome (ex. 3M mRS 0-2)')
+    parser.add_argument('--units', required=True, type=int, help='number of units in each LSTM layer')
+    parser.add_argument('--output_dir', required=True, type=str, help='output directory')
+    parser.add_argument('--features_path', required=True, type=str, help='path to features')
+    parser.add_argument('--labels_path', required=True, type=str, help='path to labels')
+    args = parser.parse_args()
 
+    # define constants
+    output_dir = args.output_dir
+    seed = 42
+    # n_splits = 5
+    n_splits = 3
+    # n_epochs = 1000
+    n_epochs = 1
+    test_size = 0.20
+    # checkpoint
+    save_checkpoint = True
+    monitor_checkpoint = ['val_matthews', 'max']
+    # early_stopping
+    early_stopping = True
+    monitor_early_stopping = ['val_matthews', 'max']
+    patience = 200
 
-all_args = [args.activation, args.batch, args.data, args.dropout, args.layers, args.masking, args.optimizer,
-            args.outcome, args.units]
+    # load the dataset
+    outcome = args.outcome
+    X, y = format_to_2d_table_with_time(feature_df_path=args.features_path, outcome_df_path=args.labels_path,
+                                        outcome=outcome)
 
-# all_args = [args['activation'], args['batch'], args['data'], args['dropout'], args['layers'], args['masking'],
-#             args['optimizer'], args['outcome'], args['units']]
+    n_time_steps = X.relative_sample_date_hourly_cat.max() + 1
+    n_channels = X.sample_label.unique().shape[0]
 
-initiate_log_files(output_dir)
-AUCheader = list(pd.read_csv(os.path.join(output_dir, 'AUC_history_gridsearch.tsv'), sep='\t', nrows=1).columns.values)
-CVheader = list(pd.read_csv(os.path.join(output_dir, 'CV_history_gridsearch.tsv'), sep='\t', nrows=1).columns.values)
-progressHeader = list(pd.read_csv(os.path.join(output_dir, 'progress.log'), sep='\t', nrows=1).columns.values)
-errorHeader = list(pd.read_csv(os.path.join(output_dir, 'error.log'), sep='\t', nrows=1).columns.values)
+    # test if data is corrupted
+    check_data(X)
 
-try:
-    create_model(activation=args.activation, batch=args.batch, data=args.data, dropout=args.dropout,
-                 layers=args.layers, masking=args.masking, optimizer=args.optimizer,
-                 outcome=args.outcome, units=args.units)
+    """
+    SPLITTING DATA
+    Splitting is done by patient id (and not admission id) as in case of the rare multiple admissions per patient there
+    would be a risk of data leakage otherwise split 'pid' in TRAIN and TEST pid = unique patient_id
+    """
+    # Reduce every patient to a single outcome (to avoid duplicates)
+    all_pids_with_outcome = link_patient_id_to_outcome(y, outcome)
+    pid_train, pid_test, y_pid_train, y_pid_test = train_test_split(all_pids_with_outcome.patient_id.tolist(),
+                                                                    all_pids_with_outcome.outcome.tolist(),
+                                                                    stratify=all_pids_with_outcome.outcome.tolist(),
+                                                                    test_size=test_size,
+                                                                    random_state=seed)
 
-    progressDF = pd.DataFrame(columns=progressHeader)
-    progressDF = progressDF.append({'completed': all_args}, ignore_index=True)
-    progressDF.to_csv(os.path.join(output_dir,'progress.log'), header=None, index=False,
-                      sep='\t', mode='a', columns=progressHeader)
+    test_X = X[X.patient_id.isin(pid_test)]
+    test_y = y[y.patient_id.isin(pid_test)]
 
-except:
-    var = traceback.format_exc()
-    errorDF = pd.DataFrame(columns=errorHeader)
-    errorDF = errorDF.append({'error': var,
-                              'args': all_args}, ignore_index=True)
-    errorDF.to_csv(os.path.join(output_dir,'error.log'), header=None, index=False,
-                   sep='\t', mode='a', columns=errorHeader)
+    # define K fold
+    kfold = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+
+    ### RUN MODEL ###
+    all_args = [args.activation, args.batch, args.data, args.dropout, args.layers, args.masking, args.optimizer,
+                args.outcome, args.units]
+
+    initiate_log_files(output_dir)
+    AUCheader = list(
+        pd.read_csv(os.path.join(output_dir, 'AUC_history_gridsearch.tsv'), sep='\t', nrows=1).columns.values)
+    CVheader = list(
+        pd.read_csv(os.path.join(output_dir, 'CV_history_gridsearch.tsv'), sep='\t', nrows=1).columns.values)
+    progressHeader = list(pd.read_csv(os.path.join(output_dir, 'progress.log'), sep='\t', nrows=1).columns.values)
+    errorHeader = list(pd.read_csv(os.path.join(output_dir, 'error.log'), sep='\t', nrows=1).columns.values)
+
+    try:
+        train_model(activation=args.activation, batch=args.batch, data=args.data, dropout=args.dropout,
+                     layers=args.layers, masking=args.masking, optimizer=args.optimizer,
+                     outcome=args.outcome, units=args.units)
+
+        progressDF = pd.DataFrame(columns=progressHeader)
+        progressDF = progressDF.append({'completed': all_args}, ignore_index=True)
+        progressDF.to_csv(os.path.join(output_dir, 'progress.log'), header=None, index=False,
+                          sep='\t', mode='a', columns=progressHeader)
+
+    except:
+        var = traceback.format_exc()
+        errorDF = pd.DataFrame(columns=errorHeader)
+        errorDF = errorDF.append({'error': var,
+                                  'args': all_args}, ignore_index=True)
+        errorDF.to_csv(os.path.join(output_dir, 'error.log'), header=None, index=False,
+                       sep='\t', mode='a', columns=errorHeader)
