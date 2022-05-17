@@ -1,4 +1,7 @@
 import os
+
+from prediction.utils.utils import generate_balanced_arrays
+
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
@@ -31,19 +34,6 @@ seed = 1234
 
 # define K fold
 kfold = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
-
-# define function for balanced training
-def generate_balanced_arrays(X_train, y_train):
-    while True:
-        positive = np.where(y_train == 1)[0].tolist()
-        negative = np.random.choice(np.where(y_train == 0)[0].tolist(),
-                                            size = len(positive),
-                                            replace = False)
-        balance = np.concatenate((positive, negative), axis = 0)
-        np.random.shuffle(balance)
-        input_ = X_train[balance]
-        target = y_train[balance]
-        yield input_, target
 
 
 # define neural network function
