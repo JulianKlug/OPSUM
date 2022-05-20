@@ -21,7 +21,7 @@ def initiate_log_files(output_dir):
     if not os.path.exists(CVfile_path):
         CVfile = open(CVfile_path, 'w')
 
-        CVheader = ['acc', 'loss', 'matthews', 'precision', 'recall', 'val_acc', 'val_loss', 'val_matthews',
+        CVheader = ['accuracy', 'loss', 'matthews', 'precision', 'recall', 'val_accuracy', 'val_loss', 'val_matthews',
         'val_precision', 'val_recall', 'cv_num'] + list(param_dict.keys())
 
         CVfile.write('epoch\t' + '\t'.join(CVheader) + '\n')

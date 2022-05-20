@@ -1,26 +1,19 @@
 #!/usr/bin/python
+import json
 import os, itertools, time, shutil, sys, stat, subprocess
 
 # check if Python-version > 3.0
+from prediction.mrs_outcome_prediction.LSTM.utils import initiate_log_files
+
 assert (sys.version_info > (3, 0)), "This script only works with Python3!"
 
-script_dir = '<PATH_FOR_THIS_SCRIPT>'
-output_dir = '<PATH_FOR_OUTPUT>'
-nnet_file = 'train_nnet.py'
+script_dir = os.path.dirname(os.path.abspath(__file__))
+output_dir = '/Users/jk1/temp/opsum_prediction_output/LSTM_72h'
+nnet_file = 'adapted_ThorsenMeyer_LSTM.py'
 batch_file = 'run_models.sh'
 
 # make parameter dictionary
-param_dict={}
-param_dict['activation'] = ['sigmoid']
-param_dict['batch'] = ['all']
-param_dict['data'] = ['balanced', 'unchanged']
-param_dict['dropout'] = [0.0, 0.2, 0.4, 0.6]
-param_dict['layers'] = [1, 2]
-param_dict['masking'] = [True]
-param_dict['optimizer'] = ['RMSprop', 'Adagrad']
-param_dict['outcome'] = ['dead90']
-param_dict['units'] = [1, 4, 8, 16, 32, 64, 128]
-
+param_dict = json.load(open('./parameter_space.json'))
 
 # do not run this, if another script is just trying to import 'param_dict'
 if __name__ == '__main__':
@@ -28,20 +21,20 @@ if __name__ == '__main__':
     all_args = (dict(zip(param_dict, x)) for x in itertools.product(*param_dict.values()))
 
     # change directory and open files for writing
-    date_string = time.strftime("%Y-%m-%d-%H%M")
-    os.chdir(output_dir)
+    date_string = time.strftime("%Y_%m_%d_%H%M")
+    working_dir = os.path.join(output_dir, date_string)
+    os.makedirs(working_dir)
 
-    os.mkdir(date_string)
-    path = "".join([output_dir, date_string])
-    os.chdir(path)
+    initiate_log_files(working_dir)
+
+    os.chdir(working_dir)
     os.mkdir('best_weights')
     os.mkdir('moab_jobs')
     os.mkdir('logs')
 
-    # save this script to path
-    filename = "".join([script_dir, sys.argv[0]])
-    shutil.copy2(filename, path)
-    shutil.copy2(script_dir + nnet_file, path)
+    # save this script to working_dir
+    shutil.copy2(os.path.abspath(__file__), working_dir)
+    shutil.copy2(os.path.join(script_dir, nnet_file), working_dir)
 
     # make batch-file
     batch_file = open('run_models.sh', 'w')
@@ -55,33 +48,6 @@ if __name__ == '__main__':
     # change permissions
     st = os.stat('run_models.sh')
     os.chmod('run_models.sh', st.st_mode | stat.S_IEXEC)
-
-    # create output files
-    AUCfile = open('AUC_history_gridsearch.tsv', 'w')
-    CVfile = open('CV_history_gridsearch.tsv', 'w')
-
-    AUCheader = ['auc_train', 'auc_val', 'matthews_train', 'matthews_val', 'cv_num'] + list(param_dict.keys())
-
-    CVheader = ['acc', 'loss', 'matthews', 'precision', 'recall', 'val_acc', 'val_loss', 'val_matthews',
-    'val_precision', 'val_recall', 'cv_num'] + list(param_dict.keys())
-
-    CVfile.write('epoch\t' + '\t'.join(CVheader) + '\n')
-    AUCfile.write('\t'.join(AUCheader) + '\n')
-
-    # close files
-    AUCfile.close()
-    CVfile.close()
-
-    # open log files
-    error_log = open('error.log', 'w')
-    errorHeader = ['error', 'args']
-    error_log.write('\t'.join(errorHeader) + '\n')
-    error_log.close()
-
-    progress_log = open('progress.log', 'w')
-    progressHeader = ['completed']
-    progress_log.write('\t'.join(progressHeader) + '\n')
-    progress_log.close()
 
     CMD = '''#!/bin/bash
      #PBS -l nodes=1:ppn=1
@@ -98,12 +64,12 @@ if __name__ == '__main__':
             file_name += '_' + str(arg[key])
             shellfile = open('moab_jobs/%s.sh' % file_name, 'w')
             shellfile.write(CMD)
-            shellfile.write('cd ' + path + '\n')
+            shellfile.write('cd ' + working_dir + '\n')
             shellfile.write(shell_arg + '\n')
             shellfile.close()
 
-    # run batch-scripts
-    run_models_path = '/'.join([path, r'run_models.sh'])
-    subprocess.call([run_models_path])
+    # # run batch-scripts
+    # run_models_path = '/'.join([working_dir, r'run_models.sh'])
+    # subprocess.call([run_models_path])
 
 
