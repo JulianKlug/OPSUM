@@ -166,7 +166,8 @@ def train_model(activation, batch, data, dropout, layers, masking, optimizer, ou
             model_history['layers'] = layers
             model_history['masking'] = masking
             model_history['outcome'] = outcome
-            model_history.to_csv(os.path.join(output_dir,'CV_history_gridsearch.tsv'), header=None, index=True, sep='\t', mode='a',
+            model_history['epoch'] = n_epochs
+            model_history.to_csv(os.path.join(output_dir,'CV_history_gridsearch.tsv'), header=None, index=False, sep='\t', mode='a',
                                  columns=CVheader)
 
         except:
