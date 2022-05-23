@@ -1,0 +1,21 @@
+#!/bin/bash
+#SBATCH --job-name=opsum_gridsearch    # Job name
+#SBATCH --partition=public-gpu
+#SBATCH --gres=gpu:rtx:1                    # Number of GPUs
+#SBATCH --ntasks=1
+#SBATCH --mem=300G                     # Job memory request
+#SBATCH --cpus-per-task=16
+#SBATCH --time=20:00:00               # Time limit hrs:min:sec
+#SBATCH --output=/home/users/k/klug/logs/opsum/opsum_gridsearch_%j.log   # Standard output and error log
+
+ulimit -S -n 131072 # setting "soft" limit number of file descriptor per processes
+ulimit -S -u 1546461 # setting soft limit number of processes per user
+
+module load Anaconda3
+
+source /home/users/k/klug/.bashrc
+
+export OPSUM_FEATURES_PATH="/home/users/k/klug/data/opsum/preprocessed_features_14052022_123333.csv"
+export OPSUM_LABELS_PATH="/home/users/k/klug/data/opsum/preprocessed_outcomes_14052022_123333.csv"
+
+export PYTHONPATH="${PYTHONPATH}:/home/users/k/klug/opsum"
