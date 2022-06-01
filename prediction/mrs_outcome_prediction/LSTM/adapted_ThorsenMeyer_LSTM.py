@@ -181,7 +181,7 @@ def train_model(activation, batch, data, dropout, layers, masking, optimizer, ou
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='LSTM model for predicting outcome')
-    # parser.add_argument('--date_string', required=True, type=str, help='datestring')
+    parser.add_argument('--date_string', required=True, type=str, help='datestring')
     parser.add_argument('--activation', required=True, type=str, help='activation function')
     parser.add_argument('--batch', required=True, type=str, help='batch size')
     parser.add_argument('--data', required=True, type=str, help='data to use')
@@ -199,10 +199,8 @@ if __name__ == '__main__':
     # define constants
     output_dir = args.output_dir
     seed = 42
-    # n_splits = 5
-    n_splits = 3
-    # n_epochs = 1000
-    n_epochs = 1
+    n_splits = 5
+    n_epochs = 1000
     test_size = 0.20
     # checkpoint
     save_checkpoint = True

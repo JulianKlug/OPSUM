@@ -9,6 +9,7 @@ assert (sys.version_info > (3, 0)), "This script only works with Python3!"
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 output_dir = '/home/users/k/klug/output/opsum/LSTM_72h'
+
 nnet_file = 'adapted_ThorsenMeyer_LSTM.py'
 batch_file = 'run_models.sh'
 
@@ -42,9 +43,9 @@ if __name__ == '__main__':
     batch_file = open(os.path.join(working_dir, 'run_models.sh'), 'w')
     batch_file.write('#!/bin/bash\n')
     batch_file.write('cd ' + output_dir + date_string + '/\n')
-    batch_file.write('for f in slurm_jobs/*.sh\n')
+    batch_file.write('for f in slurm_jobs/*.sbatch\n')
     batch_file.write('do\n')
-    batch_file.write('\tsh $f\n')
+    batch_file.write('\tsbatch $f\n')
     batch_file.write('done\n')
     batch_file.close()
     # change permissions
@@ -64,17 +65,20 @@ if __name__ == '__main__':
                     + ' --labels_path=' + '$OPSUM_LABELS_PATH'
         file_name = date_string
         for key in sorted(arg):
-            shell_arg += ' --' + key + '=' + str(arg[key])
+            option = str(arg[key])
+            if ' ' in option:
+                option = '"' + option + '"'
+            shell_arg += ' --' + key + '=' + option
             file_name += '_' + str(arg[key])
-            shellfile = open(os.path.join(working_dir, 'slurm_jobs', '%s.sh' % file_name), 'w')
-            shellfile.write(slurm_setup)
-            shellfile.write('\n cd ' + working_dir + '\n')
-            shellfile.write('conda activate opsum\n')
-            shellfile.write(shell_arg + '\n')
-            shellfile.close()
+        shellfile = open(os.path.join(working_dir, 'slurm_jobs', '%s.sbatch' % file_name), 'w')
+        shellfile.write(slurm_setup)
+        shellfile.write('\n cd ' + working_dir + '\n')
+        shellfile.write('conda activate opsum\n')
+        shellfile.write(shell_arg + '\n')
+        shellfile.close()
 
-    # # run batch-scripts
-    # run_models_path = '/'.join([working_dir, r'run_models.sh'])
-    # subprocess.call([run_models_path])
+    # run batch-scripts
+    run_models_path = '/'.join([working_dir, r'run_models.sh'])
+    subprocess.call([run_models_path])
 
 
