@@ -42,10 +42,10 @@ if __name__ == '__main__':
     # make batch-file
     batch_file = open(os.path.join(working_dir, 'run_models.sh'), 'w')
     batch_file.write('#!/bin/bash\n')
-    batch_file.write('cd ' + output_dir + date_string + '/\n')
+    batch_file.write('cd ' + output_dir + '/' + date_string + '/\n')
     batch_file.write('for f in slurm_jobs/*.sbatch\n')
     batch_file.write('do\n')
-    batch_file.write('\tsbatch $f\n')
+    batch_file.write('\tsbatch "$f"\n')
     batch_file.write('done\n')
     batch_file.close()
     # change permissions
