@@ -24,7 +24,6 @@ from prediction.utils.utils import generate_balanced_arrays, check_data, ensure_
 
 # define 'train_model'
 def train_model(activation, batch, data, dropout, layers, masking, optimizer, outcome, units):
-    input_layer = Input(shape=(n_time_steps, n_channels))
     model = lstm_generator(x_time_shape=n_time_steps, x_channels_shape=n_channels, masking=masking, n_units=units,
                         activation=activation, dropout=dropout, n_layers=layers)
 

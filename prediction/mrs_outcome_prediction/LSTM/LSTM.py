@@ -6,6 +6,7 @@ def lstm_generator(x_time_shape, x_channels_shape, masking, n_units, activation,
     ### MODEL ARCHITECTURE ###
     n_hidden = 1
     input_layer = Input(shape=(x_time_shape, x_channels_shape))
+    # TODO: try 1D convolutional layer without reducing time dimension too much
     if masking:
         # masking layer
         masking_layer = Masking(mask_value=0.)(input_layer)
@@ -32,6 +33,7 @@ def lstm_generator(x_time_shape, x_channels_shape, masking, n_units, activation,
             lstm = LSTM(n_units, activation=activation, recurrent_dropout=dropout,
                         return_sequences=True)(lstm)
 
+    # TODO: try adding more dense layers here
     # add output layer
     output_layer = Dense(1, activation='sigmoid')(lstm)
 
