@@ -60,7 +60,7 @@ if __name__ == '__main__':
 
     for arg in all_args:
         shell_arg = 'srun python ' + os.path.join(script_dir, nnet_file) + ' --date_string=' + date_string \
-                    + ' --output_dir=' + output_dir \
+                    + ' --output_dir=' + working_dir \
                     + ' --features_path=' + '$OPSUM_FEATURES_PATH' \
                     + ' --labels_path=' + '$OPSUM_LABELS_PATH'
         file_name = date_string
