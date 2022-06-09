@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score, matthews_corrcoef, accuracy_score, precision_score, recall_score
 from sklearn.model_selection import train_test_split
+from sklearn.utils import resample
 
 from prediction.mrs_outcome_prediction.LSTM.LSTM import lstm_generator
 from prediction.mrs_outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
@@ -25,15 +26,70 @@ def test_LSTM(X, y, model_weights_path, activation, batch, data, dropout, layers
     model.load_weights(model_weights_path)
 
     # calculate model prediction classes
-    y_pred_test = model.predict(X)
-    y_pred_test_binary = (y_pred_test > 0.5).astype('int32')
+    # y_pred_test = model.predict(X)
+    # y_pred_test_binary = (y_pred_test > 0.5).astype('int32')
+
+    # bootstrap predictions
+    roc_auc_scores = []
+    matthews_scores = []
+    accuracy_scores = []
+    precision_scores = []
+    recall_scores = []
+    n_iterations = 1000
+    for i in range(n_iterations):
+        X_bs, y_bs = resample(X, y, replace=True)
+        # make predictions
+        y_pred_bs = model.predict(X_bs)
+        y_pred_bs_binary = (y_pred_bs > 0.5).astype('int32')
+
+        # evaluate model
+        roc_auc_bs = roc_auc_score(y_bs, y_pred_bs)
+        roc_auc_scores.append(roc_auc_bs)
+        matthews_bs = matthews_corrcoef(y_bs, y_pred_bs_binary)
+        matthews_scores.append(matthews_bs)
+        accuracy_bs = accuracy_score(y_bs, y_pred_bs_binary)
+        accuracy_scores.append(accuracy_bs)
+        precision_bs = precision_score(y_bs, y_pred_bs_binary)
+        recall_bs = recall_score(y_bs, y_pred_bs_binary)
+        precision_scores.append(precision_bs)
+        recall_scores.append(recall_bs)
+
+    # get medians
+    median_roc_auc = np.percentile(roc_auc_scores, 50)
+    median_matthews = np.percentile(matthews_scores, 50)
+    median_accuracy = np.percentile(accuracy_scores, 50)
+    median_precision = np.percentile(precision_scores, 50)
+    median_recall = np.percentile(recall_scores, 50)
+
+    # get 95% interval
+    alpha = 100 - 95
+    lower_ci_roc_auc = np.percentile(roc_auc_scores, alpha / 2)
+    upper_ci_roc_auc = np.percentile(roc_auc_scores, 100 - alpha / 2)
+    lower_ci_matthews = np.percentile(matthews_scores, alpha / 2)
+    upper_ci_matthews = np.percentile(matthews_scores, 100 - alpha / 2)
+    lower_ci_accuracy = np.percentile(accuracy_scores, alpha / 2)
+    upper_ci_accuracy = np.percentile(accuracy_scores, 100 - alpha / 2)
+    lower_ci_precision = np.percentile(precision_scores, alpha / 2)
+    upper_ci_precision = np.percentile(precision_scores, 100 - alpha / 2)
+    lower_ci_recall = np.percentile(recall_scores, alpha / 2)
+    upper_ci_recall = np.percentile(recall_scores, 100 - alpha / 2)
 
     result_df = pd.DataFrame([{
-        'auc_test': roc_auc_score(y, y_pred_test),
-        'matthews_train': matthews_corrcoef(y, y_pred_test_binary),
-        'accuracy_test': accuracy_score(y, y_pred_test_binary),
-        'precision_test': precision_score(y, y_pred_test_binary),
-        'recall_test': recall_score(y, y_pred_test_binary),
+        'auc_test': median_roc_auc,
+        'auc_test_lower_ci': lower_ci_roc_auc,
+        'auc_test_upper_ci': upper_ci_roc_auc,
+        'matthews_test': median_matthews,
+        'matthews_test_lower_ci': lower_ci_matthews,
+        'matthews_test_upper_ci': upper_ci_matthews,
+        'accuracy_test': median_accuracy,
+        'accuracy_test_lower_ci': lower_ci_accuracy,
+        'accuracy_test_upper_ci': upper_ci_accuracy,
+        'precision_test': median_precision,
+        'precision_test_lower_ci': lower_ci_precision,
+        'precision_test_upper_ci': upper_ci_precision,
+        'recall_test': median_recall,
+        'recall_test_lower_ci': lower_ci_recall,
+        'recall_test_upper_ci': upper_ci_recall,
         'data': data,
         'activation': activation, 'dropout': dropout, 'units': units, 'optimizer': optimizer,
         'batch': batch,
