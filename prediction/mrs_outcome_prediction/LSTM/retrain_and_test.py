@@ -1,49 +1,95 @@
 import argparse
 import os
-import shutil
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import roc_auc_score, matthews_corrcoef, accuracy_score, precision_score, recall_score
+from keras.callbacks import ModelCheckpoint, EarlyStopping
+from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 
 from prediction.mrs_outcome_prediction.LSTM.LSTM import lstm_generator
+from prediction.mrs_outcome_prediction.LSTM.test_LSTM import test_LSTM
 from prediction.mrs_outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
     link_patient_id_to_outcome, features_to_numpy, numpy_to_lookup_table
 from prediction.utils.scoring import precision, recall, matthews
-from prediction.utils.utils import check_data, save_json, ensure_dir
+from prediction.utils.utils import ensure_dir, check_data, save_json, generate_balanced_arrays
 
 
-def test_LSTM(X, y, model_weights_path, activation, batch, data, dropout, layers, masking, optimizer, outcome, units,
-                n_time_steps, n_channels):
+def retrain_LSTM(X, y, model_weights_path, activation, batch, data, dropout, layers, masking, optimizer, outcome, units,
+                 n_time_steps, n_channels):
+    # checkpoint
+    save_checkpoint = True
+    monitor_checkpoint = ['matthews', 'max']
+    # early_stopping
+    early_stopping = True
+    monitor_early_stopping = ['matthews', 'max']
+    patience = 200
+
     model = lstm_generator(x_time_shape=n_time_steps, x_channels_shape=n_channels, masking=masking, n_units=units,
                            activation=activation, dropout=dropout, n_layers=layers)
 
     model.compile(loss='binary_crossentropy', optimizer=optimizer,
                   metrics=['accuracy', precision, recall, matthews])
 
+    if batch == 'all':
+        batch_size = X.shape[0]
+    else:
+        batch_size = int(batch)
+
+    checkpoint = ModelCheckpoint(model_weights_path, monitor=monitor_checkpoint[0],
+                                 verbose=0, save_best_only=True,
+                                 mode=monitor_checkpoint[1])
+
+    # define early stopping
+    earlystopping = EarlyStopping(monitor=monitor_early_stopping[0], min_delta=0, patience=patience,
+                                  verbose=0, mode=monitor_early_stopping[1])
+
+    # define callbacks_list
+    callbacks_list = []
+    if early_stopping:
+        callbacks_list.append(earlystopping)
+    if save_checkpoint:
+        callbacks_list.append(checkpoint)
+
+    # TRAIN MODEL
+    if data == "balanced":
+        train_hist = model.fit_generator(generate_balanced_arrays(X, y),
+                                         callbacks=callbacks_list,
+                                         epochs=n_epochs,
+                                         steps_per_epoch=1,
+                                         verbose=0)
+
+    elif data == "unchanged":
+        train_hist = model.fit(X, y,
+                               callbacks=callbacks_list,
+                               epochs=n_epochs,
+                               batch_size=batch_size,
+                               verbose=0)
+
+    # reload best weights
     model.load_weights(model_weights_path)
 
     # calculate model prediction classes
-    y_pred_test = model.predict(X)
-    y_pred_test_binary = (y_pred_test > 0.5).astype('int32')
+    y_pred_train = model.predict(X)
 
-    result_df = pd.DataFrame([{
-        'auc_test': roc_auc_score(y, y_pred_test),
-        'matthews_train': matthews_corrcoef(y, y_pred_test_binary),
-        'accuracy_test': accuracy_score(y, y_pred_test_binary),
-        'precision_test': precision_score(y, y_pred_test_binary),
-        'recall_test': recall_score(y, y_pred_test_binary),
-        'data': data,
-        'activation': activation, 'dropout': dropout, 'units': units, 'optimizer': optimizer,
-        'batch': batch,
-        'layers': layers,
-        'masking': masking,
-        'outcome': outcome,
-        'model_weights_path': model_weights_path
-    }], index=[0])
+    # save train history
+    model_history = pd.DataFrame.from_dict(train_hist.history)
+    model_history['final_train_auc'] = roc_auc_score(y, y_pred_train)
+    model_history['data'] = data
+    model_history['activation'] = activation
+    model_history['dropout'] = dropout
+    model_history['units'] = units
+    model_history['optimizer'] = optimizer
+    model_history['batch'] = batch
+    model_history['layers'] = layers
+    model_history['masking'] = masking
+    model_history['outcome'] = outcome
+    model_history['epoch'] = n_epochs
+    model_history.to_csv(os.path.join(os.path.dirname(model_weights_path), 'train_history.tsv'), index=False, sep='\t')
 
-    return result_df
+    return model
+
+
 
 
 if __name__ == '__main__':
@@ -60,21 +106,20 @@ if __name__ == '__main__':
     parser.add_argument('--output_dir', required=True, type=str, help='output directory')
     parser.add_argument('--features_path', required=True, type=str, help='path to features')
     parser.add_argument('--labels_path', required=True, type=str, help='path to labels')
-    parser.add_argument('--cv_fold', required=True, type=int, help='fold of cross-validation')
-    parser.add_argument('--model_weights_dir', required=True, type=str, help='path to model weights')
     args = parser.parse_args()
 
     model_name = '_'.join([args.activation, str(args.batch),
                            args.data, str(args.dropout), str(args.layers),
                            str(args.masking), args.optimizer, args.outcome,
-                           str(args.units), str(args.cv_fold)])
-    model_weights_path = os.path.join(args.model_weights_dir, model_name + '.hdf5')
-    output_dir = os.path.join(args.output_dir, f'test_LSTM_{model_name}')
+                           str(args.units)])
+    model_name = model_name.replace(' ', '-')
+    output_dir = os.path.join(args.output_dir, f'retrain_and_test_LSTM_{model_name}')
+    model_weights_path = os.path.join(output_dir, model_name + '.hdf5')
     ensure_dir(output_dir)
-    shutil.copy2(model_weights_path, output_dir)
 
     # define constants
     seed = 42
+    n_epochs = 1000
     test_size = 0.20
 
     # load the dataset
@@ -103,22 +148,37 @@ if __name__ == '__main__':
 
     test_X_df = X[X.patient_id.isin(pid_test)]
     test_y_df = y[y.patient_id.isin(pid_test)]
+    train_X_df = X[X.patient_id.isin(pid_train)]
+    train_y_df = y[y.patient_id.isin(pid_train)]
 
+    train_X_np = features_to_numpy(train_X_df,
+                                     ['case_admission_id', 'relative_sample_date_hourly_cat', 'sample_label', 'value'])
     test_X_np = features_to_numpy(test_X_df,
                                   ['case_admission_id', 'relative_sample_date_hourly_cat', 'sample_label', 'value'])
+    train_y_np = np.array([train_y_df[train_y_df.case_admission_id == cid].outcome.values[0] for cid in
+                             train_X_np[:, 0, 0, 0]]).astype('float32')
     test_y_np = np.array([test_y_df[test_y_df.case_admission_id == cid].outcome.values[0] for cid in
                           test_X_np[:, 0, 0, 0]]).astype('float32')
 
     # create look-up table for case_admission_ids, sample_labels and relative_sample_date_hourly_cat
     save_json(numpy_to_lookup_table(test_X_np),
               os.path.join(output_dir, 'test_lookup_dict.json'))
+    save_json(numpy_to_lookup_table(train_X_np),
+                os.path.join(output_dir, 'train_lookup_dict.json'))
 
     # Remove the case_admission_id, sample_label, and time_step_label columns from the data
     test_X_np = test_X_np[:, :, :, -1].astype('float32')
+    train_X_np = train_X_np[:, :, :, -1].astype('float32')
 
+    retrain_LSTM(X=train_X_np, y=train_y_np, model_weights_path=model_weights_path,
+              activation=args.activation, batch=args.batch, data=args.data, dropout=args.dropout,
+              layers=args.layers, masking=args.masking, optimizer=args.optimizer,
+              outcome=args.outcome, units=args.units, n_time_steps=n_time_steps, n_channels=n_channels)
+
+    # test the model
     result_df = test_LSTM(X=test_X_np, y=test_y_np, model_weights_path=model_weights_path,
-                          activation=args.activation, batch=args.batch, data=args.data, dropout=args.dropout,
-                          layers=args.layers, masking=args.masking, optimizer=args.optimizer,
-                          outcome=args.outcome, units=args.units, n_time_steps=n_time_steps, n_channels=n_channels)
+              activation=args.activation, batch=args.batch, data=args.data, dropout=args.dropout,
+              layers=args.layers, masking=args.masking, optimizer=args.optimizer,
+              outcome=args.outcome, units=args.units, n_time_steps=n_time_steps, n_channels=n_channels)
 
     result_df.to_csv(os.path.join(output_dir, 'test_LSTM_results.tsv'), sep='\t', index=False)
