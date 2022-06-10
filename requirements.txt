@@ -3,4 +3,6 @@ numpy~=1.21.2
 seaborn~=0.11.2
 matplotlib~=3.4.2
 
+-e git+https://github.com/AndreCNF/shap.git@f0777334bd82a1bacad578eaf1931c3ecbf40ec6#egg=shap
 git+git://github.com/Jimmy2027/MODUN#egg=modun
+git+https://github.com/slundberg/shap.git@690245c6ab043edf40cfce3d8438a62e29ab599f#egg=shap
