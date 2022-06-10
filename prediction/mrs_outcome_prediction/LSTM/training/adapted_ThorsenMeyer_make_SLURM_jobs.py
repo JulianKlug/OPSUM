@@ -14,7 +14,7 @@ nnet_file = 'adapted_ThorsenMeyer_LSTM.py'
 batch_file = 'run_models.sh'
 
 # make parameter dictionary
-param_dict = json.load(open('./parameter_space.json'))
+param_dict = json.load(open('parameter_space.json'))
 
 if __name__ == '__main__':
     # check if output directory exists

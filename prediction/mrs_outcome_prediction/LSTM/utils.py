@@ -4,7 +4,8 @@ import os
 
 def initiate_log_files(output_dir):
     #  load parameters from json file
-    param_dict = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'parameter_space.json')))
+    param_dict = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                             'training/parameter_space.json')))
 
     # create output files
     AUCfile_path = os.path.join(output_dir, 'AUC_history_gridsearch.tsv')

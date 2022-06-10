@@ -1,5 +1,5 @@
-from keras.models import Model
-from keras.layers import Dense, LSTM, Input, Masking
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, LSTM, Input, Masking
 
 
 def lstm_generator(x_time_shape, x_channels_shape, masking, n_units, activation, dropout, n_layers) -> Model:
