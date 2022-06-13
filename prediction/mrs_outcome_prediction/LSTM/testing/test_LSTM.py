@@ -54,6 +54,9 @@ def test_LSTM(X, y, model_weights_path, activation, batch, data, dropout, layers
         precision_scores.append(precision_bs)
         recall_scores.append(recall_bs)
 
+        # TODO add variables:
+        # PPV=positive predictive value. NPV=negative predictive value. LRP=likelihood ratio positive. LRN=likelihood ratio negative.
+
     # get medians
     median_roc_auc = np.percentile(roc_auc_scores, 50)
     median_matthews = np.percentile(matthews_scores, 50)
@@ -168,6 +171,14 @@ if __name__ == '__main__':
     # create look-up table for case_admission_ids, sample_labels and relative_sample_date_hourly_cat
     save_json(numpy_to_lookup_table(test_X_np),
               os.path.join(output_dir, 'test_lookup_dict.json'))
+
+    # save patient ids used for testing / training
+    pd.DataFrame(pid_train, columns=['patient_id']).to_csv(
+        os.path(output_dir, 'pid_train.tsv'),
+        sep='\t', index=False)
+    pd.DataFrame(pid_test, columns=['patient_id']).to_csv(
+        os.path(output_dir, 'pid_test.tsv'),
+        sep='\t', index=False)
 
     # Remove the case_admission_id, sample_label, and time_step_label columns from the data
     test_X_np = test_X_np[:, :, :, -1].astype('float32')

@@ -1,3 +1,5 @@
+import math
+import pandas as pd
 
 def hiat_score(age, admission_NIHSS, admission_glucose):
     '''
@@ -10,19 +12,23 @@ def hiat_score(age, admission_NIHSS, admission_glucose):
         Identifying patients at high risk for poor outcome after intra-arterial therapy for acute ischemic stroke
         Stroke, 40 (2009), pp. 1780-1785
     '''
+    # if any of age, admission_NIHSS or admission_glucose is nan return nan
+    if pd.isnull(age) or pd.isnull(admission_NIHSS) or pd.isnull(admission_glucose):
+        return math.nan
+
     score = 0
 
     if age > 75:
         score += 1
     if admission_NIHSS > 18:
-        score +=1
+        score += 1
     # Units: mmol/L
     if admission_glucose > 8.4:
         score += 1
 
     # Return probability of good outcome: mRs <4 on hospital discharge
     if score == 0:
-        return 1- 0.44
+        return 1 - 0.44
     if score == 1:
         return 1 - 0.67
     if score == 2:
@@ -41,17 +47,21 @@ def span100_score(age, admission_NIHSS, treated=1):
     Stroke prognostication using age and NIH stroke scale: SPAN-100
     Neurology, 80 (2013), pp. 21-28
     '''
+    if pd.isnull(age) or pd.isnull(admission_NIHSS):
+        return math.nan
+
     score = age + admission_NIHSS
     if treated:
         if score < 100:
             return 0.554
         else:
             return 0.056
-    else: # not treated patients
+    else:  # not treated patients
         if score < 100:
             return 0.402
         else:
             return 0.039
+
 
 def thrive_score(age, admission_NIHSS, hist_hypertension, hist_diabetes, hist_afib):
     '''
@@ -63,6 +73,9 @@ def thrive_score(age, admission_NIHSS, hist_hypertension, hist_diabetes, hist_af
     THRIVE score predicts ischemic stroke outcomes and thrombolytic hemorrhage risk in VISTA
     Stroke, 44 (2013), pp. 3365-3369
     '''
+    if pd.isnull(age) or pd.isnull(admission_NIHSS) or pd.isnull(hist_hypertension) or pd.isnull(hist_diabetes) or pd.isnull(hist_afib):
+        return math.nan
+
     score = 0
     if admission_NIHSS >= 11 and admission_NIHSS < 21:
         score += 2
@@ -75,7 +88,7 @@ def thrive_score(age, admission_NIHSS, hist_hypertension, hist_diabetes, hist_af
 
     chronic_disease_scale = 0
     if hist_afib:
-        chronic_disease_scale +=1
+        chronic_disease_scale += 1
     if hist_hypertension:
         chronic_disease_scale += 1
     if hist_diabetes:
@@ -90,3 +103,40 @@ def thrive_score(age, admission_NIHSS, hist_hypertension, hist_diabetes, hist_af
     else:
         return 0.106
 
+
+def thriveC_score(age, admission_NIHSS, hist_hypertension, hist_diabetes, hist_afib):
+    '''
+    Population: VISTA & STIS-most studies (IVT trials)
+    Returns: probability Good Outcome (mRS 0–2)
+    𝑃=1/(1+𝑒^−(4.94+(−0.035*𝑎𝑔𝑒)+(−0.19*𝑁𝐼𝐻𝑆𝑆)+(−0.105*𝐶𝐷𝑆1)+(−0.408*𝐶𝐷𝑆2)+(−0.702*𝐶𝐷𝑆3)))
+    Ref:
+    Flint AC, Rao VA, Chan SL, et al. Improved Ischemic Stroke Outcome Prediction Using Model Estimation of Outcome Probability: The THRIVE-c Calculation. International Journal of Stroke. 2015;10(6):815-821. doi:10.1111/ijs.12529
+    '''
+    if pd.isnull(age) or pd.isnull(admission_NIHSS) or pd.isnull(hist_hypertension) or pd.isnull(hist_diabetes) or pd.isnull(hist_afib):
+        return math.nan
+
+    chronic_disease_scale = 0
+    if hist_afib:
+        chronic_disease_scale += 1
+    if hist_hypertension:
+        chronic_disease_scale += 1
+    if hist_diabetes:
+        chronic_disease_scale += 1
+
+    if chronic_disease_scale == 0:
+        cds_coefficient = 0
+    elif chronic_disease_scale == 1:
+        cds_coefficient = -0.105
+    elif chronic_disease_scale == 2:
+        cds_coefficient = -0.408
+    elif chronic_disease_scale == 3:
+        cds_coefficient = -0.702
+    else:
+        raise ValueError('Chronic disease scale must be between 0 and 3')
+
+    probability = 1 / (1 + math.exp(-(4.942
+                                      + (-0.035 * age)
+                                      + (-0.19 * admission_NIHSS)
+                                      + cds_coefficient)))
+
+    return probability
