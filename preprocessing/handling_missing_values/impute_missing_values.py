@@ -1,5 +1,6 @@
 import pandas as pd
 from tqdm import tqdm
+import numpy as np
 
 categorical_vars = [
     'sex_male',
@@ -110,11 +111,13 @@ def impute_missing_values(df:pd.DataFrame, verbose:bool=True) -> pd.DataFrame:
     locf_imputed_missing_df.value = locf_imputed_missing_df.value.fillna(method='ffill')
     locf_imputed_missing_df.sample_label = locf_imputed_missing_df.sample_label.fillna(method='ffill')
     locf_imputed_missing_df.case_admission_id = locf_imputed_missing_df.case_admission_id.fillna(method='ffill')
-    for sample_label in tqdm(imputed_missing_df.sample_label.unique()):
-        sample_label_original_source = \
-        imputed_missing_df[imputed_missing_df.sample_label == sample_label].source.mode(dropna=True)[0]
-        locf_imputed_missing_df.loc[(locf_imputed_missing_df.sample_label == sample_label) & (
-            locf_imputed_missing_df.source.isna()), 'source'] = f'{sample_label_original_source}_locf_imputed'
+
+    locf_imputed_missing_df['source_imputation'] = locf_imputed_missing_df.source.apply(lambda x: '' if type(x) == str else np.nan)
+    locf_imputed_missing_df.source_imputation = locf_imputed_missing_df.source_imputation.fillna('_locf_imputed')
+    locf_imputed_missing_df.source = locf_imputed_missing_df.source.fillna(method='ffill')
+    locf_imputed_missing_df.source += locf_imputed_missing_df.source_imputation
+    locf_imputed_missing_df.drop(columns=['source_imputation'], inplace=True)
+
     # reset relative_sample_date_hourly_cat as column
     locf_imputed_missing_df.reset_index(level=2, inplace=True)
     # drop groupby index

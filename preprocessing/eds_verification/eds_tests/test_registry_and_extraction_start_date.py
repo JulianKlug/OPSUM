@@ -1,6 +1,6 @@
 import pandas as pd
 
-from preprocessing.utils import create_case_identification_column
+from preprocessing.utils import create_ehr_case_identification_column
 
 
 def test_registry_and_extraction_start_date(registry_patient_selection_path, eds_j1_path):
@@ -15,7 +15,7 @@ def test_registry_and_extraction_start_date(registry_patient_selection_path, eds
 
     eds_df = pd.read_csv(eds_j1_path, delimiter=';')
 
-    eds_df['case_admission_id'] = create_case_identification_column(eds_df)
+    eds_df['case_admission_id'] = create_ehr_case_identification_column(eds_df)
 
     restricted_eds_df = eds_df[eds_df['case_admission_id'].isin(registry_data_df['case_admission_id'])]
 

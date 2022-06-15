@@ -2,6 +2,9 @@ import pandas as pd
 import os
 import numpy as np
 
+from preprocessing.utils import create_ehr_case_identification_column
+
+
 def restrict_variable_to_possible_ranges(df, variable_name, possible_value_ranges, verbose=False):
     """
     Restricts a variable to the possible ranges in the possible_value_ranges dataframe.
@@ -30,9 +33,7 @@ def preprocess_scales(scales_df, eds_df, verbose=False):
 
     scales_df['original_patient_id'] = scales_df['patient_id'].apply(lambda x: eds_df[eds_df['eds_final_patient_id'] == x]['patient_id'].iloc[0])
 
-    scales_df['case_admission_id'] = scales_df['original_patient_id'].astype(str) \
-                                     + scales_df['eds_end_4digit'].astype(str) \
-                                     + '_' + scales_df['begin_date'].apply(lambda bd: ''.join(bd.split(' ')[0].split('.')))
+    scales_df['case_admission_id'] = create_ehr_case_identification_column(scales_df)
 
     columns_to_drop = ['nr', 'patient_id', 'eds_end_4digit', 'eds_manual', 'DOB', 'begin_date',
                        'end_date', 'death_date', 'death_hosp', 'eds_final_id',

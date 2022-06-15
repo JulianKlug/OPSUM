@@ -2,7 +2,7 @@ import numpy as np
 import os
 import pandas as pd
 
-from preprocessing.utils import create_case_identification_column
+from preprocessing.utils import create_ehr_case_identification_column
 
 
 def restrict_variable_to_possible_ranges(df, variable_name, possible_value_ranges, verbose=False):
@@ -26,7 +26,7 @@ def preprocess_vitals(vitals_df, verbose=False):
                                               'possible_ranges_for_variables.xlsx')
     possible_value_ranges = pd.read_excel(possible_value_ranges_file)
 
-    vitals_df['case_admission_id'] = create_case_identification_column(vitals_df)
+    vitals_df['case_admission_id'] = create_ehr_case_identification_column(vitals_df)
 
     columns_to_drop = ['nr', 'patient_id', 'eds_end_4digit', 'eds_manual', 'DOB', 'begin_date',
                        'end_date', 'death_date', 'death_hosp', 'eds_final_id',

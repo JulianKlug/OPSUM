@@ -1,27 +1,27 @@
 import pandas as pd
 
+from preprocessing.stroke_registry_params_preprocessing.utils import set_sample_date
+from preprocessing.utils import create_registry_case_identification_column
+
 
 def treatment_params_preprocessing(stroke_registry_df: pd.DataFrame) -> pd.DataFrame:
     stroke_registry_df = stroke_registry_df.copy()
-    stroke_registry_df['patient_id'] = stroke_registry_df['Case ID'].apply(lambda x: x[8:-4])
-    stroke_registry_df['EDS_last_4_digits'] = stroke_registry_df['Case ID'].apply(lambda x: x[-4:])
-    stroke_registry_df['case_admission_id'] = stroke_registry_df['patient_id'].astype(str) \
-                                        + stroke_registry_df['EDS_last_4_digits'].astype(str) \
-                                        + '_' + pd.to_datetime(stroke_registry_df['Arrival at hospital'],
-                                                               format='%Y%m%d').dt.strftime('%d%m%Y').astype(str)
-    stroke_registry_df['begin_date'] = pd.to_datetime(stroke_registry_df['Arrival at hospital'],
-                                                         format='%Y%m%d').dt.strftime('%d.%m.%Y') + ' ' + \
-                                          stroke_registry_df['Arrival time']
 
     stroke_registry_df['onset_datetime'] = pd.to_datetime(
         pd.to_datetime(stroke_registry_df['Onset date'], format='%Y%m%d').dt.strftime('%d-%m-%Y') \
-        + ' ' + stroke_registry_df['Onset time'], format='%d-%m-%Y %H:%M')
+        + ' ' + pd.to_datetime(stroke_registry_df['Onset time'], format='%H:%M',
+                                                       infer_datetime_format=True).dt.strftime('%H:%M'),
+        format='%d-%m-%Y %H:%M')
     stroke_registry_df['IVT_datetime'] = pd.to_datetime(
         pd.to_datetime(stroke_registry_df['IVT start date'], format='%Y%m%d').dt.strftime('%d-%m-%Y') \
-        + ' ' + stroke_registry_df['IVT start time'], format='%d-%m-%Y %H:%M')
+        + ' ' + pd.to_datetime(stroke_registry_df['IVT start time'], format='%H:%M',
+                                                       infer_datetime_format=True).dt.strftime('%H:%M'),
+        format='%d-%m-%Y %H:%M')
     stroke_registry_df['groin_puncture_datetime'] = pd.to_datetime(
         pd.to_datetime(stroke_registry_df['Date of groin puncture'], format='%Y%m%d').dt.strftime('%d-%m-%Y') \
-        + ' ' + stroke_registry_df['Time of groin puncture'], format='%d-%m-%Y %H:%M')
+        + ' ' + pd.to_datetime(stroke_registry_df['Time of groin puncture'], format='%H:%M',
+                                                       infer_datetime_format=True).dt.strftime('%H:%M'),
+        format='%d-%m-%Y %H:%M')
 
     stroke_registry_df['onset_to_IVT_min'] = (pd.to_datetime(stroke_registry_df['IVT_datetime'],
                                                                 format='%d-%m-%Y %H:%M:%S') - pd.to_datetime(
@@ -57,12 +57,12 @@ def treatment_params_preprocessing(stroke_registry_df: pd.DataFrame) -> pd.DataF
     stroke_registry_df[(stroke_registry_df['categorical_IAT'] != 'no_IAT')]['categorical_IAT'].mode()[0]
 
     treatment_columns = ['categorical_IVT', 'categorical_IAT']
-    treatment_df = stroke_registry_df[treatment_columns + ['case_admission_id', 'begin_date']]
+    treatment_df = stroke_registry_df[treatment_columns + ['case_admission_id', 'sample_date']]
 
     # verify that there is no missing data
     assert treatment_df.isna().sum().sum() == 0, 'Missing treatment data in stroke registry dataframe'
 
-    treatment_df = pd.melt(treatment_df, id_vars=['case_admission_id', 'begin_date'], var_name='sample_label')
+    treatment_df = pd.melt(treatment_df, id_vars=['case_admission_id', 'sample_date'], var_name='sample_label')
 
     return treatment_df
 
