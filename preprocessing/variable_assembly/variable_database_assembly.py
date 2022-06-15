@@ -95,7 +95,7 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
         stroke_registry_df = set_sample_date(stroke_registry_df)
 
         restricted_stroke_registry_df = restrict_to_patient_selection(stroke_registry_df, patient_selection_path,
-                                                                      verbose=verbose, restrict_to_event_period=True)
+                                                                      verbose=verbose, restrict_to_event_period=False)
 
         admission_data_df = preprocess_admission_data(restricted_stroke_registry_df, verbose=verbose)
         admission_data_df['source'] = 'stroke_registry'
