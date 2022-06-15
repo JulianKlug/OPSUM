@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import numpy as np
 
-from preprocessing.utils import create_case_identification_column
+from preprocessing.utils import create_ehr_case_identification_column
 
 
 def restrict_variable_to_possible_ranges(df, variable_name, possible_value_ranges, verbose=False):
@@ -22,8 +22,8 @@ def restrict_variable_to_possible_ranges(df, variable_name, possible_value_range
 
 
 def preprocess_ventilation(ventilation_df, eds_df, verbose=False):
-    ventilation_df['case_admission_id'] = create_case_identification_column(ventilation_df)
-    eds_df['case_admission_id'] = create_case_identification_column(eds_df)
+    ventilation_df['case_admission_id'] = create_ehr_case_identification_column(ventilation_df)
+    eds_df['case_admission_id'] = create_ehr_case_identification_column(eds_df)
 
     columns_to_drop = ['nr', 'patient_id', 'eds_end_4digit', 'eds_manual', 'DOB', 'begin_date',
                        'end_date', 'death_date', 'death_hosp', 'eds_final_id',
@@ -85,7 +85,7 @@ def preprocess_ventilation(ventilation_df, eds_df, verbose=False):
     room_air_fio2_df['no_recorded_FIO2'] = room_air_fio2_df['case_admission_id'].isin(case_admission_ids_with_no_fio2)
     room_air_fio2_df['FIO2'] = 21
     room_air_fio2_df['FIO2_unit'] = '%'
-    room_air_fio2_df['datetime'] = eds_df['begin_date']
+    room_air_fio2_df['datetime'] = eds_df['eds_final_begin'].fillna(eds_df['begin_date'])
     room_air_fio2_df.loc[room_air_fio2_df['no_recorded_FIO2'] == False, 'FIO2'] = np.nan
     room_air_fio2_df.dropna(inplace=True)
     room_air_fio2_df.drop(['no_recorded_FIO2'], axis=1, inplace=True)

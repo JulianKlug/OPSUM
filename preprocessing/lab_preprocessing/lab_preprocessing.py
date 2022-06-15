@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from preprocessing.utils import remove_french_accents_and_cedillas_from_dataframe, create_case_identification_column
+from preprocessing.utils import remove_french_accents_and_cedillas_from_dataframe, create_ehr_case_identification_column
 
 columns_to_drop = ['nr', 'patient_id', 'eds_end_4digit', 'eds_manual', 'DOB', 'begin_date',
                    'end_date', 'death_date', 'death_hosp', 'eds_final_id',
@@ -91,7 +91,7 @@ def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_bloo
     :return:
     """
     lab_df = lab_df.copy()
-    lab_df['case_admission_id'] = create_case_identification_column(lab_df)
+    lab_df['case_admission_id'] = create_ehr_case_identification_column(lab_df)
 
     lab_df.drop(columns_to_drop, axis=1, inplace=True)
 

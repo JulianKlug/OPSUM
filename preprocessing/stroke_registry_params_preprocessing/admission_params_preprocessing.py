@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import os
 
+from preprocessing.stroke_registry_params_preprocessing.utils import set_sample_date
+
 selected_admission_data_columns = [
     "Age (calc.)",
     "Sex",
@@ -57,19 +59,9 @@ def restrict_variable_to_possible_ranges(df, variable_name, possible_value_range
 
 
 def preprocess_admission_data(stroke_registry_df: pd.DataFrame, verbose=False) -> pd.DataFrame:
-    stroke_registry_df['patient_id'] = stroke_registry_df['Case ID'].apply(lambda x: x[8:-4])
-    stroke_registry_df['EDS_last_4_digits'] = stroke_registry_df['Case ID'].apply(lambda x: x[-4:])
-
-    stroke_registry_df['begin_date'] = pd.to_datetime(stroke_registry_df['Arrival at hospital'],
-                                                         format='%Y%m%d').dt.strftime('%d.%m.%Y') + ' ' + \
-                                          stroke_registry_df['Arrival time']
-    stroke_registry_df['case_admission_id'] = stroke_registry_df['patient_id'].astype(str) \
-                                                 + stroke_registry_df['EDS_last_4_digits'].astype(str) + '_' +  \
-                                                        stroke_registry_df['begin_date'].apply(
-                                                        lambda bd: ''.join(bd.split(' ')[0].split('.')))
 
     admission_data_df = stroke_registry_df[selected_admission_data_columns
-                                              + ['case_admission_id', 'begin_date']]
+                                           + ['case_admission_id', 'sample_date']]
     admission_data_df = admission_data_df.drop(admission_data_to_drop, axis=1)
 
     # restricting to plausible range
@@ -118,13 +110,13 @@ def preprocess_admission_data(stroke_registry_df: pd.DataFrame, verbose=False) -
 
     # fusion of similar variable categories
     admission_data_df['MedHist cerebrovascular_event'] = (
-                admission_data_df[['MedHist Stroke', 'MedHist TIA', 'MedHist ICH']] == 'yes').any(axis=1)
+            admission_data_df[['MedHist Stroke', 'MedHist TIA', 'MedHist ICH']] == 'yes').any(axis=1)
     admission_data_df.drop(columns=['MedHist Stroke', 'MedHist TIA', 'MedHist ICH'], inplace=True)
 
     # Rename columns for EHR correspondence
     admission_data_df.rename(columns={'1st cholesterol total': 'cholesterol total',
-                                      '1st cholesterol LDL':'LDL cholesterol calcule',
-                                      'NIH on admission':'NIHSS'}, inplace=True)
+                                      '1st cholesterol LDL': 'LDL cholesterol calcule',
+                                      'NIH on admission': 'NIHSS'}, inplace=True)
 
     # dealing with missing values
     # - for variables with DPI overlap -> leave NaN for now (should be dealt with after fusion)
@@ -137,14 +129,14 @@ def preprocess_admission_data(stroke_registry_df: pd.DataFrame, verbose=False) -
             continue
         if variable in continuous_variables:
             admission_data_df[variable].fillna(admission_data_df[variable].median(skipna=True),
-                                                        inplace=True)
+                                               inplace=True)
         else:
             admission_data_df[variable].fillna(admission_data_df[variable].mode(dropna=True)[0],
-                                                        inplace=True)
+                                               inplace=True)
 
-
-    # melt dataframe keeping patient_id and begin_date constant into two columns for sample_label and value
-    admission_data_df = pd.melt(admission_data_df, id_vars=['case_admission_id', 'begin_date'], var_name='sample_label')
+    # melt dataframe keeping patient_id and sample_date constant into two columns for sample_label and value
+    admission_data_df = pd.melt(admission_data_df, id_vars=['case_admission_id', 'sample_date'],
+                                var_name='sample_label')
 
     # drop rows with missing values
     admission_data_df = admission_data_df.dropna()

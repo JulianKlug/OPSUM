@@ -3,6 +3,7 @@ import numpy as np
 import os
 
 from preprocessing.patient_selection.restrict_to_patient_selection import restrict_to_patient_selection
+from preprocessing.utils import create_registry_case_identification_column
 
 outcome_columns = ["Symptomatic ICH",
 "Symptomatic ICH date",
@@ -46,12 +47,15 @@ def preprocess_outcomes(stroke_registry_data_path, patient_selection_path, verbo
     stroke_registry_df['patient_id'] = stroke_registry_df['Case ID'].apply(lambda x: x[8:-4])
     stroke_registry_df['EDS_last_4_digits'] = stroke_registry_df['Case ID'].apply(lambda x: x[-4:])
 
-    stroke_registry_df['case_admission_id'] = stroke_registry_df['patient_id'].astype(str) \
-                                              + stroke_registry_df['EDS_last_4_digits'].astype(str) \
-                                              + '_' + pd.to_datetime(stroke_registry_df['Arrival at hospital'],
-                                                                     format='%Y%m%d').dt.strftime('%d%m%Y').astype(str)
-    restricted_stroke_registry_df = restrict_to_patient_selection(stroke_registry_df, patient_selection_path,
+    stroke_registry_df['case_admission_id'] = create_registry_case_identification_column(stroke_registry_df)
+    restricted_stroke_registry_df = restrict_to_patient_selection(stroke_registry_df, patient_selection_path, restrict_to_event_period=False,
                                                                   verbose=verbose)
+
+    # if death in hospital, set mRs to 6
+    restricted_stroke_registry_df.loc[restricted_stroke_registry_df['Death in hospital'] == 'yes', '3M mRS'] = 6
+    # if 3M Death and 3M mRS nan, set mrs to 6
+    restricted_stroke_registry_df.loc[(restricted_stroke_registry_df['3M Death'] == 'yes') &
+                                        (restricted_stroke_registry_df['3M mRS'].isna()), '3M mRS'] = 6
 
     restricted_stroke_registry_df['3M delta mRS'] = restricted_stroke_registry_df['3M mRS'] - restricted_stroke_registry_df[
         'Prestroke disability (Rankin)']
@@ -62,8 +66,8 @@ def preprocess_outcomes(stroke_registry_data_path, patient_selection_path, verbo
     outcome_df.loc[outcome_df['3M delta mRS'] < 0, '3M delta mRS'] = 0
     outcome_df.loc[outcome_df['Duration of hospital stay (days)'] > 365, 'Duration of hospital stay (days)'] = np.nan
 
-    # add binarised outcomes
-    outcome_df['3M mRS 0-1'] = outcome_df['3M mRS'] <= 1
-    outcome_df['3M mRS 0-2'] = outcome_df['3M mRS'] <= 2
+    # add binarised outcomes if 3M mRS is not nan
+    outcome_df['3M mRS 0-1'] = np.where(outcome_df['3M mRS'].isna(), np.nan, np.where(outcome_df['3M mRS'] <= 1, 1, 0))
+    outcome_df['3M mRS 0-2'] = np.where(outcome_df['3M mRS'].isna(), np.nan, np.where(outcome_df['3M mRS'] <= 2, 1, 0))
 
     return outcome_df
