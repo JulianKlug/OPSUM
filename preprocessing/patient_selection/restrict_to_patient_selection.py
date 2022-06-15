@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 from preprocessing.utils import create_registry_case_identification_column
@@ -31,9 +32,12 @@ def restrict_to_patient_selection(variable_df: pd.DataFrame, patient_selection_p
         print('Number of patients not selected:', len(variable_df['case_admission_id'].unique()) - len(restricted_to_selection_df['case_admission_id'].unique()))
         print('Number of patients from selection that were not found:', len(patient_selection_df['case_admission_id'].unique()) - len(restricted_to_selection_df['case_admission_id'].unique()))
 
+
+    # Registry and outcome data should not be needed to be restricted to the event period
     if not restrict_to_event_period:
         return restricted_to_selection_df
     else:
+        # only EHR data is restricted to the event period
         # restrict case_admissions to those sampled within bounds of event [event date -10 days, event date + 7 days]
         datatime_format = '%d.%m.%Y %H:%M'
         # find first sample_date for each case_admission id
@@ -56,6 +60,7 @@ def restrict_to_patient_selection(variable_df: pd.DataFrame, patient_selection_p
 
         # UPPER BOUND: Applying upper bound of EHR sampling
         # set end of reference period to stroke onset or arrival at hospital, whichever is later
+        # (if stroke onset not defined, arrival at hospital is used implicitly)
         first_sample_date['delta_onset_arrival'] = (
                 pd.to_datetime(first_sample_date['Stroke onset date'], format='%Y%m%d') - pd.to_datetime(
             first_sample_date['Arrival at hospital'], format='%Y%m%d')).dt.total_seconds()
@@ -72,16 +77,17 @@ def restrict_to_patient_selection(variable_df: pd.DataFrame, patient_selection_p
         temp_df = temp_df[~temp_df['case_admission_id'].isin(cid_sampled_too_late)]
 
         if verbose:
-            print(f'Dropping {len(cid_sampled_too_early)} cases due to EHR sampling start date too early')
-            print(f'Dropping {len(cid_sampled_too_late)} cases due to EHR sampling start date too late')
+            print(f'Dropping {len(cid_sampled_too_early)} cases because sampling start date too early')
+            print(f'Dropping {len(cid_sampled_too_late)} cases because sampling start date too late')
             print('Number of patients after selection:', len(temp_df['case_admission_id'].unique()))
 
         # Samples occurring before stroke onset should be excluded
         initial_columns = temp_df.columns
         # create duplicate of Arrival at hospital to avoid confusion with stroke registry data
         patient_selection_df['arrival_at_hospital_date'] = patient_selection_df['Arrival at hospital']
-        temp_df = temp_df.merge(patient_selection_df[['case_admission_id', 'Stroke onset date', 'arrival_at_hospital_date']],
+        temp_df = temp_df.merge(patient_selection_df[['case_admission_id', 'Stroke onset date', 'arrival_at_hospital_date', 'Time of symptom onset known']],
                                 on='case_admission_id', how='left')
+        temp_df.loc[temp_df['Time of symptom onset known'] == 'no', 'Stroke onset date'] = np.nan
         temp_df['event_start_date_reference'] = temp_df['Stroke onset date'].fillna(temp_df['arrival_at_hospital_date'])
         temp_df['delta_sample_date_stroke_onset'] = (
                 pd.to_datetime(temp_df['sample_date'], format=datatime_format) - pd.to_datetime(

@@ -77,6 +77,7 @@ def transform_to_relative_timestamps(df: pd.DataFrame, drop_old_columns: bool = 
 
     def determine_reference_time_point(row):
         # default is first sample date of EHR
+        # (NB: samples occurring before stroke onset should be dropped by now)
         if row['delta_first_sample_date_h'] > -24:
             return row['first_ehr_sample_date']
         # except in cases where first sample date of EHR is more than 1 day before first sample date of stroke registry
