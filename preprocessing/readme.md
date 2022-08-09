@@ -71,3 +71,7 @@
 ## Complete pipeline
 
 Path: ./preprocessing_pipeline
+
+## Limitations
+
+- Very severe lesions are excluded (death in the first 12 hours)
