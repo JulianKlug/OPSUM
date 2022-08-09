@@ -8,7 +8,7 @@
 2. Select patients from stroke registry data
    - Path: ./patient_selection/patient_selection.ipynb
    - Inclusion criteria: > 17y, ischemic stroke, inpatient/non-transferred, not refusing to participate
-   - Exclusion criteria: < 12h of hospitalisation
+   - Exclusion criteria: < 12h of hospitalisation, non acute stroke (hospitalisation after 7 days of onset)
 
 
 
