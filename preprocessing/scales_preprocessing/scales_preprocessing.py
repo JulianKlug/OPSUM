@@ -39,7 +39,7 @@ def preprocess_scales(scales_df, eds_df, verbose=False):
                        'end_date', 'death_date', 'death_hosp', 'eds_final_id',
                        'eds_final_begin', 'eds_final_end', 'eds_final_patient_id', 'original_patient_id',
                        'eds_final_birth', 'eds_final_death', 'eds_final_birth_str',
-                       'date_from', 'date_to']
+                       'date_from', 'date_to', 'patient_id_manual', 'stroke_onset_date', 'Referral', 'match_by']
     scales_df.drop(columns_to_drop, axis=1, inplace=True)
     possible_value_ranges_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                             'possible_ranges_for_variables.xlsx')

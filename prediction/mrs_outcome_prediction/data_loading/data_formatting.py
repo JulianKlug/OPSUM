@@ -68,13 +68,13 @@ pd.DataFrame, pd.DataFrame):
     features_df.drop(['Unnamed: 0'], axis=1, inplace=True)
 
     # add a patient id column
-    features_df['patient_id'] = features_df['case_admission_id'].apply(lambda x: x.split('_')[0][:-4])
+    features_df['patient_id'] = features_df['case_admission_id'].apply(lambda x: x.split('_')[0])
 
     X = features_df.copy()
 
     y = pd.DataFrame(X['case_admission_id'].unique(), columns=['case_admission_id'])
 
-    y['patient_id'] = y['case_admission_id'].apply(lambda x: x.split('_')[0][:-4])
+    y['patient_id'] = y['case_admission_id'].apply(lambda x: x.split('_')[0])
     y['outcome'] = y.case_admission_id.apply(lambda x:
                                              outcome_df[outcome_df.case_admission_id == x][outcome].values[0]
                                              if len(outcome_df[outcome_df.case_admission_id == x][outcome].values) > 0

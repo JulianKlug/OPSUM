@@ -9,7 +9,7 @@ columns_to_drop = ['nr', 'patient_id', 'eds_end_4digit', 'eds_manual', 'DOB', 'b
                    'end_date', 'death_date', 'death_hosp', 'eds_final_id',
                    'eds_final_begin', 'eds_final_end', 'eds_final_patient_id',
                    'eds_final_birth', 'eds_final_death', 'eds_final_birth_str',
-                   'date_from', 'date_to']
+                   'date_from', 'date_to', 'patient_id_manual', 'stroke_onset_date', 'Referral', 'match_by']
 
 identification_columns = ['case_admission_id', 'sample_date']
 
@@ -133,8 +133,14 @@ def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_bloo
             raise ValueError(f'{dosage_label} has different units: {units_for_dosage_label}')
 
     # fixing material equivalents and materials to exclude
-    # raise error if pO2, pCO2 or pH come from arterial and venous blood
     for dosage_label in ['pO2', 'pCO2', 'pH']:
+        # for pO2, pCO2 and ph, exclude values with material_label other than 'sga'
+        equalized_reorganised_lab_df = equalized_reorganised_lab_df[~equalized_reorganised_lab_df[
+            (equalized_reorganised_lab_df['dosage_label'].str.contains(dosage_label)) &
+            (equalized_reorganised_lab_df['material_label'] != 'sga')
+        ]]
+
+        # raise error if pO2, pCO2 or pH come from arterial and venous blood
         dosage_label_materials = \
             equalized_reorganised_lab_df[equalized_reorganised_lab_df['dosage_label'].str.contains(dosage_label)][
                 'material_label'].unique()
