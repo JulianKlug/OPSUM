@@ -32,7 +32,7 @@ def preprocess_vitals(vitals_df, verbose=False):
                        'end_date', 'death_date', 'death_hosp', 'eds_final_id',
                        'eds_final_begin', 'eds_final_end', 'eds_final_patient_id',
                        'eds_final_birth', 'eds_final_death', 'eds_final_birth_str',
-                       'date_from', 'date_to', 'patient_value']
+                       'date_from', 'date_to', 'patient_value', 'patient_id_manual', 'stroke_onset_date', 'Referral', 'match_by']
     vitals_df.drop(columns_to_drop, axis=1, inplace=True)
 
     # Preprocessing  temperature
