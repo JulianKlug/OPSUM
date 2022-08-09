@@ -9,6 +9,8 @@
    - Path: ./patient_selection/patient_selection.ipynb
    - Inclusion criteria: > 17y, ischemic stroke, inpatient/non-transferred, not refusing to participate
    - Exclusion criteria: < 12h of hospitalisation, non acute stroke (hospitalisation after 7 days of onset)
+     - Optional exclusion criteria: international transfer (from France), intra-hospital stroke
+
 
 
 
