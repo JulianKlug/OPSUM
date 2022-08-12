@@ -16,7 +16,8 @@ identification_columns = ['case_admission_id', 'sample_date']
 
 # defining equivalent dosage labels
 fibrinogen_equivalent_dosage_labels = ['fibrinogène', 'fibrinogène, antigène']
-creatinine_equivalent_dosage_labels = ['créatinine', 'U-créatinine, colorimétrie', 'créatinine, colorimétrie']
+creatinine_equivalent_dosage_labels = ['créatinine', 'U-créatinine, colorimétrie', 'créatinine, colorimétrie',
+                                       'Creatinine, Piccolo', 'G-Creatinine, ABL', 'Creatinine, iSTAT']
 hematocrit_equivalent_dosage_labels = ['hématocrite', 'G-Sgc-hématocrite, ABL', 'G-Sgv-hématocrite, ABL',
                                        'Hématocrite, Smart 546', 'G-Sgv-hématocrite', 'hématocrite, pocH-100i',
                                        'G-Sgvm-hématocrite, ABL', 'hématocrite, impédancemétrie',
@@ -35,8 +36,8 @@ hemoglobin_equivalent_dosage_labels = ['hémoglobine', 'G-Sga-hémoglobine, ABL'
                                        'G-Sgc-hémoglobine, ABL', 'G-Sgv-hémoglobine']
 thrombocytes_equivalent_dosage_labels = ['thrombocytes', 'Thrombocytes, pocH-100i']
 leucocytes_equivalent_dosage_labels = ['leucocytes', 'Leucocytes, pocH-100i']
-erythrocytes_equivalent_dosage_labels = ['érythrocytes', 'érythrocytes, numération, impédancemétrie']
-inr_equivalent_dosage_labels = ['INR', 'INR, turbodensitométrie']
+erythrocytes_equivalent_dosage_labels = ['érythrocytes', 'érythrocytes, numération, impédancemétrie', 'Erythrocytes, pocH-100i']
+inr_equivalent_dosage_labels = ['INR', 'INR, turbodensitométrie', 'INR, électrochimie']
 crp_equivalent_dosage_labels = ['protéine C-réactive', 'Protéine C-Réactive  (CRP), Piccolo',
                                 'protéine C-réactive (CRP), immunoturbidimétrique latex CP',
                                 'protéine C-réactive, Smart 546']
@@ -54,6 +55,10 @@ doac_xa_equivalent_dosage_labels = ['Activité anti-Xa (DOAC)', 'Activité anti-
                                     'Activité anti-Xa (apixaban)', 'Activité anti-Xa (edoxaban)',
                                     'Activité anti-Xa (Apixaban)']
 ldl_equivalent_dosage_labels = ['LDL cholestérol calculé', 'cholestérol non-HDL']
+lactate_equivalent_dosage_labels = ['lactate', 'G-Sgv-lactate, ABL', 'G-Sga-lactate, ABL']
+osmolality_equivalent_dosage_labels = ['osmolality', 'G-Sgv-mOsm, ABL', 'G-Sga-mOsm, ABL']
+chlore_equivalent_dosage_labels = ['chlore', 'G-Sga-chlorures, ABL', 'G-Sgv-chlorures, ABL']
+pH_equivalent_dosage_labels = ['G-Sga-pH(T), ABL', 'G-Sga-pH(T°), ABL']
 
 equivalence_lists = [fibrinogen_equivalent_dosage_labels, creatinine_equivalent_dosage_labels,
                      hematocrit_equivalent_dosage_labels,
@@ -66,7 +71,8 @@ equivalence_lists = [fibrinogen_equivalent_dosage_labels, creatinine_equivalent_
                      crp_equivalent_dosage_labels, glucose_equivalent_dosage_labels,
                      bilirubine_equivalent_dosage_labels,
                      asat_equivalent_dosage_labels, alat_equivalent_dosage_labels, doac_xa_equivalent_dosage_labels,
-                     ldl_equivalent_dosage_labels]
+                     ldl_equivalent_dosage_labels, lactate_equivalent_dosage_labels, osmolality_equivalent_dosage_labels,
+                     chlore_equivalent_dosage_labels]
 
 dosage_labels_to_exclude = ['érythrocytes agglutinés', 'Type d\'érythrocytes', 'Type des érythrocytes',
                             'érythrocytes en rouleaux',
@@ -79,7 +85,7 @@ dosage_labels_to_exclude = ['érythrocytes agglutinés', 'Type d\'érythrocytes'
 blood_material_equivalents = ['sga', 'sgv', 'sgvm', 'sgc']
 material_to_exclude = ['LCR', 'liqu. pleural', 'épanchement', 'sg cordon', 'liqu. abdo.', 'liqu. ascite', 'liqu.']
 non_numerical_values_to_remove = ['ERROR', 'nan', 'SANS RES.', 'Hémolysé', 'sans resultat',
-                                  'NON REALISE', 'NON INTERPRÉT.', 'COA', 'TAM']
+                                  'NON REALISE', 'NON INTERPRÉT.', 'COA', 'TAM', '****.**', '-100000.0']
 
 
 def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_blood'],
@@ -136,10 +142,11 @@ def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_bloo
     # fixing material equivalents and materials to exclude
     for dosage_label in ['pO2', 'pCO2', 'pH']:
         # for pO2, pCO2 and ph, exclude values with material_label other than 'sga'
-        equalized_reorganised_lab_df = equalized_reorganised_lab_df[~equalized_reorganised_lab_df[
+        equalized_reorganised_lab_df = equalized_reorganised_lab_df.drop(
+            equalized_reorganised_lab_df[
             (equalized_reorganised_lab_df['dosage_label'].str.contains(dosage_label)) &
             (equalized_reorganised_lab_df['material_label'] != 'sga')
-        ]]
+            ].index)
 
         # raise error if pO2, pCO2 or pH come from arterial and venous blood
         dosage_label_materials = \
@@ -178,11 +185,12 @@ def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_bloo
     equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'glucose') & (
                 equalized_reorganised_lab_df['value'] < 0), 'value'] = np.NAN
     equalized_reorganised_lab_df.dropna(subset=['value'], inplace=True)
-    # warn if negative values are still present
-    if len(equalized_reorganised_lab_df[equalized_reorganised_lab_df['value'] < 0]) > 0:
+    # warn if negative values are still present (except base deficit)
+    if len(equalized_reorganised_lab_df[(equalized_reorganised_lab_df['value'] < 0)
+                                        & (~equalized_reorganised_lab_df.dosage_label.str.contains('cBase'))]) > 0:
         warnings.warn('Negative values are present. Check data.')
 
-    # remove all french accents and cedillas
+    # remove all French accents and cedillas
     equalized_reorganised_lab_df = remove_french_accents_and_cedillas_from_dataframe(equalized_reorganised_lab_df)
 
     # restrict to possible value ranges
@@ -257,6 +265,12 @@ def correct_non_numerical_values(equalized_reorganised_lab_df: pd.DataFrame) -> 
     # replace >1.20 value if dosage label is 'activité anti-Xa (HNF)'
     equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'activité anti-Xa (HNF)') & (
             equalized_reorganised_lab_df['value'] == '>1.20'), 'value'] = 1.20 + 0.05 * 1.20
+    # replace >180 value if dosage label is 'sodium'
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'sodium') & (
+            equalized_reorganised_lab_df['value'] == '>180'), 'value'] = 180 + 0.05 * 180
+    # replace >200.00 value if dosage label is 'protéine C-réactive'
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'protéine C-réactive') & (
+            equalized_reorganised_lab_df['value'] == '>200.00'), 'value'] = 200.00 + 0.05 * 200.00
 
     # replace <5 value if dosage label is 'ALAT'
     equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'ALAT') & (
@@ -280,6 +294,12 @@ def correct_non_numerical_values(equalized_reorganised_lab_df: pd.DataFrame) -> 
     # replace <0.30 if label is 'protéine C-réactive'
     equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'protéine C-réactive') & (
             equalized_reorganised_lab_df['value'] == '<0.30'), 'value'] = 0.30 - 0.05 * 0.30
+    # replace '<0.08' if label is 'cholestérol HDL'
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'cholestérol HDL') & (
+        equalized_reorganised_lab_df['value'] == '<0.08'), 'value'] = 0.08 - 0.05 * 0.08
+    # replace '<18' if label is 'créatinine'
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'créatinine') & (
+        equalized_reorganised_lab_df['value'] == '<18'), 'value'] = 18 - 0.05 * 18
 
     return equalized_reorganised_lab_df
 
