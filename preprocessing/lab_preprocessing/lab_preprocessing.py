@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 
+from preprocessing.patient_selection.filter_ehr_patients import filter_ehr_patients
 from preprocessing.utils import remove_french_accents_and_cedillas_from_dataframe, create_ehr_case_identification_column
 
 columns_to_drop = ['nr', 'patient_id', 'eds_end_4digit', 'eds_manual', 'DOB', 'begin_date',
@@ -297,6 +298,7 @@ if __name__ == '__main__':
                  for f in os.listdir(args.data_path)
                  if f.startswith(lab_file_start)]
     lab_df = pd.concat(lab_files, ignore_index=True)
+    lab_df = filter_ehr_patients(lab_df)
     preprocessed_lab_df = preprocess_labs(lab_df, material_to_include=args.material_to_include)
     if args.output_dir is not None:
         preprocessed_lab_df.to_csv(os.path.join(args.output_dir, 'preprocessed_labs.csv'), index=False,
