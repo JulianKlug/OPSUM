@@ -88,6 +88,11 @@ def preprocess_and_save(ehr_data_path:str, stroke_registry_data_path:str, patien
 
 
 if __name__ == '__main__':
+    """
+    Example usage:
+    python preprocessing_pipeline.py -e /Users/jk1/-/-/-/Extraction20220629 -r /Users/jk1/-/-/-/post_hoc_modified/stroke_registry_post_hoc_modified.xlsx 
+    -p /Users/jk1/-/-/high_frequency_data_patient_selection_with_details.csv -o /Users/jk1/-/opsum_prepro_output
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument('-e','--ehr', type=str, help='EHR data path')
     parser.add_argument('-r', '--registry', type=str, help='Registry data path')
