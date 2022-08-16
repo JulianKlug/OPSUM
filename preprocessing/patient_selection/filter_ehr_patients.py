@@ -15,7 +15,7 @@ def filter_ehr_patients(df) -> pd.DataFrame:
     """
 
     # Manual patient id should not be used for matching (manual EDS is always used in this case)
-    if df[(~df.patient_id_manual.isna() & (df.match_by != '0 = eds manual'))]:
+    if df[(~df.patient_id_manual.isna()) & (df.match_by != '0 = eds manual')]:
         raise ValueError('patient_id_manual might be used for matching. Please check data.')
 
 
