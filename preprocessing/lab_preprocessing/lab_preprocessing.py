@@ -5,95 +5,39 @@ import pandas as pd
 
 from preprocessing.patient_selection.filter_ehr_patients import filter_ehr_patients
 from preprocessing.utils import remove_french_accents_and_cedillas_from_dataframe, create_ehr_case_identification_column
+from preprocessing.variable_assembly.variable_selection import restrict_to_selected_variables
 
 columns_to_drop = ['nr', 'patient_id', 'eds_end_4digit', 'eds_manual', 'DOB', 'begin_date',
                    'end_date', 'death_date', 'death_hosp', 'eds_final_id',
                    'eds_final_begin', 'eds_final_end', 'eds_final_patient_id',
                    'eds_final_birth', 'eds_final_death', 'eds_final_birth_str',
-                   'date_from', 'date_to', 'patient_id_manual', 'stroke_onset_date', 'Referral', 'match_by']
+                   'date_from', 'date_to', 'patient_id_manual', 'stroke_onset_date', 'Referral', 'match_by',
+                   'multiple_id']
 
 identification_columns = ['case_admission_id', 'sample_date']
 
 # defining equivalent dosage labels
-fibrinogen_equivalent_dosage_labels = ['fibrinogène', 'fibrinogène, antigène']
-creatinine_equivalent_dosage_labels = ['créatinine', 'U-créatinine, colorimétrie', 'créatinine, colorimétrie',
-                                       'Creatinine, Piccolo', 'G-Creatinine, ABL', 'Creatinine, iSTAT']
-hematocrit_equivalent_dosage_labels = ['hématocrite', 'G-Sgc-hématocrite, ABL', 'G-Sgv-hématocrite, ABL',
-                                       'Hématocrite, Smart 546', 'G-Sgv-hématocrite', 'hématocrite, pocH-100i',
-                                       'G-Sgvm-hématocrite, ABL', 'hématocrite, impédancemétrie',
-                                       'G-Sgv-hématocrite, ABL', 'G-Sga-hématocrite, ABL']
-potassium_equivalent_dosage_labels = ['potassium', 'G-Sga-potassium, ABL', 'G-Sgv-potassium, ABL', 'Potassium, Piccolo',
-                                      'potassium, potentiométrie', 'G-Sgvm-potassium, ABL', 'G-Sgc-potassium, ABL',
-                                      'G-Sgv-potassium', 'U-potassium, potentiométrie indirecte']
-sodium_equivalent_dosage_labels = ['sodium', 'G-Sga-sodium, ABL', 'G-Sgv-sodium, ABL', 'sodium, potentiométrie',
-                                   'Sodium, Piccolo', 'G-Sgvm-sodium, ABL', 'U-sodium, potentiométrie indirecte',
-                                   'G-Sgc-sodium, ABL', 'G-Sgv-sodium']
-urea_equivalent_dosage_labels = ['urée', 'urée, colorimétrie', 'U-urée, colorimétrie']
-hba1c_equivalent_dosage_labels = ['hémoglobine glyquée',
-                                  'hémoglobine glyquée (HbA1c), immunologique d\x92agglutination latex']
-hemoglobin_equivalent_dosage_labels = ['hémoglobine', 'G-Sga-hémoglobine, ABL', 'G-Sgv-hémoglobine, ABL',
-                                       'hémoglobine, pocH-100i', 'hémoglobine, HemoCue 201', 'G-Sgvm-hémoglobine, ABL',
-                                       'G-Sgc-hémoglobine, ABL', 'G-Sgv-hémoglobine']
-thrombocytes_equivalent_dosage_labels = ['thrombocytes', 'Thrombocytes, pocH-100i']
-leucocytes_equivalent_dosage_labels = ['leucocytes', 'Leucocytes, pocH-100i']
-erythrocytes_equivalent_dosage_labels = ['érythrocytes', 'érythrocytes, numération, impédancemétrie', 'Erythrocytes, pocH-100i']
-inr_equivalent_dosage_labels = ['INR', 'INR, turbodensitométrie', 'INR, électrochimie']
-crp_equivalent_dosage_labels = ['protéine C-réactive', 'Protéine C-Réactive  (CRP), Piccolo',
-                                'protéine C-réactive (CRP), immunoturbidimétrique latex CP',
-                                'protéine C-réactive, Smart 546']
-glucose_equivalent_dosage_labels = ['glucose', 'G-Sga-glucose, ABL', 'G-Sgv-glucose, ABL', 'Glucose',
-                                    'Glucose, Piccolo', 'glucose, PAP', 'G-Sgvm-glucose, ABL', 'G-Sgv-glucose',
-                                    'G-Sgc-glucose, ABL', 'U-glucose, PAP colorimétrie']
-bilirubine_equivalent_dosage_labels = ['bilirubine totale', 'G-Sga-bilirubine totale, ABL',
-                                       'G-Sgv-bilirubine totale, ABL', 'Bilirubine totale, Piccolo',
-                                       'bilirubine totale, colorimétrie', 'G-Sgvm-bilirubine totale, ABL']
-asat_equivalent_dosage_labels = ['ASAT', 'Aspartate aminotransférase (ASAT), Piccolo',
-                                 'aspartate aminotransférase (ASAT), colorimétrie']
-alat_equivalent_dosage_labels = ['ALAT', 'Alanine aminotransférase (ALAT), Piccolo',
-                                 'alanine aminotransférase (ALAT), colorimétrie']
-doac_xa_equivalent_dosage_labels = ['Activité anti-Xa (DOAC)', 'Activité anti-Xa (rivaroxaban)',
-                                    'Activité anti-Xa (apixaban)', 'Activité anti-Xa (edoxaban)',
-                                    'Activité anti-Xa (Apixaban)']
-ldl_equivalent_dosage_labels = ['LDL cholestérol calculé', 'cholestérol non-HDL']
-lactate_equivalent_dosage_labels = ['lactate', 'G-Sgv-lactate, ABL', 'G-Sga-lactate, ABL']
-osmolality_equivalent_dosage_labels = ['osmolality', 'G-Sgv-mOsm, ABL', 'G-Sga-mOsm, ABL']
-chlore_equivalent_dosage_labels = ['chlore', 'G-Sga-chlorures, ABL', 'G-Sgv-chlorures, ABL']
-pH_equivalent_dosage_labels = ['G-Sga-pH(T), ABL', 'G-Sga-pH(T°), ABL']
+equivalent_labels_path = os.path.join(os.path.dirname(__file__), 'equivalent_labels.csv')
+# defining desired units of measure
+dosage_units_path = os.path.join(os.path.dirname(__file__), 'dosage_units.csv')
+# defining selected variables path (path to the variable selection file)
+selected_variables_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'variable_assembly/selected_variables.xlsx')
 
-equivalence_lists = [fibrinogen_equivalent_dosage_labels, creatinine_equivalent_dosage_labels,
-                     hematocrit_equivalent_dosage_labels,
-                     potassium_equivalent_dosage_labels, sodium_equivalent_dosage_labels,
-                     urea_equivalent_dosage_labels,
-                     hba1c_equivalent_dosage_labels, hemoglobin_equivalent_dosage_labels,
-                     thrombocytes_equivalent_dosage_labels,
-                     leucocytes_equivalent_dosage_labels, erythrocytes_equivalent_dosage_labels,
-                     inr_equivalent_dosage_labels,
-                     crp_equivalent_dosage_labels, glucose_equivalent_dosage_labels,
-                     bilirubine_equivalent_dosage_labels,
-                     asat_equivalent_dosage_labels, alat_equivalent_dosage_labels, doac_xa_equivalent_dosage_labels,
-                     ldl_equivalent_dosage_labels, lactate_equivalent_dosage_labels, osmolality_equivalent_dosage_labels,
-                     chlore_equivalent_dosage_labels, pH_equivalent_dosage_labels]
+blood_material_equivalents = ['sga', 'sgv', 'sgvm', 'sgc', 'sgv ponction', 'sgv cathéter', 'sga cathéter', 'cathéter artériel', 'cathéter veineux', 'plasma', 'Sang', 'sg cordon']
 
-dosage_labels_to_exclude = ['érythrocytes agglutinés', 'Type d\'érythrocytes', 'Type des érythrocytes',
-                            'érythrocytes en rouleaux',
-                            'Cristaux cholestérol',
-                            'potassium débit', 'urée débit', 'sodium débit', 'glucose débit',
-                            'protéine C-réactive, POCT',
-                            'activité anti-Xa (HBPM), autre posologie',
-                            'activité anti-Xa (HBPM), thérapeutique, 1x /jour']
+unit_of_measure_equivalents = [['UI/ml', 'U/ml']]
 
-blood_material_equivalents = ['sga', 'sgv', 'sgvm', 'sgc']
-material_to_exclude = ['LCR', 'liqu. pleural', 'épanchement', 'sg cordon', 'liqu. abdo.', 'liqu. ascite', 'liqu.']
 non_numerical_values_to_remove = ['ERROR', 'nan', 'SANS RES.', 'Hémolysé', 'sans resultat',
-                                  'NON REALISE', 'NON INTERPRÉT.', 'COA', 'TAM', '****.**', '-100000.0']
+                                  'NON REALISE', 'NON INTERPRÉT.', 'COA', 'TAM', '****.**', '-100000.0', '----']
 
 
-def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_blood'],
+def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_blood'], log_dir:str = '',
                     verbose: bool = True) -> pd.DataFrame:
     """
     Preprocess the labs dataframe
     :param lab_df:
     :param material_to_include: list of materials to include where material is one of the following: 'any_blood', 'urine'
+    :param log_dir: directory where to save the log file
     :param verbose: print preprocessing safety details
     :return:
     """
@@ -102,32 +46,90 @@ def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_bloo
 
     lab_df.drop(columns_to_drop, axis=1, inplace=True)
 
-    lab_names = set([c.split('_')[0] for c in lab_df.columns if c not in identification_columns])
-    new_lab_column_headers = set(
-        ['_'.join(c.split('_')[1:]) for c in lab_df.columns if c not in identification_columns])
+    # After reorganisation of df, final columns are:
+    target_structure_columns = ['case_admission_id','sample_date','analyse_label','dosage_label','material_label','unit_of_measure','value','lower_limit','upper_limit']
+    # when coming from another structure, there will be an extra lab_name column
 
-    print('Labs measured:', lab_names)
+    # verify that target_structure_columns is a subset of lab_df.columns
+    if set(target_structure_columns).issubset(lab_df.columns):
+        reorganised_lab_df = lab_df
 
-    # split lab df into individual lab dfs for every lab name
-    lab_df_split_by_lab_name = []
+    else:
+        # Reorganize from individual lab columns to a structure with common columns
+        lab_names = set([c.split('_')[0] for c in lab_df.columns if c not in identification_columns])
+        print('Labs measured:', lab_names)
 
-    for _, lab_name in enumerate(lab_names):
-        selected_columns = identification_columns + [c for c in lab_df.columns if c.split('_')[0] == lab_name]
-        individual_lab_df = lab_df[selected_columns].dropna(subset=[f'{lab_name}_value'])
-        individual_lab_df.columns = identification_columns + ['_'.join(c.split('_')[1:]) for c in
-                                                              individual_lab_df.columns if c.startswith(lab_name)]
-        individual_lab_df['lab_name'] = lab_name
-        lab_df_split_by_lab_name.append(individual_lab_df)
+        # split lab df into individual lab dfs for every lab name
+        lab_df_split_by_lab_name = []
 
-    reorganised_lab_df = pd.concat(lab_df_split_by_lab_name, ignore_index=True)
+        for _, lab_name in enumerate(lab_names):
+            selected_columns = identification_columns + [c for c in lab_df.columns if c.split('_')[0] == lab_name]
+            individual_lab_df = lab_df[selected_columns].dropna(subset=[f'{lab_name}_value'])
+            individual_lab_df.columns = identification_columns + ['_'.join(c.split('_')[1:]) for c in
+                                                                  individual_lab_df.columns if c.startswith(lab_name)]
+            individual_lab_df['lab_name'] = lab_name
+            lab_df_split_by_lab_name.append(individual_lab_df)
 
-    equalized_reorganised_lab_df = reorganised_lab_df.copy()
-    for equivalence_list in equivalence_lists:
+        reorganised_lab_df = pd.concat(lab_df_split_by_lab_name, ignore_index=True)
+
+    equalized_reorganised_lab_df = reorganised_lab_df
+
+    ### PROCESSING LABELS ###
+    # Align equivalent labels to a unified label
+    equivalent_labels_df = pd.read_csv(equivalent_labels_path)
+    for column in equivalent_labels_df.columns:
+        equivalence_list = equivalent_labels_df[f'{column}'].dropna().values
         equalized_reorganised_lab_df.loc[
-            reorganised_lab_df['dosage_label'].isin(equivalence_list[1:]), 'dosage_label'] = equivalence_list[0]
+            equalized_reorganised_lab_df['dosage_label'].isin(equivalence_list[1:]), 'dosage_label'] = equivalence_list[
+            0]
+
+    # Restrict to selected variables
+    selected_variables = pd.read_excel(selected_variables_path)['included']
+    dropped_dosage_labels = equalized_reorganised_lab_df[~equalized_reorganised_lab_df.dosage_label.isin(selected_variables)].dosage_label.unique()
+    equalized_reorganised_lab_df = equalized_reorganised_lab_df.drop(
+        equalized_reorganised_lab_df[~equalized_reorganised_lab_df.dosage_label.isin(selected_variables)].index)
+    included_dosage_labels = equalized_reorganised_lab_df.dosage_label.unique()
+
+    ### PROCESSING MATERIALS ###
+    # Retain only selected materials
+    equalized_reorganised_lab_df.loc[
+        reorganised_lab_df['material_label'].isin(blood_material_equivalents), 'material_label'] = 'any_blood'
+    excluded_material = list(set(equalized_reorganised_lab_df.material_label.unique()) - set(material_to_include))
 
     equalized_reorganised_lab_df = equalized_reorganised_lab_df[
-        ~equalized_reorganised_lab_df['dosage_label'].isin(dosage_labels_to_exclude)]
+        equalized_reorganised_lab_df['material_label'].isin(material_to_include)]
+
+    # fixing material equivalents and materials to exclude
+    for dosage_label in ['pO2', 'pCO2', 'pH']:
+        # for pO2, pCO2 and ph, exclude values with material_label other than 'sga'
+        equalized_reorganised_lab_df = equalized_reorganised_lab_df.drop(
+            equalized_reorganised_lab_df[
+                (equalized_reorganised_lab_df['dosage_label'].str.contains(dosage_label)) &
+                (equalized_reorganised_lab_df['material_label'] != 'sga')
+                ].index)
+
+        # raise error if pO2, pCO2 or pH come from arterial and venous blood
+        dosage_label_materials = \
+            equalized_reorganised_lab_df[equalized_reorganised_lab_df['dosage_label'].str.contains(dosage_label)][
+                'material_label'].unique()
+        if 'sga' in dosage_label_materials and len(dosage_label_materials) > 1:
+            raise ValueError(f'{dosage_label} has arterial and other materials: {dosage_label_materials}')
+
+    ### PROCESSING UNITS OF MEASURE ###
+    # Convert equivalent units of measure to a unified unit of measure
+    for units_equivalence_list in unit_of_measure_equivalents:
+        equalized_reorganised_lab_df.loc[
+            equalized_reorganised_lab_df['unit_of_measure'].isin(units_equivalence_list[1:]), 'unit_of_measure'] = \
+            units_equivalence_list[0]
+
+    # Only retain certain units for materials with multiple units
+    dosage_units_df = pd.read_csv(dosage_units_path)
+    for dosage_label in dosage_units_df.columns:
+        equalized_reorganised_lab_df.drop(
+            equalized_reorganised_lab_df[
+                  (equalized_reorganised_lab_df['dosage_label'] == dosage_label)
+                  & (~equalized_reorganised_lab_df.unit_of_measure.isin(dosage_units_df[dosage_label]))
+                  ].index, inplace=True)
 
     # check that units correspond
     for dosage_label in equalized_reorganised_lab_df['dosage_label'].unique():
@@ -139,30 +141,8 @@ def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_bloo
             warnings.warn(f'{dosage_label} has different units: {units_for_dosage_label}')
             raise ValueError(f'{dosage_label} has different units: {units_for_dosage_label}')
 
-    # fixing material equivalents and materials to exclude
-    for dosage_label in ['pO2', 'pCO2', 'pH']:
-        # for pO2, pCO2 and ph, exclude values with material_label other than 'sga'
-        equalized_reorganised_lab_df = equalized_reorganised_lab_df.drop(
-            equalized_reorganised_lab_df[
-            (equalized_reorganised_lab_df['dosage_label'].str.contains(dosage_label)) &
-            (equalized_reorganised_lab_df['material_label'] != 'sga')
-            ].index)
 
-        # raise error if pO2, pCO2 or pH come from arterial and venous blood
-        dosage_label_materials = \
-            equalized_reorganised_lab_df[equalized_reorganised_lab_df['dosage_label'].str.contains(dosage_label)][
-                'material_label'].unique()
-        if 'sga' in dosage_label_materials and len(dosage_label_materials) > 1:
-            raise ValueError(f'{dosage_label} has arterial and other materials: {dosage_label_materials}')
-
-    equalized_reorganised_lab_df.loc[
-        reorganised_lab_df['material_label'].isin(blood_material_equivalents), 'material_label'] = 'any_blood'
-    equalized_reorganised_lab_df = equalized_reorganised_lab_df[
-        ~equalized_reorganised_lab_df['material_label'].isin(material_to_exclude)]
-    equalized_reorganised_lab_df = equalized_reorganised_lab_df[
-        equalized_reorganised_lab_df['material_label'].isin(material_to_include)]
-
-
+    ### PROCESSING VALUES ###
     # correct non numeric values
     equalized_reorganised_lab_df = correct_non_numerical_values(equalized_reorganised_lab_df)
     # remove non numerical values in value column
@@ -204,18 +184,44 @@ def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_bloo
                                          & (~equalized_reorganised_lab_df['value'].between(
                                              possible_value_ranges_for_variable['Min'].values[0],
                                              possible_value_ranges_for_variable['Max'].values[0])), 'value'] = np.NAN
+
+    n_observations_out_ouf_range = equalized_reorganised_lab_df["value"].isna().sum()
     if verbose:
-        print(f'Excluding {equalized_reorganised_lab_df["value"].isna().sum()} observations because out of range')
+        print(f'Excluding {n_observations_out_ouf_range} observations because out of range')
     equalized_reorganised_lab_df.dropna(subset=['value'], inplace=True)
 
 
     # get mean number of values per dosage label patient admission id
     median_observations_per_case_admission_id = \
         equalized_reorganised_lab_df.groupby(['case_admission_id', 'dosage_label'])['value'].count().reset_index()
+    median_observations_per_case_admission_id_df = median_observations_per_case_admission_id.groupby('dosage_label').median()
+    median_observations_per_case_admission_id_df.rename(columns={'value': 'median_observations_per_case_admission_id'}, inplace=True)
+    descriptive_stats_df = equalized_reorganised_lab_df.groupby('dosage_label')['value'].describe()
 
     if verbose:
-        print(median_observations_per_case_admission_id.groupby('dosage_label').median())
-        print(equalized_reorganised_lab_df.groupby('dosage_label')['value'].describe())
+        print('Median observations per case admission id:')
+        print(median_observations_per_case_admission_id_df)
+        print('Descriptive statistics:')
+        print(descriptive_stats_df)
+
+    if log_dir != '':
+        data_to_log = [included_dosage_labels, dropped_dosage_labels,
+                       material_to_include, excluded_material,
+                       [n_observations_out_ouf_range]
+                       ]
+        log_columns = ['included_dosage_labels', 'dropped_dosage_labels',
+                      'included_material', 'excluded_material',
+                      'n_observations_out_ouf_range']
+        log_dataframe = pd.DataFrame(data_to_log).T
+        log_dataframe.columns = log_columns
+        log_dataframe = pd.concat([log_dataframe, possible_value_ranges], axis=1)
+        log_dataframe.to_csv(os.path.join(log_dir, 'lab_preprocessing_log.csv'), index=False)
+
+        median_observations_per_case_admission_id_df.to_csv(os.path.join(log_dir, 'median_observations_per_case_admission_id.csv'), index=True)
+        descriptive_stats_df.to_csv(os.path.join(log_dir, 'descriptive_stats.csv'), index=True)
+
+
+
 
     return equalized_reorganised_lab_df
 
@@ -315,12 +321,12 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--patient_selection_path', help='Path to patient selection file', required=False, default='')
     args = parser.parse_args()
     lab_file_start = 'labo'
-    lab_files = [pd.read_csv(os.path.join(args.data_path, f), delimiter=';', encoding='utf-8')
+    lab_files = [pd.read_csv(os.path.join(args.data_path, f), delimiter=';', encoding='utf-8', dtype=str)
                  for f in os.listdir(args.data_path)
                  if f.startswith(lab_file_start)]
     lab_df = pd.concat(lab_files, ignore_index=True)
     lab_df = filter_ehr_patients(lab_df, args.patient_selection_path)
-    preprocessed_lab_df = preprocess_labs(lab_df, material_to_include=args.material_to_include)
+    preprocessed_lab_df = preprocess_labs(lab_df, material_to_include=args.material_to_include, log_dir=args.output_dir)
     if args.output_dir is not None:
         preprocessed_lab_df.to_csv(os.path.join(args.output_dir, 'preprocessed_labs.csv'), index=False,
                                    encoding='utf-8')

@@ -44,7 +44,7 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
     lab_file_start = 'labo'
     lab_df = load_data_from_main_dir(raw_data_path, lab_file_start)
     lab_df = filter_ehr_patients(lab_df, patient_selection_path)
-    preprocessed_lab_df = preprocess_labs(lab_df, verbose=verbose)
+    preprocessed_lab_df = preprocess_labs(lab_df, verbose=verbose, log_dir=log_dir)
     preprocessed_lab_df = preprocessed_lab_df[['case_admission_id', 'sample_date', 'dosage_label', 'value']]
     preprocessed_lab_df.rename(columns={'dosage_label': 'sample_label'}, inplace=True)
     preprocessed_lab_df['source'] = 'EHR'
