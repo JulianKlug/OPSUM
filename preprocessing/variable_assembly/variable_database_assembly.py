@@ -38,12 +38,12 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
     # load eds data
     eds_df = pd.read_csv(os.path.join(raw_data_path, 'eds_j1.csv'), delimiter=';', encoding='utf-8',
                          dtype=str)
-    eds_df = filter_ehr_patients(eds_df)
+    eds_df = filter_ehr_patients(eds_df, patient_selection_path)
 
     # Load and preprocess lab data
     lab_file_start = 'labo'
     lab_df = load_data_from_main_dir(raw_data_path, lab_file_start)
-    lab_df = filter_ehr_patients(lab_df)
+    lab_df = filter_ehr_patients(lab_df, patient_selection_path)
     preprocessed_lab_df = preprocess_labs(lab_df, verbose=verbose)
     preprocessed_lab_df = preprocessed_lab_df[['case_admission_id', 'sample_date', 'dosage_label', 'value']]
     preprocessed_lab_df.rename(columns={'dosage_label': 'sample_label'}, inplace=True)
@@ -52,7 +52,7 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
     # Load and preprocess scales data
     scales_file_start = 'scale'
     scales_df = load_data_from_main_dir(raw_data_path, scales_file_start)
-    scales_df = filter_ehr_patients(scales_df)
+    scales_df = filter_ehr_patients(scales_df, patient_selection_path)
     scales_df = preprocess_scales(scales_df, eds_df, verbose=verbose)
     scales_df = scales_df[['scale', 'event_date', 'score', 'case_admission_id']]
     scales_df.rename(columns={'scale': 'sample_label', 'score': 'value', 'event_date': 'sample_date'}, inplace=True)
@@ -61,7 +61,7 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
     # Load and preprocess ventilation data
     ventilation_file_start = 'ventilation'
     ventilation_df = load_data_from_main_dir(raw_data_path, ventilation_file_start)
-    ventilation_df = filter_ehr_patients(ventilation_df)
+    ventilation_df = filter_ehr_patients(ventilation_df, patient_selection_path)
     fio2_df, spo2_df = preprocess_ventilation(ventilation_df, eds_df, verbose=verbose)
     fio2_df = fio2_df[['case_admission_id', 'FIO2', 'datetime']]
     fio2_df['sample_label'] = 'FIO2'
@@ -75,7 +75,7 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
     # Load and preprocess vitals data
     vitals_file_start = 'patientvalue'
     vitals_df = load_data_from_main_dir(raw_data_path, vitals_file_start)
-    vitals_df = filter_ehr_patients(vitals_df)
+    vitals_df = filter_ehr_patients(vitals_df, patient_selection_path)
     vitals_df = preprocess_vitals(vitals_df, verbose=verbose)
     vitals_df = vitals_df[['case_admission_id', 'datetime', 'vital_value', 'vital_name']]
     vitals_df.rename(columns={'vital_name': 'sample_label', 'vital_value': 'value', 'datetime': 'sample_date'},

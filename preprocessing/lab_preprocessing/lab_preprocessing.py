@@ -312,13 +312,14 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output_dir', help='Directory to save output', required=False, default=None)
     parser.add_argument('-m', '--material_to_include', help='Material to include', required=False,
                         default=['any_blood'])
+    parser.add_argument('-p', '--patient_selection_path', help='Path to patient selection file', required=False, default='')
     args = parser.parse_args()
     lab_file_start = 'labo'
     lab_files = [pd.read_csv(os.path.join(args.data_path, f), delimiter=';', encoding='utf-8')
                  for f in os.listdir(args.data_path)
                  if f.startswith(lab_file_start)]
     lab_df = pd.concat(lab_files, ignore_index=True)
-    lab_df = filter_ehr_patients(lab_df)
+    lab_df = filter_ehr_patients(lab_df, args.patient_selection_path)
     preprocessed_lab_df = preprocess_labs(lab_df, material_to_include=args.material_to_include)
     if args.output_dir is not None:
         preprocessed_lab_df.to_csv(os.path.join(args.output_dir, 'preprocessed_labs.csv'), index=False,
