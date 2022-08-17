@@ -12,6 +12,8 @@
      - Optional exclusion criteria: international transfer (from France), intra-hospital stroke
 
 
+3. Verify EHR extraction 
+   - Path: ./ehr_extraction_verification 
 
 
 ### A. Feature preprocessing
