@@ -2,6 +2,7 @@ import pandas as pd
 import os
 import numpy as np
 
+from preprocessing.patient_selection.filter_ehr_patients import filter_ehr_patients
 from preprocessing.utils import create_ehr_case_identification_column, correct_overwritten_patient_id
 
 
@@ -21,7 +22,7 @@ def restrict_variable_to_possible_ranges(df, variable_name, possible_value_range
     clean_df = clean_df.dropna(subset=['score'])
     return clean_df, excluded_df
 
-def preprocess_scales(scales_df, eds_df, verbose=False):
+def preprocess_scales(scales_df, eds_df, patient_selection_path, verbose=False):
     """
     Preprocesses the scales dataframe.
     eds_df is necessary as patient_id in scales_df was overwritten by eds_final_patient_id
@@ -33,6 +34,10 @@ def preprocess_scales(scales_df, eds_df, verbose=False):
 
     # Correct for overwritten patient_id
     scales_df = correct_overwritten_patient_id(scales_df, eds_df)
+
+    # Filter out patients that are not in the patient_selection
+    # Filtering has to be done after correcting for overwritten patient_id
+    scales_df = filter_ehr_patients(scales_df, patient_selection_path)
 
     scales_df['case_admission_id'] = create_ehr_case_identification_column(scales_df)
 
