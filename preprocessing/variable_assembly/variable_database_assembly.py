@@ -52,7 +52,7 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
     # Load and preprocess scales data
     scales_file_start = 'scale'
     scales_df = load_data_from_main_dir(raw_data_path, scales_file_start)
-    scales_df = filter_ehr_patients(scales_df, patient_selection_path)
+    # Filtering out patients not in patient selection has to be done after preprocessing for scale data
     scales_df = preprocess_scales(scales_df, eds_df, verbose=verbose)
     scales_df = scales_df[['scale', 'event_date', 'score', 'case_admission_id']]
     scales_df.rename(columns={'scale': 'sample_label', 'score': 'value', 'event_date': 'sample_date'}, inplace=True)
