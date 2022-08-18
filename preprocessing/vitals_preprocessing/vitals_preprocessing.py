@@ -17,6 +17,7 @@ def restrict_variable_to_possible_ranges(df, variable_name, possible_value_range
     if verbose:
         print(f'Excluding {clean_df[variable_name].isna().sum()} observations because out of range')
     excluded_df = df[clean_df[variable_name].isna()]
+    # TODO verify this dropna (nan could be in any column)
     clean_df = clean_df.dropna()
     return clean_df, excluded_df
 
@@ -38,6 +39,7 @@ def preprocess_vitals(vitals_df, verbose=False):
     # Preprocessing  temperature
     if verbose:
         print('Preprocessing temperature')
+    # TODO verify this dropna (nan could be in any column)
     temperature_df = vitals_df[['case_admission_id', 'datetime', 'temperature', 'temp_unit']].dropna()
     # convert ',' to '.' in temperature column
     temperature_df['temperature'] = temperature_df['temperature'].astype(str).apply(lambda t: t.replace(',', '.'))
@@ -52,6 +54,7 @@ def preprocess_vitals(vitals_df, verbose=False):
     # Preprocessing    systolic    blood    pressure
     if verbose:
         print('Preprocessing systolic blood pressure')
+    # TODO verify this dropna (nan could be in any column)
     sys_bp_df = vitals_df[['case_admission_id', 'datetime', 'sys', 'sys_unit']].dropna()
     sys_bp_df['sys'] = pd.to_numeric(sys_bp_df['sys'], errors='coerce')
     sys_bp_df, _ = restrict_variable_to_possible_ranges(sys_bp_df, 'sys', possible_value_ranges,
@@ -62,6 +65,7 @@ def preprocess_vitals(vitals_df, verbose=False):
     # Preprocessing    diastolic blood    pressure
     if verbose:
         print('Preprocessing diastolic blood pressure')
+    # TODO verify this dropna (nan could be in any column)
     dia_bp_df = vitals_df[['case_admission_id', 'datetime', 'dia', 'dia_unit']].dropna()
     dia_bp_df['dia'] = pd.to_numeric(dia_bp_df['dia'], errors='coerce')
     dia_bp_df, _ = restrict_variable_to_possible_ranges(dia_bp_df, 'dia', possible_value_ranges,
@@ -72,6 +76,7 @@ def preprocess_vitals(vitals_df, verbose=False):
     # Preprocessing    mean blood    pressure
     if verbose:
         print('Preprocessing mean blood pressure')
+    # TODO verify this dropna (nan could be in any column)
     mean_bp_df = vitals_df[['case_admission_id', 'datetime', 'mean', 'mean_unit']].dropna()
     mean_bp_df['mean'] = pd.to_numeric(mean_bp_df['mean'], errors='coerce')
     mean_bp_df, _ = restrict_variable_to_possible_ranges(mean_bp_df, 'mean', possible_value_ranges,
@@ -82,6 +87,7 @@ def preprocess_vitals(vitals_df, verbose=False):
     # Preprocessing    heart rate
     if verbose:
         print('Preprocessing heart rate')
+    # TODO verify this dropna (nan could be in any column)
     pulse_df = vitals_df[['case_admission_id', 'datetime', 'pulse', 'pulse_unit']].dropna()
     pulse_df['pulse'] = pulse_df['pulse'].astype(str).apply(lambda p: p.replace(',', '.'))
     pulse_df = pulse_df[pulse_df['pulse'] != '.']
@@ -95,6 +101,7 @@ def preprocess_vitals(vitals_df, verbose=False):
     # Preprocessing    respiratory rate
     if verbose:
         print('Preprocessing respiratory rate')
+    # TODO verify this dropna (nan could be in any column)
     resp_rate_df = vitals_df[['case_admission_id', 'datetime', 'fr', 'fr_unit']].dropna()
     resp_rate_df['fr'] = resp_rate_df['fr'].astype(str).apply(lambda r: r.replace(',', '.'))
     resp_rate_df = resp_rate_df[resp_rate_df['fr'] != '.']
@@ -108,6 +115,7 @@ def preprocess_vitals(vitals_df, verbose=False):
     # Preprocessing    oxygen    saturation
     if verbose:
         print('Preprocessing oxygen saturation')
+    # TODO verify this dropna (nan could be in any column)
     spo2_df = vitals_df[['case_admission_id', 'datetime', 'spo2', 'spo2_unit']].dropna()
     spo2_df['spo2'] = pd.to_numeric(spo2_df['spo2'], errors='coerce')
     spo2_df, _ = restrict_variable_to_possible_ranges(spo2_df, 'spo2', possible_value_ranges,
@@ -118,6 +126,7 @@ def preprocess_vitals(vitals_df, verbose=False):
     # Preprocessing    weight
     if verbose:
         print('Preprocessing weight')
+    # TODO verify this dropna (nan could be in any column)
     weight_df = vitals_df[['case_admission_id', 'datetime', 'weight', 'weight_unit']].dropna()
     weight_df['weight'] = pd.to_numeric(weight_df['weight'], errors='coerce')
     weight_df, _ = restrict_variable_to_possible_ranges(weight_df, 'weight', possible_value_ranges,

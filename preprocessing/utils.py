@@ -10,6 +10,30 @@ def remove_french_accents_and_cedillas_from_dataframe(df: pd.DataFrame) -> pd.Da
     return df
 
 
+def safe_conversion_to_numeric(df, column):
+    remaining_non_numerical_values = df[pd.to_numeric(df[column], errors='coerce').isnull()][column].unique()
+    if len(remaining_non_numerical_values) > 0:
+        raise ValueError(f'Remaining non-numerical values: {remaining_non_numerical_values}')
+    df[column] = pd.to_numeric(df[column], errors='coerce')
+    return df
+
+
+def restrict_variable_to_possible_ranges(df, variable_name, possible_value_ranges, verbose=False):
+    """
+    Restricts a variable to the possible ranges in the possible_value_ranges dataframe.
+    """
+    variable_range = possible_value_ranges[possible_value_ranges['variable_label'] == variable_name]
+    variable_range = variable_range.iloc[0]
+    clean_df = df.copy()
+    clean_df[variable_name] = df[variable_name].apply(
+        lambda x: np.nan if x < variable_range['Min'] or x > variable_range['Max'] else x)
+    if verbose:
+        print(f'Excluding {clean_df[variable_name].isna().sum()} observations because out of range')
+    excluded_df = df[clean_df[variable_name].isna()]
+    clean_df = clean_df.dropna(axis=0, subset=[variable_name])
+    return clean_df, excluded_df
+
+
 def create_ehr_case_identification_column(df):
     # Identify each case with case id (patient id + eds last 4 digits)
     case_identification_column = df['patient_id'].astype(str) \
