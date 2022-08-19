@@ -139,7 +139,6 @@ def preprocess_admission_data(stroke_registry_df: pd.DataFrame, verbose=False) -
                                 var_name='sample_label')
 
     # drop rows with missing values
-    # TODO verify (nan could be in any column)?
-    admission_data_df = admission_data_df.dropna()
+    admission_data_df = admission_data_df.dropna(subset=['value'])
 
     return admission_data_df
