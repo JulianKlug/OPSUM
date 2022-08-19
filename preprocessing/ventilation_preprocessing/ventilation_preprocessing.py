@@ -19,9 +19,19 @@ variables_to_drop = ['air', 'air_unit', 'peep', 'peep_unit', 'startingFlow', 'st
                      'trigger_insp', 'trigger_insp_unit', 'duration', 'duration_unit']
 
 
-def preprocess_ventilation(ventilation_df, eds_df, verbose=False):
+def preprocess_ventilation(ventilation_df, first_sample_date_df, verbose=False):
+    """
+    Preprocesses the ventilation dataframe.
+    First sample dates from other EHR date is needed to infer the time of the first sample for FiO2 inference
+
+    Arguments:
+        ventilation_df: Dataframe with ventilation data
+        first_sample_date_df: Dataframe with first sample dates from other EHR date (case_admission_id, first_sample_date)
+        verbose: If True, prints some information about the preprocessing
+    Returns:
+        Dataframe with preprocessed ventilation data
+    """
     ventilation_df['case_admission_id'] = create_ehr_case_identification_column(ventilation_df)
-    eds_df['case_admission_id'] = create_ehr_case_identification_column(eds_df)
 
     ventilation_df.drop(columns_to_drop, axis=1, inplace=True)
 
@@ -68,12 +78,12 @@ def preprocess_ventilation(ventilation_df, eds_df, verbose=False):
     fio2_df, _ = restrict_variable_to_possible_ranges(fio2_df, 'FIO2', possible_value_ranges, verbose=verbose)
 
     # Set fIo2 to 21% if no value exists for a specific case_admission_id
-    case_admission_ids_with_no_fio2 = set(eds_df['case_admission_id']) - set(fio2_df['case_admission_id'])
-    room_air_fio2_df = pd.DataFrame(columns=['case_admission_id', 'FIO2', 'FIO2_unit', 'datetime'])
-    room_air_fio2_df['case_admission_id'] = pd.Series(list(case_admission_ids_with_no_fio2))
+    case_admission_ids_with_no_fio2 = set(first_sample_date_df['case_admission_id']) - set(fio2_df['case_admission_id'])
+    room_air_fio2_df = first_sample_date_df[
+        first_sample_date_df.case_admission_id.isin(case_admission_ids_with_no_fio2)]
     room_air_fio2_df['FIO2'] = 21
     room_air_fio2_df['FIO2_unit'] = '%'
-    room_air_fio2_df['datetime'] = eds_df['eds_final_begin'].fillna(eds_df['begin_date'])
+    room_air_fio2_df.rename(columns={'first_sample_date': 'datetime'}, inplace=True)
     fio2_df = pd.concat([fio2_df, room_air_fio2_df])
 
     if verbose:
