@@ -24,6 +24,18 @@ def load_data_from_main_dir(data_path: str, file_start: str) -> pd.DataFrame:
     return pd.concat(files, ignore_index=True)
 
 
+def get_first_sample_date(df):
+    datatime_format = '%d.%m.%Y %H:%M'
+    df['sample_date_dt'] = pd.to_datetime(df['sample_date'], format=datatime_format)
+    first_sample_date = df.groupby('case_admission_id').sample_date_dt.min()
+    df.drop(columns=['sample_date_dt'], inplace=True)
+    first_sample_date = first_sample_date.reset_index(level=0)
+    first_sample_date.rename(columns={'sample_date_dt': 'first_sample_date'}, inplace=True)
+    first_sample_date['first_sample_date'] = first_sample_date['first_sample_date'].dt.strftime(datatime_format)
+
+    return first_sample_date
+
+
 def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: str,
                                patient_selection_path: str, verbose: bool = False,
                                use_stroke_registry_data: bool = True,
@@ -53,24 +65,10 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
     scales_file_start = 'scale'
     scales_df = load_data_from_main_dir(raw_data_path, scales_file_start)
     # Filtering out patients not in patient selection has to be done after preprocessing for scale data
-    scales_df = preprocess_scales(scales_df, eds_df, verbose=verbose)
+    scales_df = preprocess_scales(scales_df, eds_df, patient_selection_path, verbose=verbose)
     scales_df = scales_df[['scale', 'event_date', 'score', 'case_admission_id']]
     scales_df.rename(columns={'scale': 'sample_label', 'score': 'value', 'event_date': 'sample_date'}, inplace=True)
     scales_df['source'] = 'EHR'
-
-    # Load and preprocess ventilation data
-    ventilation_file_start = 'ventilation'
-    ventilation_df = load_data_from_main_dir(raw_data_path, ventilation_file_start)
-    ventilation_df = filter_ehr_patients(ventilation_df, patient_selection_path)
-    fio2_df, spo2_df = preprocess_ventilation(ventilation_df, eds_df, verbose=verbose)
-    fio2_df = fio2_df[['case_admission_id', 'FIO2', 'datetime']]
-    fio2_df['sample_label'] = 'FIO2'
-    fio2_df.rename(columns={'FIO2': 'value', 'datetime': 'sample_date'}, inplace=True)
-    fio2_df['source'] = 'EHR'
-    spo2_df = spo2_df[['case_admission_id', 'spo2', 'datetime']]
-    spo2_df['sample_label'] = 'oxygen_saturation'
-    spo2_df.rename(columns={'spo2': 'value', 'datetime': 'sample_date'}, inplace=True)
-    spo2_df['source'] = 'EHR'
 
     # Load and preprocess vitals data
     vitals_file_start = 'patientvalue'
@@ -81,6 +79,24 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
     vitals_df.rename(columns={'vital_name': 'sample_label', 'vital_value': 'value', 'datetime': 'sample_date'},
                      inplace=True)
     vitals_df['source'] = 'EHR'
+
+    intermediate_feature_data = pd.concat([preprocessed_lab_df, scales_df, vitals_df], ignore_index=True)
+    first_sample_date_df = get_first_sample_date(intermediate_feature_data)
+
+    # Load and preprocess ventilation data
+    ventilation_file_start = 'ventilation'
+    ventilation_df = load_data_from_main_dir(raw_data_path, ventilation_file_start)
+    ventilation_df = filter_ehr_patients(ventilation_df, patient_selection_path)
+    fio2_df, spo2_df = preprocess_ventilation(ventilation_df, first_sample_date_df, verbose=verbose)
+    fio2_df = fio2_df[['case_admission_id', 'FIO2', 'datetime']]
+    fio2_df['sample_label'] = 'FIO2'
+    fio2_df.rename(columns={'FIO2': 'value', 'datetime': 'sample_date'}, inplace=True)
+    fio2_df['source'] = 'EHR'
+    spo2_df = spo2_df[['case_admission_id', 'spo2', 'datetime']]
+    spo2_df['sample_label'] = 'oxygen_saturation'
+    spo2_df.rename(columns={'spo2': 'value', 'datetime': 'sample_date'}, inplace=True)
+    spo2_df['source'] = 'EHR'
+
 
     # Assemble feature database
     feature_database = pd.concat([preprocessed_lab_df, scales_df, fio2_df, spo2_df, vitals_df], ignore_index=True)
@@ -116,7 +132,7 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
                                                      ignore_index=True)
 
         # Only keep case_admissions that are in the EHR data and in the stroke registry data (intersection)
-        # (FIO2 are excluded from this count, as it is inferred from when missing)
+        # (FIO2 are excluded from this count, as it is inferred from when missing - thus all patients have FIO2)
         ehr_cid_before_restriction_to_registry = feature_database[feature_database.sample_label != 'FIO2']['case_admission_id'].unique()
         intersection_ehr_registry = set(ehr_cid_before_restriction_to_registry)\
             .intersection(set(selected_stroke_registry_data_df['case_admission_id'].unique()))
