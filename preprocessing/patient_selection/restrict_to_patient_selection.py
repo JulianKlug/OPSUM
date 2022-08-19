@@ -18,7 +18,7 @@ def restrict_to_patient_selection(variable_df: pd.DataFrame, patient_selection_p
     :param variable_df:
     :param patient_selection_path:
     :param restrict_to_event_period:
-    :param lower_bound_days: maxmimum number of days that first sample of EHR data can be before stroke onset (ideally number of ehr sampling days - 4) to include 72h of stroke monitoring
+    :param lower_bound_days: maximum number of days that first sample of EHR data can be before stroke onset (ideally number of ehr sampling days - 4) to include 72h of stroke monitoring
     :param upper_bound_days: maximum number of days that first sample of EHR data can be after reference date in registry to include only acute stroke events (should generally by 7 days)
     :param verbose:
     :return:

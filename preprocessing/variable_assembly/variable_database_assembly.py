@@ -80,10 +80,11 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
                      inplace=True)
     vitals_df['source'] = 'EHR'
 
+    # Find first sample date in EHR for each patient, this will be used for the inference of FiO2
     intermediate_feature_data = pd.concat([preprocessed_lab_df, scales_df, vitals_df], ignore_index=True)
     first_sample_date_df = get_first_sample_date(intermediate_feature_data)
 
-    # Load and preprocess ventilation data
+    # Load and preprocess ventilation data (this has to be done last, to have access to the first sample date)
     ventilation_file_start = 'ventilation'
     ventilation_df = load_data_from_main_dir(raw_data_path, ventilation_file_start)
     ventilation_df = filter_ehr_patients(ventilation_df, patient_selection_path)
@@ -96,7 +97,6 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
     spo2_df['sample_label'] = 'oxygen_saturation'
     spo2_df.rename(columns={'spo2': 'value', 'datetime': 'sample_date'}, inplace=True)
     spo2_df['source'] = 'EHR'
-
 
     # Assemble feature database
     feature_database = pd.concat([preprocessed_lab_df, scales_df, fio2_df, spo2_df, vitals_df], ignore_index=True)
