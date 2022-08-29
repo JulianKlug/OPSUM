@@ -24,7 +24,7 @@ def transform_to_relative_timestamps(df: pd.DataFrame, drop_old_columns: bool = 
     datatime_format = '%d.%m.%Y %H:%M'
     df['sample_date'] = pd.to_datetime(df['sample_date'], format=datatime_format)
 
-    # SET REFRENCE time point 0 for each case_admission id
+    # SET REFERENCE time point 0 for each case_admission id
     # - default reference as start: first sample date of EHR
     # -- Exclude registry data from first sample date estimation
     #    Rationale:
@@ -32,9 +32,9 @@ def transform_to_relative_timestamps(df: pd.DataFrame, drop_old_columns: bool = 
     #       - this allows for the case in which patient is admitted a few days after initial evaluation (limited to +7 days
     #          in restrict_to_patient_selection) and avoids a gap between registry and EHR data
     # -- FIO2 should not be used as reference, as its timing is inferred from registry data
+    #
     # - when first sample date of EHR is more than 1 day before first sample date of stroke registry:
-    # -- if first sample of NIHSS is before first sample of stroke registry -> reference is first sample of EHR
-    # -- if first sample of NIHSS is after first sample of stroke registry -> reference is first sample of stroke registry
+    # -> use first sample of EHR in the 24h before start according to registry (if not defined, use first sample of registry)
     #     -> remove samples occurring before reference
 
     # Find first sample date of EHR
@@ -47,33 +47,25 @@ def transform_to_relative_timestamps(df: pd.DataFrame, drop_old_columns: bool = 
         'case_admission_id').sample_date.min().reset_index(level=0)
     first_registry_sample_date.rename(columns={'sample_date': 'first_registry_sample_date'}, inplace=True)
 
-    # Find first sample date of NIHSS for each case_admission id, if NIHSS is not available, use nan
-    first_NIHSS_sample_date = df[(df.sample_label == 'NIHSS') & (df.source == 'EHR')].groupby(
-        'case_admission_id').sample_date.min().reset_index(level=0)
-    # for all cases with missing NIHSS data, use nan
-    missing_NIHSS_sample_date = pd.DataFrame(set(df.case_admission_id.unique())
-                                             .difference(set(first_NIHSS_sample_date.case_admission_id.unique())),
-                                             columns=['case_admission_id'])
-    missing_NIHSS_sample_date['sample_date'] = np.nan
-    first_NIHSS_sample_date = first_NIHSS_sample_date.append(missing_NIHSS_sample_date)
-    first_NIHSS_sample_date.rename(columns={'sample_date': 'first_NIHSS_sample_date'}, inplace=True)
-
     merged_first_sample_dates_df = first_ehr_sample_date.merge(first_registry_sample_date, on='case_admission_id')
-    merged_first_sample_dates_df = merged_first_sample_dates_df.merge(first_NIHSS_sample_date, on='case_admission_id')
 
     merged_first_sample_dates_df['delta_first_sample_date_h'] = (
                         merged_first_sample_dates_df[
                             'first_ehr_sample_date']
                         - merged_first_sample_dates_df[
-                            'first_registry_sample_date']) / np.timedelta64(
-        1, 'h')
+                            'first_registry_sample_date']) / np.timedelta64(1, 'h')
 
-    merged_first_sample_dates_df['delta_first_NIHSS_to_registry_start_date_h'] = (
-             merged_first_sample_dates_df[
-                 'first_NIHSS_sample_date']
-             - merged_first_sample_dates_df[
-                 'first_registry_sample_date']) / np.timedelta64(
-        1, 'h')
+    def find_first_EHR_in_24h_from_registry_start(cid):
+        # find first EHR sample in the 24h before first registry sample
+        first_registry_sample_date_minus_24h = merged_first_sample_dates_df[
+                                                   merged_first_sample_dates_df.case_admission_id == cid]\
+                                                   .first_registry_sample_date - pd.Timedelta(hours=24)
+        subj_df = df[(df.case_admission_id == cid)]
+        subj_df['delta_sample_date_to_registry_sample_date_minus_24h'] = (subj_df.sample_date -
+                                                                          first_registry_sample_date_minus_24h.iloc[0]) \
+                                                                         / np.timedelta64(1, 'h')
+        return subj_df[(subj_df.delta_sample_date_to_registry_sample_date_minus_24h > 0) & (
+                    subj_df.source == 'EHR')].sample_date.min()
 
     def determine_reference_time_point(row):
         # default is first sample date of EHR
@@ -81,16 +73,15 @@ def transform_to_relative_timestamps(df: pd.DataFrame, drop_old_columns: bool = 
         if row['delta_first_sample_date_h'] > -24:
             return row['first_ehr_sample_date']
         # except in cases where first sample date of EHR is more than 1 day before first sample date of stroke registry
-        # in that case, reference is first sample date of stroke registry
-        elif (row['delta_first_NIHSS_to_registry_start_date_h'] > 0) \
-                and (~np.isnan(row['delta_first_NIHSS_to_registry_start_date_h'])):
-            return row['first_registry_sample_date']
-        # except if first sample date of NIHSS is before first sample date of stroke registry, then it is likely that
-        # the patient was admitted and evaluated before the registry admission date (and NIHSS is done after other date in the EHR)
-        # if NIHSS sample date is nan, use first sample date of EHR
+        # in that case, reference is first sample date of stroke EHR in the 24h before first sample date of stroke registry (or registry start if this is not defined)
         else:
-            # ALTERNATIVE would be first sample date of EHR again
-            return row['first_ehr_sample_date']
+            first_EHR_sample_in_24h_from_registry_start = find_first_EHR_in_24h_from_registry_start(row['case_admission_id'])
+            if pd.isnull(first_EHR_sample_in_24h_from_registry_start):
+                # if no first sample date of EHR in the 24h before first sample date of stroke registry, use first sample date of stroke registry
+                return row['first_registry_sample_date']
+            else:
+                return first_EHR_sample_in_24h_from_registry_start
+
 
     merged_first_sample_dates_df['reference_first_sample_date'] = merged_first_sample_dates_df.apply(
         lambda row: determine_reference_time_point(row), axis=1)
@@ -114,6 +105,9 @@ def transform_to_relative_timestamps(df: pd.DataFrame, drop_old_columns: bool = 
     # exclude samples with relative_sample_date < 0
     df = df[df['relative_sample_date'] >= 0]
 
+    if restrict_to_time_range:
+        df = df[df['relative_sample_date'] <= desired_time_range]
+
     if enforce_min_time_range:
         max_sampling_dates = df[df.source != 'stroke_registry'].groupby(
             'case_admission_id').relative_sample_date.max().reset_index()
@@ -128,8 +122,5 @@ def transform_to_relative_timestamps(df: pd.DataFrame, drop_old_columns: bool = 
 
     if drop_old_columns:
         df.drop(['sample_date', 'first_sample_date'], axis=1, inplace=True)
-
-    if restrict_to_time_range:
-        df = df[df['relative_sample_date'] <= desired_time_range]
 
     return df
