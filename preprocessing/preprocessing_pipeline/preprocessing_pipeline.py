@@ -47,7 +47,8 @@ def preprocess(ehr_data_path:str, stroke_registry_data_path:str, patient_selecti
 
     # 7. Encoding categorical variables (one-hot)
     print('ENCODING CATEGORICAL VARIABLES')
-    cat_encoded_restricted_feature_df = encode_categorical_variables(restricted_feature_df, verbose=verbose)
+    cat_encoded_restricted_feature_df = encode_categorical_variables(restricted_feature_df, verbose=verbose,
+                                                                     log_dir=log_dir)
     print(f'C. Number of patients: {cat_encoded_restricted_feature_df.case_admission_id.nunique()}')
 
 
