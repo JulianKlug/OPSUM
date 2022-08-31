@@ -151,7 +151,7 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
 
     # Restrict to variable selection
     variable_selection_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'selected_variables.xlsx')
-    feature_database = restrict_to_selected_variables(feature_database, variable_selection_path)
+    feature_database = restrict_to_selected_variables(feature_database, variable_selection_path, enforce=True)
 
     if log_dir != '':
         # save cids of patients in selection and that are not included in the feature_database

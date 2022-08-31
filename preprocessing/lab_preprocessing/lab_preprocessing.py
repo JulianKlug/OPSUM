@@ -23,12 +23,13 @@ dosage_units_path = os.path.join(os.path.dirname(__file__), 'dosage_units.csv')
 # defining selected variables path (path to the variable selection file)
 selected_variables_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'variable_assembly/selected_variables.xlsx')
 
-blood_material_equivalents = ['sga', 'sgv', 'sgvm', 'sgc', 'sgv ponction', 'sgv cathéter', 'sga cathéter', 'cathéter artériel', 'cathéter veineux', 'plasma', 'Sang', 'sg cordon']
+blood_material_equivalents = ['sga', 'sgv', 'sgvm', 'sgc', 'sgv ponction', 'sgv cathéter', 'sga cathéter', 'cathéter artériel', 'cathéter veineux', 'plasma', 'Sang', 'sg cordon',
+                              'sgv catheter', 'sga catheter', 'catheter arteriel', 'catheter veineux']
 
 unit_of_measure_equivalents = [['UI/ml', 'U/ml']]
 
-non_numerical_values_to_remove = ['ERROR', 'nan', 'SANS RES.', 'Hémolysé', 'sans resultat',
-                                  'NON REALISE', 'NON INTERPRÉT.', 'COA', 'TAM', '****.**', '-100000.0', '----']
+non_numerical_values_to_remove = ['ERROR', 'nan', 'SANS RES.', 'Hémolysé', 'Hemolyse', 'sans resultat','voir POCT',
+                                  'NON REALISE', 'NON INTERPRÉT.', 'NON INTERPRET.', 'COA', 'TAM', '****.**', '-100000.0', '----']
 
 
 def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_blood'], log_dir:str = '',
@@ -82,6 +83,9 @@ def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_bloo
         equalized_reorganised_lab_df.loc[
             equalized_reorganised_lab_df['dosage_label'].isin(equivalence_list[1:]), 'dosage_label'] = equivalence_list[
             0]
+
+    # remove all French accents and cedillas
+    equalized_reorganised_lab_df = remove_french_accents_and_cedillas_from_dataframe(equalized_reorganised_lab_df)
 
     # Restrict to selected variables
     selected_variables = pd.read_excel(selected_variables_path)['included']
@@ -159,7 +163,7 @@ def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_bloo
 
     # correct negative values
     # set negative values for dosage label 'hémoglobine' to NaN (NaN values will be removed later)
-    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'hémoglobine') & (
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'].isin(['hémoglobine', 'hemoglobine'])) & (
                 equalized_reorganised_lab_df['value'] < 0), 'value'] = np.NAN
     # set negative values for dosage label 'glucose' to NaN (NaN values will be removed later)
     equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'glucose') & (
@@ -170,8 +174,6 @@ def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_bloo
                                         & (~equalized_reorganised_lab_df.dosage_label.str.contains('cBase'))]) > 0:
         warnings.warn('Negative values are present. Check data.')
 
-    # remove all French accents and cedillas
-    equalized_reorganised_lab_df = remove_french_accents_and_cedillas_from_dataframe(equalized_reorganised_lab_df)
 
     # restrict to possible value ranges
     possible_value_ranges_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -245,10 +247,10 @@ def correct_non_numerical_values(equalized_reorganised_lab_df: pd.DataFrame) -> 
     equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'proBNP') & (
             equalized_reorganised_lab_df['value'] == '>70000'), 'value'] = 70000 + 0.05 * 70000
     # replace >474 value if dosage label is 'Activité anti-Xa (DOAC)'
-    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'Activité anti-Xa (DOAC)') & (
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'].isin(['Activité anti-Xa (DOAC)', 'Activite anti-Xa (DOAC)'])) & (
             equalized_reorganised_lab_df['value'] == '>474'), 'value'] = 474 + 0.05 * 474
     # replace >445 value if dosage label is 'Activité anti-Xa (DOAC)'
-    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'Activité anti-Xa (DOAC)') & (
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'].isin(['Activité anti-Xa (DOAC)', 'Activite anti-Xa (DOAC)'])) & (
             equalized_reorganised_lab_df['value'] == '>445'), 'value'] = 445 + 0.05 * 445
     # replace >160.0 value if dosage label is 'PTT'
     equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'PTT') & (
@@ -257,25 +259,25 @@ def correct_non_numerical_values(equalized_reorganised_lab_df: pd.DataFrame) -> 
     equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'INR') & (
             equalized_reorganised_lab_df['value'] == '>11.00'), 'value'] = 11.00 + 0.05 * 11.00
     # replace >11.00 and >11.0 value if dosage label is 'fibrinogène'
-    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'fibrinogène') & (
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'].isin(['fibrinogène', 'fibrinogene'])) & (
             equalized_reorganised_lab_df['value'] == '>11.00'), 'value'] = 11.00 + 0.05 * 11.00
-    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'fibrinogène') & (
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'].isin(['fibrinogène', 'fibrinogene'])) & (
             equalized_reorganised_lab_df['value'] == '>11.0'), 'value'] = 11.0 + 0.05 * 11.0
     # replace >1.60 value if dosage label is 'activité anti-Xa (HBPM), thérapeutique, 2x /jour'
     equalized_reorganised_lab_df.loc[
-        (equalized_reorganised_lab_df['dosage_label'] == 'activité anti-Xa (HBPM), thérapeutique, 2x /jour') & (
+        (equalized_reorganised_lab_df['dosage_label'].isin(['activité anti-Xa (HBPM), thérapeutique, 2x /jour', 'activite anti-Xa (HBPM), therapeutique, 2x /jour'])) & (
                 equalized_reorganised_lab_df['value'] == '>1.60'), 'value'] = 1.60 + 0.05 * 1.60
     # replace >1.31 value if dosage label is 'activité anti-Xa (HNF)'
-    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'activité anti-Xa (HNF)') & (
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'].isin(['activité anti-Xa (HNF)', 'activite anti-Xa (HNF)'])) & (
             equalized_reorganised_lab_df['value'] == '>1.31'), 'value'] = 1.31 + 0.05 * 1.31
     # replace >1.20 value if dosage label is 'activité anti-Xa (HNF)'
-    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'activité anti-Xa (HNF)') & (
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'].isin(['activité anti-Xa (HNF)', 'activite anti-Xa (HNF)'])) & (
             equalized_reorganised_lab_df['value'] == '>1.20'), 'value'] = 1.20 + 0.05 * 1.20
     # replace >180 value if dosage label is 'sodium'
     equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'sodium') & (
             equalized_reorganised_lab_df['value'] == '>180'), 'value'] = 180 + 0.05 * 180
     # replace >200.00 value if dosage label is 'protéine C-réactive'
-    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'protéine C-réactive') & (
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'].isin(['protéine C-réactive', 'proteine C-reactive'])) & (
             equalized_reorganised_lab_df['value'] == '>200.00'), 'value'] = 200.00 + 0.05 * 200.00
 
     # replace <5 value if dosage label is 'ALAT'
@@ -285,26 +287,26 @@ def correct_non_numerical_values(equalized_reorganised_lab_df: pd.DataFrame) -> 
     equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'bilirubine totale') & (
             equalized_reorganised_lab_df['value'] == '<3'), 'value'] = 3 - 0.05 * 3
     # replace <10 value if dosage label is 'Activité anti-Xa (DOAC)'
-    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'Activité anti-Xa (DOAC)') & (
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'].isin(['Activité anti-Xa (DOAC)', 'Activite anti-Xa (DOAC)'])) & (
             equalized_reorganised_lab_df['value'] == '<10'), 'value'] = 10 - 0.05 * 10
     # replace <1.00 if dosage label is 'INR'
     equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'INR') & (
             equalized_reorganised_lab_df['value'] == '<1.00'), 'value'] = 1.00 - 0.05 * 1.00
     # replace <0.7, <0.5, <0.4 if dosage label is 'fibrinogène'
-    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'fibrinogène') & (
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'].isin(['fibrinogène', 'fibrinogene'])) & (
             equalized_reorganised_lab_df['value'] == '<0.7'), 'value'] = 0.7 - 0.05 * 0.7
-    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'fibrinogène') & (
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'].isin(['fibrinogène', 'fibrinogene'])) & (
             equalized_reorganised_lab_df['value'] == '<0.5'), 'value'] = 0.5 - 0.05 * 0.5
-    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'fibrinogène') & (
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'].isin(['fibrinogène', 'fibrinogene'])) & (
             equalized_reorganised_lab_df['value'] == '<0.4'), 'value'] = 0.4 - 0.05 * 0.4
     # replace <0.30 if label is 'protéine C-réactive'
-    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'protéine C-réactive') & (
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'].isin(['protéine C-réactive', 'proteine C-reactive'])) & (
             equalized_reorganised_lab_df['value'] == '<0.30'), 'value'] = 0.30 - 0.05 * 0.30
     # replace '<0.08' if label is 'cholestérol HDL'
-    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'cholestérol HDL') & (
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'].isin(['cholestérol HDL', 'cholesterol HDL'])) & (
         equalized_reorganised_lab_df['value'] == '<0.08'), 'value'] = 0.08 - 0.05 * 0.08
     # replace '<18' if label is 'créatinine'
-    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'créatinine') & (
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'].isin(['créatinine', 'creatinine'])) & (
         equalized_reorganised_lab_df['value'] == '<18'), 'value'] = 18 - 0.05 * 18
 
     return equalized_reorganised_lab_df
