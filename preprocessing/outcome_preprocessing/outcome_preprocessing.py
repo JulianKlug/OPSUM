@@ -70,4 +70,7 @@ def preprocess_outcomes(stroke_registry_data_path, patient_selection_path, verbo
     outcome_df['3M mRS 0-1'] = np.where(outcome_df['3M mRS'].isna(), np.nan, np.where(outcome_df['3M mRS'] <= 1, 1, 0))
     outcome_df['3M mRS 0-2'] = np.where(outcome_df['3M mRS'].isna(), np.nan, np.where(outcome_df['3M mRS'] <= 2, 1, 0))
 
+    assert outcome_df['3M mRS 0-2'].value_counts().sum() == outcome_df['3M mRS'].value_counts().sum(), "Number of 3M mRS 0-2 not equal to 3M mRS"
+    assert outcome_df['3M mRS 0-1'].value_counts().sum() == outcome_df['3M mRS'].value_counts().sum(), "Number of 3M mRS 0-1 not equal to 3M mRS"
+
     return outcome_df
