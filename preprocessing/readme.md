@@ -67,7 +67,7 @@
 ### B. Outcome preprocessing
 
 12. Outcome preprocessing
-   - Path: ./outcome_preprocessing/outcome_preprocesing.py
+   - Path: ./outcome_preprocessing/outcome_preprocessing.py
 
 
 ## Complete pipeline

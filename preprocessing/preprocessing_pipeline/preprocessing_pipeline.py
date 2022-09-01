@@ -64,7 +64,7 @@ def preprocess(ehr_data_path:str, stroke_registry_data_path:str, patient_selecti
 
     # 10. normalisation
     print('APPLYING NORMALISATION')
-    normalised_df = normalise_data(imputed_missing_df, verbose=verbose)
+    normalised_df = normalise_data(imputed_missing_df, verbose=verbose, log_dir=log_dir)
     print(f'F. Number of patients: {normalised_df.case_admission_id.nunique()}')
 
     # 11. preprocessing outcomes
