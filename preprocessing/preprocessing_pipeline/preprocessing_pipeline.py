@@ -8,6 +8,7 @@ from preprocessing.encoding_categorical_variables.encode_categorical_variables i
 from preprocessing.handling_missing_values.impute_missing_values import impute_missing_values
 from preprocessing.normalisation.normalisation import normalise_data
 from preprocessing.outcome_preprocessing.outcome_preprocessing import preprocess_outcomes
+from preprocessing.preprocessing_verification.outcome_presence_verification import outcome_presence_verification
 from preprocessing.preprocessing_verification.variable_presence_verification import variable_presence_verification
 from preprocessing.resample_to_time_bins.resample_to_hourly_features import resample_to_hourly_features
 from preprocessing.variable_assembly.variable_database_assembly import assemble_variable_database
@@ -93,6 +94,8 @@ def preprocess_and_save(ehr_data_path:str, stroke_registry_data_path:str, patien
 
     # verification of preprocessing
     variable_presence_verification(preprocessed_feature_df, desired_time_range=desired_time_range)
+    outcome_presence_verification(preprocessed_outcome_df, preprocessed_feature_df, log_dir=log_dir)
+
 
 
 if __name__ == '__main__':
