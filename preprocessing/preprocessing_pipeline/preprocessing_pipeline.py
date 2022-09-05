@@ -1,6 +1,5 @@
 import argparse
 import os
-
 import pandas as pd
 import time
 
@@ -9,19 +8,22 @@ from preprocessing.encoding_categorical_variables.encode_categorical_variables i
 from preprocessing.handling_missing_values.impute_missing_values import impute_missing_values
 from preprocessing.normalisation.normalisation import normalise_data
 from preprocessing.outcome_preprocessing.outcome_preprocessing import preprocess_outcomes
+from preprocessing.preprocessing_verification.variable_presence_verification import variable_presence_verification
 from preprocessing.resample_to_time_bins.resample_to_hourly_features import resample_to_hourly_features
 from preprocessing.variable_assembly.variable_database_assembly import assemble_variable_database
 from preprocessing.variable_assembly.relative_timestamps import transform_to_relative_timestamps
 
 
 def preprocess(ehr_data_path:str, stroke_registry_data_path:str, patient_selection_path:str,
-               log_dir: str, verbose:bool=True) -> pd.DataFrame:
+               log_dir: str, verbose:bool=True, desired_time_range:int=72) -> pd.DataFrame:
     """
     Apply preprocessing pipeline detailed in ./preprocessing/readme.md
     :param ehr_data_path: path to EHR data
     :param stroke_registry_data_path: path to stroke registry (admission) data
     :param patient_selection_path: path to patient selection file
     :param log_dir: path to logging directory (this will receive logs of excluded patients and those that were not found)
+    :param verbose:
+    :param desired_time_range: number of hours to use for imputation
     :return: preprocessed feature Dataframe, preprocessed outcome dataframe
     """
 
@@ -40,7 +42,7 @@ def preprocess(ehr_data_path:str, stroke_registry_data_path:str, patient_selecti
     # - Restrict to desired time range: 72h
     print('TRANSFORMING TO RELATIVE TIME AND RESTRICTING TIME RANGE')
     restricted_feature_df = transform_to_relative_timestamps(feature_df, drop_old_columns=False,
-                                                             restrict_to_time_range=True, desired_time_range=72,
+                                                             restrict_to_time_range=True, desired_time_range=desired_time_range,
                                                              enforce_min_time_range=True, min_time_range=12,
                                                              log_dir=log_dir)
     print(f'B. Number of patients: {restricted_feature_df.case_admission_id.nunique()}')
@@ -59,7 +61,7 @@ def preprocess(ehr_data_path:str, stroke_registry_data_path:str, patient_selecti
 
     # 9. imputation of missing values
     print('IMPUTING MISSING VALUES')
-    imputed_missing_df = impute_missing_values(resampled_df, verbose=verbose)
+    imputed_missing_df = impute_missing_values(resampled_df, verbose=verbose, log_dir=log_dir, desired_time_range=desired_time_range)
     print(f'E. Number of patients: {imputed_missing_df.case_admission_id.nunique()}')
 
     # 10. normalisation
@@ -77,15 +79,20 @@ def preprocess_and_save(ehr_data_path:str, stroke_registry_data_path:str, patien
                         feature_file_prefix:str = 'preprocessed_features', outcome_file_prefix:str = 'preprocessed_outcomes', verbose:bool=True):
 
     timestamp = time.strftime("%d%m%Y_%H%M%S")
+    desired_time_range = 72
     log_dir = os.path.join(output_dir, f'logs_{timestamp}')
     ensure_dir(log_dir)
     preprocessed_feature_df, preprocessed_outcome_df = preprocess(ehr_data_path, stroke_registry_data_path,
-                                                                  patient_selection_path, verbose=verbose, log_dir=log_dir)
+                                                                  patient_selection_path, verbose=verbose, log_dir=log_dir,
+                                                                  desired_time_range=desired_time_range)
     features_save_path = os.path.join(output_dir, f'{feature_file_prefix}_{timestamp}.csv')
     outcomes_save_path = os.path.join(output_dir, f'{outcome_file_prefix}_{timestamp}.csv')
 
     preprocessed_feature_df.to_csv(features_save_path)
     preprocessed_outcome_df.to_csv(outcomes_save_path)
+
+    # verification of preprocessing
+    variable_presence_verification(preprocessed_feature_df, desired_time_range=desired_time_range)
 
 
 if __name__ == '__main__':

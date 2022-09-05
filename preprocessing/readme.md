@@ -69,6 +69,12 @@
 12. Outcome preprocessing
    - Path: ./outcome_preprocessing/outcome_preprocessing.py
 
+### C. Verify preprocessing
+
+13. Verify preprocessing
+   - Path: ./preprocessing_verification/
+   - Verify that the preprocessing steps were applied correctly
+   - Verify that the outcome preprocessing was applied correctly
 
 ## Complete pipeline
 
