@@ -1,6 +1,7 @@
 import pandas as pd
 from tqdm import tqdm
 import numpy as np
+import os
 
 categorical_vars = [
     'sex_male',
@@ -40,14 +41,15 @@ categorical_vars = [
 ]
 
 
-def impute_missing_values(df:pd.DataFrame, verbose:bool=True) -> pd.DataFrame:
+def impute_missing_values(df:pd.DataFrame, verbose:bool=True, log_dir:str='',
+                          desired_time_range:int=72) -> pd.DataFrame:
     """
     Impute missing values in the dataframe.
     Missing values, are imputed by last observation carried forward (LOCF).
     Population medians in the datasets were used for missing values occurring before the first actual measurement.
 
     Requirements:
-    - Should be run after encoding categorical variables
+    - Should be run after encoding categorical variables and resampling to timebins
     - Should be run before normalization
 
     Parameters
@@ -63,6 +65,31 @@ def impute_missing_values(df:pd.DataFrame, verbose:bool=True) -> pd.DataFrame:
         DataFrame with missing values imputed.
     """
     imputed_missing_df = df.copy()
+
+    # Compute missingness of variables before imputing missing variables
+    if log_dir != '':
+        if verbose:
+            print('Computing missingness.')
+        missingness_df_columns = ['sample_label', 'n_missing_overall'] + [f'n_missing_h{i}' for i in
+                                                                          range(desired_time_range)]
+        missingness_df = pd.DataFrame(columns=missingness_df_columns)
+        for variable in tqdm(df.sample_label.unique()):
+            # compute number of missing cid overall
+            n_missing_cids_overall = df.case_admission_id.nunique() - df[
+                df.sample_label == variable].case_admission_id.nunique()
+            # compute number of missing cid per time bin
+            n_missing_cids_per_time_bin = [df.case_admission_id.nunique() -
+                                           df[(df.sample_label == variable)
+                                                        & (df.relative_sample_date_hourly_cat == time_bin)]
+                                           .case_admission_id.nunique()
+                                           for time_bin in range(desired_time_range)]
+
+            missingness_df = missingness_df.append(
+                pd.DataFrame([[variable, n_missing_cids_overall] + n_missing_cids_per_time_bin],
+                             columns=missingness_df_columns))
+
+        missingness_df.to_csv(os.path.join(log_dir, 'missingness.csv'), index=False)
+
 
     # Handle first missing values (timebin 0)
     # -> fill with population median/mode
