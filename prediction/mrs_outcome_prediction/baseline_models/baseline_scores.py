@@ -1,6 +1,19 @@
 import math
 import pandas as pd
 
+
+def check_for_truth_equivalents(input):
+    '''
+    Check if entry is equivalent to True equivalent value
+    '''
+    truth_equivalents = ['True', 'true', 'TRUE', '1', 1, True, 'yes', 'Yes', 'YES', 'y', 'Y', 't', 'T']
+    if input in truth_equivalents:
+        return True
+    else:
+        return False
+
+
+
 def hiat_score(age, admission_NIHSS, admission_glucose):
     '''
     Houston Intra-arterial recanalization therapy Score
@@ -87,11 +100,11 @@ def thrive_score(age, admission_NIHSS, hist_hypertension, hist_diabetes, hist_af
         score += 2
 
     chronic_disease_scale = 0
-    if hist_afib:
+    if check_for_truth_equivalents(hist_afib):
         chronic_disease_scale += 1
-    if hist_hypertension:
+    if check_for_truth_equivalents(hist_hypertension):
         chronic_disease_scale += 1
-    if hist_diabetes:
+    if check_for_truth_equivalents(hist_diabetes):
         chronic_disease_scale += 1
 
     score += chronic_disease_scale
@@ -116,11 +129,11 @@ def thriveC_score(age, admission_NIHSS, hist_hypertension, hist_diabetes, hist_a
         return math.nan
 
     chronic_disease_scale = 0
-    if hist_afib:
+    if check_for_truth_equivalents(hist_afib):
         chronic_disease_scale += 1
-    if hist_hypertension:
+    if check_for_truth_equivalents(hist_hypertension):
         chronic_disease_scale += 1
-    if hist_diabetes:
+    if check_for_truth_equivalents(hist_diabetes):
         chronic_disease_scale += 1
 
     if chronic_disease_scale == 0:
