@@ -174,10 +174,10 @@ if __name__ == '__main__':
 
     # save patient ids used for testing / training
     pd.DataFrame(pid_train, columns=['patient_id']).to_csv(
-        os.path(output_dir, 'pid_train.tsv'),
+        os.path.join(output_dir, 'pid_train.tsv'),
         sep='\t', index=False)
     pd.DataFrame(pid_test, columns=['patient_id']).to_csv(
-        os.path(output_dir, 'pid_test.tsv'),
+        os.path.join(output_dir, 'pid_test.tsv'),
         sep='\t', index=False)
 
     # Remove the case_admission_id, sample_label, and time_step_label columns from the data

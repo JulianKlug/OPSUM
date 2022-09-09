@@ -53,9 +53,11 @@ if __name__ == '__main__':
     os.chmod(os.path.join(working_dir, 'run_models.sh'), st.st_mode | stat.S_IEXEC)
 
     # Load SLURM setup
-    slurm_setup_file = open(os.path.join(script_dir, "ygdrassil_slurm_setup.txt"), "r")
+    slurm_setup_path = os.path.join(script_dir, "ygdrassil_slurm_setup.txt")
+    slurm_setup_file = open(slurm_setup_path, "r")
     slurm_setup = slurm_setup_file.read()
     slurm_setup_file.close()
+    shutil.copy2(slurm_setup_path, working_dir)
 
 
     for arg in all_args:
