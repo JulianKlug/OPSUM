@@ -1,36 +1,31 @@
+import argparse
+
 import shap
-import numpy as np
-import pandas as pd
 import os
 from prediction.utils.scoring import precision, recall, matthews
 from prediction.mrs_outcome_prediction.LSTM.LSTM import lstm_generator
 import numpy as np
-from random import randint
 import pickle
 from tqdm import tqdm
+from prediction.mrs_outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time
 
-def compute_shap_explanations_over_time():
-    model_weights_path = '/home/klug/data/opsum/models/sigmoid_all_unchanged_0.2_2_True_RMSprop_3M_mRS_0-2_128_4.hdf5'
-    features_path = '/home/klug/data/opsum/72h_input_data/02092022_083046/preprocessed_features_02092022_083046.csv'
-    labels_path = '/home/klug/data/opsum/72h_input_data/02092022_083046/preprocessed_outcomes_02092022_083046.csv'
-    out_dir = '/home/klug/output/opsum/LSTM_72h_test_results/2022_09_07_1744'
+DEFAULT_CONFIG = {
+    'outcome': '3M mRS 0-2',
+    'masking': True,
+    'units ': 128,
+    'activation' : 'sigmoid',
+    'dropout' : 0.2,
+    'layers' : 2,
+    'optimizer' : 'RMSprop',
+    'seed' : 42,
+    'test_size' : 0.20,
+}
 
-    outcome = '3M mRS 0-2'
-    masking = True
-    units = 128
-    activation = 'sigmoid'
-    dropout = 0.2
-    layers = 2
-    optimizer = 'RMSprop'
-    seed = 42
-    test_size = 0.20
-    override_masking_value = False
-
-    from prediction.mrs_outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time
+def compute_shap_explanations_over_time(model_weights_path:str, features_path:str, labels_path:str, out_dir:str, config:dict=DEFAULT_CONFIG):
 
     # load the dataset
     X, y = format_to_2d_table_with_time(feature_df_path=features_path, outcome_df_path=labels_path,
-                                        outcome=outcome)
+                                        outcome=config['outcome'])
 
     n_time_steps = X.relative_sample_date_hourly_cat.max() + 1
     n_channels = X.sample_label.unique().shape[0]
@@ -40,12 +35,12 @@ def compute_shap_explanations_over_time():
         link_patient_id_to_outcome, numpy_to_lookup_table
 
     # Reduce every patient to a single outcome (to avoid duplicates)
-    all_pids_with_outcome = link_patient_id_to_outcome(y, outcome)
+    all_pids_with_outcome = link_patient_id_to_outcome(y, config['outcome'])
     pid_train, pid_test, y_pid_train, y_pid_test = train_test_split(all_pids_with_outcome.patient_id.tolist(),
                                                                     all_pids_with_outcome.outcome.tolist(),
                                                                     stratify=all_pids_with_outcome.outcome.tolist(),
-                                                                    test_size=test_size,
-                                                                    random_state=seed)
+                                                                    test_size=config['test_size'],
+                                                                    random_state=config['seed'])
 
     test_X_df = X[X.patient_id.isin(pid_test)]
     test_y_df = y[y.patient_id.isin(pid_test)]
@@ -71,13 +66,16 @@ def compute_shap_explanations_over_time():
 
     shap_values_over_ts = []
 
+    # Masking has to be overriden
+    override_masking_value = False
+
     for ts in tqdm(range(n_time_steps)):
         modified_time_steps = ts + 1
         model = lstm_generator(x_time_shape=modified_time_steps, x_channels_shape=n_channels, masking=override_masking_value,
-                               n_units=units,
-                               activation=activation, dropout=dropout, n_layers=layers)
+                               n_units=config['units'],
+                               activation=config['activation'], dropout=config['dropout'], n_layers=config['layers'])
 
-        model.compile(loss='binary_crossentropy', optimizer=optimizer,
+        model.compile(loss='binary_crossentropy', optimizer=config['optimizer'],
                       metrics=['accuracy', precision, recall, matthews])
 
         model.load_weights(model_weights_path)
@@ -95,5 +93,41 @@ def compute_shap_explanations_over_time():
     with open(os.path.join(out_dir, '/deep_explainer_shap_values_over_ts.pkl'),
               'wb') as handle:
         pickle.dump(shap_values_over_ts, handle)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='LSTM model for predicting outcome')
+    parser.add_argument('--activation', required=True, type=str, help='activation function')
+    parser.add_argument('--test_size', required=False, type=float, help='test set size [0-1]', default=0.2)
+    parser.add_argument('--seed', required=False, type=int, help='Seed', default=42)
+    parser.add_argument('--dropout', required=True, type=float, help='dropout fraction')
+    parser.add_argument('--layers', required=True, type=int, help='number of LSTM layers')
+    parser.add_argument('--masking', required=True, type=bool, help='masking true/false')
+    parser.add_argument('--optimizer', required=True, type=str, help='optimizer function')
+    parser.add_argument('--outcome', required=True, type=str, help='outcome (ex. 3M mRS 0-2)')
+    parser.add_argument('--units', required=True, type=int, help='number of units in each LSTM layer')
+    parser.add_argument('--output_dir', required=True, type=str, help='output directory')
+    parser.add_argument('--features_path', required=True, type=str, help='path to features')
+    parser.add_argument('--labels_path', required=True, type=str, help='path to labels')
+    parser.add_argument('--model_weights_path', required=True, type=str, help='path to model weights')
+    args = parser.parse_args()
+
+    config = {
+    'outcome': args.outcome,
+    'masking': args.masking,
+    'units ': args.units,
+    'activation' : args.activation,
+    'dropout' : args.dropout,
+    'layers' : args.layers,
+    'optimizer' : args.optimizer,
+    'seed' : args.seed,
+    'test_size' : args.test_size,
+    }
+
+    compute_shap_explanations_over_time(model_weights_path=args.model_weights_path,
+                                        features_path=args.features_path,
+                                        labels_path=args.labels_path,
+                                        out_dir=args.output_dir,
+                                        config=config)
 
 
