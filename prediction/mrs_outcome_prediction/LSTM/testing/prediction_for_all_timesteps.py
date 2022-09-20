@@ -16,7 +16,7 @@ from prediction.mrs_outcome_prediction.LSTM.LSTM import lstm_generator
 DEFAULT_CONFIG = {
     'outcome': '3M mRS 0-2',
     'masking': True,
-    'units ': 128,
+    'units': 128,
     'activation' : 'sigmoid',
     'dropout' : 0.2,
     'layers' : 2,
@@ -55,7 +55,7 @@ def prediction_for_all_timesteps(data, model_weights_path:str, config:dict=DEFAU
         subj_X_with_first_n_ts = data[:, 0:modified_time_steps, :]
 
         y_pred = model.predict(subj_X_with_first_n_ts)
-        subj_pred_over_ts.append(y_pred[0][0])
+        subj_pred_over_ts.append(np.squeeze(y_pred))
 
     return np.array(subj_pred_over_ts)
 
@@ -80,7 +80,7 @@ if __name__ == '__main__':
     config = {
     'outcome': args.outcome,
     'masking': args.masking,
-    'units ': args.units,
+    'units': args.units,
     'activation' : args.activation,
     'dropout' : args.dropout,
     'layers' : args.layers,

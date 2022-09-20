@@ -12,7 +12,7 @@ from prediction.mrs_outcome_prediction.data_loading.data_formatting import forma
 DEFAULT_CONFIG = {
     'outcome': '3M mRS 0-2',
     'masking': True,
-    'units ': 128,
+    'units': 128,
     'activation' : 'sigmoid',
     'dropout' : 0.2,
     'layers' : 2,
@@ -115,7 +115,7 @@ if __name__ == '__main__':
     config = {
     'outcome': args.outcome,
     'masking': args.masking,
-    'units ': args.units,
+    'units': args.units,
     'activation' : args.activation,
     'dropout' : args.dropout,
     'layers' : args.layers,
