@@ -1,3 +1,5 @@
+import os.path
+
 import pandas as pd
 
 CONTINUOUS_CHARACTERISTICS = [
@@ -25,7 +27,7 @@ def extract_patient_characteristics(patient_id_path: str, stroke_registry_data_p
                                     categorical_characteristics: list = CATEGORICAL_CHARACTERISTICS) -> pd.DataFrame:
     """
     Extracts patient characteristics from the stroke registry data.
-    :param patient_id_path: path to the patient id file to select the patients to extract the characteristics from.
+    :param patient_id_path: path to the patient id file to select the patients to extract the characteristics from (is produced during training as pid_train.tsv / pid_test.tsv).
     :param stroke_registry_data_path: path to the stroke registry data (after post-hoc modification).
     :param continuous_characteristics: list of continuous characteristics to extract.
     :param categorical_characteristics: list of categorical characteristics to extract.
@@ -72,11 +74,12 @@ def extract_patient_characteristics(patient_id_path: str, stroke_registry_data_p
 
 
 if __name__ == '__main__':
-    patient_id_path = ''
-    stroke_registry_data_path = ''
+    patient_id_path = '../pid_test.tsv'
+    stroke_registry_data_path = '../stroke_registry_post_hoc_modified.xlsx'
 
     patient_characteristics_df = extract_patient_characteristics(patient_id_path, stroke_registry_data_path)
-    patient_characteristics_df.to_csv('', sep='\t', index=False)
+    patient_characteristics_df.to_csv(os.path.join('.',
+                                                   f'patient_characteristics_{os.path.basename(patient_id_path).split("_")[1]}'), sep='\t', index=False)
 
     print()
 
