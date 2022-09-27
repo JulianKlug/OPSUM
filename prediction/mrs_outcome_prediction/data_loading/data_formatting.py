@@ -103,7 +103,9 @@ def link_patient_id_to_outcome(y: pd.DataFrame, outcome: str) -> pd.DataFrame:
     """
     all_pids = y[['patient_id', 'outcome']].copy()
 
-    if outcome != '3M mRS 0-2':
+    accepted_outcomes = ['3M mRS 0-2', '3M mRS 0-1']
+    if outcome not in accepted_outcomes:
+        raise ValueError('Outcome must be one of {}'.format(accepted_outcomes))
         raise ValueError('Reduction to single outcome is not implemented for {}'.format(outcome))
 
     # replaces duplicated patient_ids with a single patient_id with minimum outcome
