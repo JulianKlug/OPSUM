@@ -1,10 +1,10 @@
 #!/usr/bin/python
 import json
 import os, itertools, time, shutil, sys, stat, subprocess
+from prediction.mrs_outcome_prediction.LSTM.utils import initiate_log_files
+from prediction.utils.utils import ensure_dir
 
 # check if Python-version > 3.0
-from prediction.mrs_outcome_prediction.LSTM.utils import initiate_log_files
-
 assert (sys.version_info > (3, 0)), "This script only works with Python3!"
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -26,7 +26,9 @@ if __name__ == '__main__':
 
     # change directory and open files for writing
     date_string = time.strftime("%Y_%m_%d_%H%M")
-    working_dir = os.path.join(output_dir, date_string)
+    outcome_dir = os.path.join(output_dir, '_'.join(param_dict['outcome']).replace(' ', '_'))
+    ensure_dir(outcome_dir)
+    working_dir = os.path.join(outcome_dir, date_string)
     os.makedirs(working_dir)
 
     initiate_log_files(working_dir)
@@ -42,7 +44,7 @@ if __name__ == '__main__':
     # make batch-file
     batch_file = open(os.path.join(working_dir, 'run_models.sh'), 'w')
     batch_file.write('#!/bin/bash\n')
-    batch_file.write('cd ' + output_dir + '/' + date_string + '/\n')
+    batch_file.write('cd ' + working_dir + '\n')
     batch_file.write('for f in slurm_jobs/*.sbatch\n')
     batch_file.write('do\n')
     batch_file.write('\tsbatch "$f"\n')
@@ -74,7 +76,7 @@ if __name__ == '__main__':
             file_name += '_' + str(arg[key])
         shellfile = open(os.path.join(working_dir, 'slurm_jobs', '%s.sbatch' % file_name), 'w')
         shellfile.write(slurm_setup)
-        shellfile.write('\n cd ' + working_dir + '\n')
+        shellfile.write('\ncd ' + working_dir + '\n')
         shellfile.write('conda activate opsum\n')
         shellfile.write(shell_arg + '\n')
         # copy logs to log dir
