@@ -8,9 +8,7 @@ from prediction.mrs_outcome_prediction.LSTM.utils import initiate_log_files
 assert (sys.version_info > (3, 0)), "This script only works with Python3!"
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
-# output_dir = '/home/users/k/klug/output/opsum/LSTM_72h'
-output_dir = '/Users/jk1/temp/opsum_prepro_output/temp_output'
-
+output_dir = '/home/users/k/klug/output/opsum/LSTM_72h'
 
 nnet_file = 'adapted_ThorsenMeyer_LSTM.py'
 batch_file = 'run_models.sh'
@@ -79,13 +77,13 @@ if __name__ == '__main__':
         shellfile.write('\n cd ' + working_dir + '\n')
         shellfile.write('conda activate opsum\n')
         shellfile.write(shell_arg + '\n')
+        # copy logs to log dir
+        shellfile.write('cp $OPSUM_LOGS_PATH ' + os.path.join(working_dir, 'logs') + '\n')
         shellfile.close()
 
     # run batch-scripts
     run_models_path = '/'.join([working_dir, r'run_models.sh'])
     subprocess.call([run_models_path])
 
-    # copy logs to log dir
-    shutil.copy2(os.environ["OPSUM_LOGS_PATH"], os.path.join(working_dir, 'logs'))
 
 
