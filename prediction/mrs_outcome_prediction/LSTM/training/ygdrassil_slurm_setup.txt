@@ -15,7 +15,8 @@ module load Anaconda3
 
 source /home/users/k/klug/.bashrc
 
-export OPSUM_FEATURES_PATH="/home/users/k/klug/data/opsum/preprocessed_features_14052022_123333.csv"
-export OPSUM_LABELS_PATH="/home/users/k/klug/data/opsum/preprocessed_outcomes_14052022_123333.csv"
+export OPSUM_FEATURES_PATH="/home/users/k/klug/data/opsum/preprocessed_features_27092022_172403.csv"
+export OPSUM_LABELS_PATH="/home/users/k/klug/data/opsum/preprocessed_outcomes_27092022_172403.csv"
+export OPSUM_LOGS_PATH="/home/users/k/klug/logs/opsum/opsum_gridsearch_${SLURM_JOB_ID}.log"
 
 export PYTHONPATH="${PYTHONPATH}:/home/users/k/klug/opsum"
