@@ -77,7 +77,6 @@ if __name__ == '__main__':
         shellfile = open(os.path.join(working_dir, 'slurm_jobs', '%s.sbatch' % file_name), 'w')
         shellfile.write(slurm_setup)
         shellfile.write('\ncd ' + working_dir + '\n')
-        shellfile.write('conda activate opsum\n')
         shellfile.write(shell_arg + '\n')
         # copy logs to log dir
         shellfile.write('cp $OPSUM_LOGS_PATH ' + os.path.join(working_dir, 'logs') + '\n')
