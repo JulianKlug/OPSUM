@@ -19,5 +19,6 @@ export OPSUM_FEATURES_PATH="/home/users/k/klug/data/opsum/preprocessed_features_
 export OPSUM_LABELS_PATH="/home/users/k/klug/data/opsum/preprocessed_outcomes_27092022_172403.csv"
 export OPSUM_LOGS_PATH="/home/users/k/klug/logs/opsum/opsum_gridsearch_${SLURM_JOB_ID}.log"
 
+conda activate opsum
 export PYTHONPATH="${PYTHONPATH}:/home/users/k/klug/opsum"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/
