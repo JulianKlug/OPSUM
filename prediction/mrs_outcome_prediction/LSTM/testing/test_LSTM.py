@@ -123,6 +123,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_weights_dir', required=True, type=str, help='path to model weights')
     args = parser.parse_args()
 
+
     model_name = '_'.join([args.activation, str(args.batch),
                            args.data, str(args.dropout), str(args.layers),
                            str(args.masking), args.optimizer, args.outcome,

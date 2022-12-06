@@ -3,32 +3,34 @@
 
 Should all be in lab events
 
-1. [ ] sodium
-2. [ ] chlore
-3. [ ] hemoglobine glyquee
-4. [ ] ALAT
-5. [ ] calcium corrige
-6. [ ] triglycerides
-7. [ ] fibrinogene
-8. [ ] INR
-9. [ ] proBNP
-10. [ ] PTT
-11. [ ] potassium
-12. [ ] bilirubine totale
-13. [ ] lactate
-14. [ ] creatinine
-15. [ ] cholesterol HDL
-16. [ ] LDL cholesterol calcule
-17. [ ] cholesterol total
-18. [ ] proteine C-reactive
-19. [ ] hemoglobine
-20. [ ] glucose
-21. [ ] erythrocytes
-22. [ ] uree
-23. [ ] leucocytes
-24. [ ] ASAT
-25. [ ] hematocrite
-26. [ ] thrombocytes
+1. [x] sodium
+2. [x] chlore
+3. [x] hemoglobine glyquee
+4. [x] ALAT
+5. [x] calcium corrige
+- extracted from calcium and albumin
+6. [x] triglycerides
+7. [x] fibrinogene
+8. [x] INR
+9. [x] proBNP
+10. [x] PTT
+11. [x] potassium
+12. [x] bilirubine totale
+13. [x] lactate
+14. [x] creatinine
+15. [x] cholesterol HDL
+16. [x] LDL cholesterol calcule
+17. [x] cholesterol total
+18. [x] proteine C-reactive
+19. [x] hemoglobine
+20. [x] glucose
+21. [x] erythrocytes
+22. [x] uree
+23. [x] leucocytes
+24. [x] ASAT
+25. [x] hematocrite
+26. [x] thrombocytes
+27. [x] lactate
 
 # Monitoring
 
@@ -59,7 +61,6 @@ Except NIHSS, should be readily available
 ### Prestroke condition 
 
 4. [ ] Prestroke disability (Rankin)
- - static depending on referral
  - from admission note
 
 ### Admission medication
@@ -102,6 +103,8 @@ Ref:
 18. [ ] wake_up_stroke
 
 # Procedural variables
+
+--> Admission note
 
 1. [ ] categorical_IVT
    - ICD9 code: 9910
