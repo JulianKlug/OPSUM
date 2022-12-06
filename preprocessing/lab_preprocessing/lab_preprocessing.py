@@ -63,7 +63,7 @@ def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_bloo
         # split lab df into individual lab dfs for every lab name
         lab_df_split_by_lab_name = []
 
-        for _, lab_name in enumerate(lab_names):
+        for lab_name in lab_names:
             selected_columns = identification_columns + [c for c in lab_df.columns if c.split('_')[0] == lab_name]
             individual_lab_df = lab_df[selected_columns].dropna(subset=[f'{lab_name}_value'])
             individual_lab_df.columns = identification_columns + ['_'.join(c.split('_')[1:]) for c in
