@@ -41,7 +41,8 @@ categorical_vars = [
 ]
 
 
-def impute_missing_values(df:pd.DataFrame, verbose:bool=True, log_dir:str='',
+def impute_missing_values(df:pd.DataFrame, reference_population_stats_path: str ='',
+                          verbose:bool=True, log_dir:str='',
                           desired_time_range:int=72) -> pd.DataFrame:
     """
     Impute missing values in the dataframe.
@@ -56,8 +57,14 @@ def impute_missing_values(df:pd.DataFrame, verbose:bool=True, log_dir:str='',
     ----------
     df : pd.DataFrame
         DataFrame with missing values.
+    reference_population_stats_path : str, optional
+        Path to the reference population statistics. The default is ''.
     verbose : bool
         If True, print the number of missing values in each column.
+    log_dir : str
+        Path to the log directory. The default is ''.
+    desired_time_range : int
+        The desired time range in hours. The default is 72.
 
     Returns
     -------
@@ -65,6 +72,10 @@ def impute_missing_values(df:pd.DataFrame, verbose:bool=True, log_dir:str='',
         DataFrame with missing values imputed.
     """
     imputed_missing_df = df.copy()
+
+    if reference_population_stats_path != '':
+        reference_population_stats_df = pd.read_csv(reference_population_stats_path)
+        labels_imputed_from_reference_population = []
 
     # Compute missingness of variables before imputing missing variables
     if log_dir != '':
@@ -101,16 +112,39 @@ def impute_missing_values(df:pd.DataFrame, verbose:bool=True, log_dir:str='',
             imputed_missing_df[(imputed_missing_df.sample_label == sample_label) & (
                         imputed_missing_df.relative_sample_date_hourly_cat == 0)].case_admission_id.unique()))
 
+        n_missing_cids_overall = df.case_admission_id.nunique() - df[
+            df.sample_label == sample_label].case_admission_id.nunique()
+
         if sample_label == 'FIO2':
             # for FIO2, impute with 21.0%
             imputed_tp0_value = 21.0
+
+        elif (n_missing_cids_overall > 2/3 * df.case_admission_id.nunique()) & (reference_population_stats_path != ''):
+        #  if sample label has a lot of missing values (~50%), then use mean/median of the reference population
+            if sample_label in categorical_vars:
+                # not implemented
+                raise NotImplementedError('Imputation from reference population of categorical variables is not implemented.')
+            else:
+                # use median
+                imputed_tp0_value = reference_population_stats_df[reference_population_stats_df.dosage_label == sample_label]['50%'].iloc[0]
+            labels_imputed_from_reference_population.append([sample_label, imputed_tp0_value, len(patients_with_no_sample_label_tp0)])
         elif sample_label in categorical_vars:
             # for categorical vars, impute with mode
-            imputed_tp0_value = imputed_missing_df[(imputed_missing_df.sample_label == sample_label) & (
+            n_missing_cids_tp0 = len(patients_with_no_sample_label_tp0)
+            if n_missing_cids_tp0 > 0.5 * df.case_admission_id.nunique():
+                # impute over all timepoints
+                imputed_tp0_value = imputed_missing_df[imputed_missing_df.sample_label == sample_label].value.mode().iloc[0]
+            else:
+                imputed_tp0_value = imputed_missing_df[(imputed_missing_df.sample_label == sample_label) & (
                         imputed_missing_df.relative_sample_date_hourly_cat == 0)].value.mode()[0]
         else:
             # for numerical vars, impute with median
-            imputed_tp0_value = imputed_missing_df[(imputed_missing_df.sample_label == sample_label) & (
+            n_missing_cids_tp0 = len(patients_with_no_sample_label_tp0)
+            if n_missing_cids_tp0 > 0.5 * df.case_admission_id.nunique():
+                # impute over all timepoints
+                imputed_tp0_value = imputed_missing_df[imputed_missing_df.sample_label == sample_label].value.median()
+            else:
+                imputed_tp0_value = imputed_missing_df[(imputed_missing_df.sample_label == sample_label) & (
                         imputed_missing_df.relative_sample_date_hourly_cat == 0)].value.median()
         if verbose:
             print(
@@ -127,6 +161,11 @@ def impute_missing_values(df:pd.DataFrame, verbose:bool=True, log_dir:str='',
 
         # impute missing values for sample_label in first timebin
         imputed_missing_df = imputed_missing_df.append(imputed_sample_label, ignore_index=True)
+
+    if (log_dir != '') & (reference_population_stats_path != ''):
+        # save labels imputed from reference population
+        pd.DataFrame(labels_imputed_from_reference_population, columns=['label', 'imputed_value', 'imputed_for_n_subjects'])\
+            .to_csv(os.path.join(log_dir, 'labels_imputed_from_reference_population.csv'), index=False)
 
     # following missing values (timebin > 0)
     # -> Fill missing timebin values by last observation carried forward

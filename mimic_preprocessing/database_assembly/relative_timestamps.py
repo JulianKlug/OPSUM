@@ -26,12 +26,17 @@ def transform_to_relative_timestamps(df: pd.DataFrame, drop_old_columns: bool = 
     df['sample_date'] = pd.to_datetime(df['sample_date'], format=datatime_format)
 
     # SET REFERENCE time point 0 for each case_admission id
-    # - default reference as start: first sample date of EHR
-
-    # Find first sample date of EHR
+    # - default reference as start: first sample date of monitoring in EHR (as lab is drawn in ED)
+    # Find first sample date of all EHR
     first_ehr_sample_date = df[(df.source == 'EHR')] \
         .groupby('case_admission_id').sample_date.min().reset_index(level=0)
     first_ehr_sample_date.rename(columns={'sample_date': 'first_ehr_sample_date'}, inplace=True)
+
+    # Find first sample date of EHR that is not part of laboratory labels (thus start of monitoring in the ICU)
+    lab_labels = pd.read_excel(os.path.join(os.path.dirname(os.path.dirname(__file__)),'lab_preprocessing', 'selected_lab_values.xlsx'))['DPI_name']
+    first_monitoring_sample_date = df[(df.source == 'EHR') & (~df.sample_label.isin(lab_labels))] \
+        .groupby('case_admission_id').sample_date.min().reset_index(level=0)
+    first_monitoring_sample_date.rename(columns={'sample_date': 'first_monitoring_sample_date'}, inplace=True)
 
     # Find first sample date of admission notes
     first_notes_sample_date = df[df.source == 'notes'].groupby(
@@ -39,6 +44,7 @@ def transform_to_relative_timestamps(df: pd.DataFrame, drop_old_columns: bool = 
     first_notes_sample_date.rename(columns={'sample_date': 'first_notes_sample_date'}, inplace=True)
 
     merged_first_sample_dates_df = first_ehr_sample_date.merge(first_notes_sample_date, on='case_admission_id')
+    merged_first_sample_dates_df = merged_first_sample_dates_df.merge(first_monitoring_sample_date, on='case_admission_id')
 
     merged_first_sample_dates_df['delta_first_sample_date_h'] = (
                         merged_first_sample_dates_df[
@@ -46,11 +52,21 @@ def transform_to_relative_timestamps(df: pd.DataFrame, drop_old_columns: bool = 
                         - merged_first_sample_dates_df[
                             'first_notes_sample_date']) / np.timedelta64(1, 'h')
 
+    merged_first_sample_dates_df['delta_first_monitoring_sample_date_h'] = (
+                        merged_first_sample_dates_df[
+                            'first_ehr_sample_date']
+                        - merged_first_sample_dates_df[
+                            'first_monitoring_sample_date']) / np.timedelta64(1, 'h')
+
     # verify that notes are not too distant from EHR
     if any(merged_first_sample_dates_df['delta_first_sample_date_h'].abs() > 24):
         raise Exception('Data extracted from admission notes should always occur before EHR!')
 
-    merged_first_sample_dates_df['reference_first_sample_date'] = merged_first_sample_dates_df['first_ehr_sample_date']
+    # verify that monitoring is not too distant from first lab data in EHR
+    if any(merged_first_sample_dates_df['delta_first_monitoring_sample_date_h'].abs() > 24):
+        raise Exception('Lab data and monitoring data are too distant!')
+
+    merged_first_sample_dates_df['reference_first_sample_date'] = merged_first_sample_dates_df['first_monitoring_sample_date']
     merged_first_sample_dates_df = merged_first_sample_dates_df[['case_admission_id', 'reference_first_sample_date']]
 
     # TRANSFORM TO RELATIVE TIMESTAMPS
@@ -65,9 +81,9 @@ def transform_to_relative_timestamps(df: pd.DataFrame, drop_old_columns: bool = 
     # ensure notes data at timepoint 0
     df.loc[df.source == 'notes', 'relative_sample_date'] = 0.0
 
-    # FILTER OUT UNWARRANTED DATA
-    # exclude samples with relative_sample_date < 0
-    df = df[df['relative_sample_date'] >= 0]
+    # reaining samples with relative_sample_date < 0 are labs drawn in the ED which should be kept and set at tp0
+    # Reason: reference tp0 is first sample date of non lab date from EHR
+    df.loc[df['relative_sample_date'] < 0, 'relative_sample_date'] = 0
 
     if restrict_to_time_range:
         df = df[df['relative_sample_date'] <= desired_time_range]
