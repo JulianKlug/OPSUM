@@ -102,7 +102,7 @@ def resample_to_hourly_features(df: pd.DataFrame, verbose=True,
             median_variable_df)
 
     assert (resampled_df.groupby(['case_admission_id', 'relative_sample_date_hourly_cat',
-                           'sample_label']).count().reset_index().value == 1).all(), \
+                           'sample_label']).count().reset_index().value <= 1).all(), \
         "There are multiple values per hour per variable per case_admission_id"
 
     return resampled_df

@@ -3,9 +3,13 @@ import pandas as pd
 
 from mimic_preprocessing.database_assembly.database_assembly import assemble_variable_database
 from mimic_preprocessing.database_assembly.relative_timestamps import transform_to_relative_timestamps
+from preprocessing.resample_to_time_bins.resample_to_hourly_features import resample_to_hourly_features
+from preprocessing_tools.encoding_categorical_variables.encode_categorical_variables import encode_categorical_variables
+from preprocessing_tools.handling_missing_values.impute_missing_values import impute_missing_values
 
 
 def preprocess(extracted_tables_path: str, admission_notes_data_path: str,
+               reference_population_stats_path: str,
                preproccessed_monitoring_data_path: str = '',
                 mimic_admission_nihss_db_path: str = '',
                log_dir: str = '', verbose:bool=True, desired_time_range:int=72) -> pd.DataFrame:
@@ -44,12 +48,30 @@ def preprocess(extracted_tables_path: str, admission_notes_data_path: str,
                                                              log_dir=log_dir)
     print(f'B. Number of patients: {restricted_feature_df.case_admission_id.nunique()}')
 
+    # 7. Encoding categorical variables (one-hot)
+    print('ENCODING CATEGORICAL VARIABLES')
+    cat_encoded_restricted_feature_df = encode_categorical_variables(restricted_feature_df, verbose=verbose,
+                                                                     log_dir=log_dir)
+    print(f'C. Number of patients: {cat_encoded_restricted_feature_df.case_admission_id.nunique()}')
+
+    # 8. Resampling to hourly frequency
+    print('RESAMPLING TO HOURLY FREQUENCY')
+    resampled_df = resample_to_hourly_features(cat_encoded_restricted_feature_df, verbose=verbose)
+    print(f'D. Number of patients: {resampled_df.case_admission_id.nunique()}')
+
+    # 9. imputation of missing values
+    print('IMPUTING MISSING VALUES')
+    imputed_missing_df = impute_missing_values(resampled_df, reference_population_stats_path=reference_population_stats_path,
+                                               verbose=verbose, log_dir=log_dir, desired_time_range=desired_time_range)
+    print(f'E. Number of patients: {imputed_missing_df.case_admission_id.nunique()}')
 
 
 
 tables_path = '/Users/jk1/temp/mimic/extraction'
 admission_notes_path = '/Users/jk1/OneDrive - unige.ch/stroke_research/geneva_stroke_unit_dataset/data/mimic_data/combined_notes_labels.xlsx'
 preprocessed_monitoring_path = '/Users/jk1/temp/mimic/preprocessing/preprocessed_monitoring_df.csv'
+reference_population_stats_path = '/Users/jk1/temp/opsum_prepro_output/logs_27092022_172403/descriptive_stats.csv'
 mimic_admission_nihss_db_path = '/Users/jk1/stroke_datasets/national-institutes-of-health-stroke-scale-nihss-annotations-for-the-mimic-iii-database-1.0.0/mimic_nihss_database.csv'
+log_dir = '/Users/jk1/temp/mimic/logging/test'
 
-preprocess(tables_path, admission_notes_path, preprocessed_monitoring_path, mimic_admission_nihss_db_path, verbose=True)
+preprocess(tables_path, admission_notes_path, reference_population_stats_path, preprocessed_monitoring_path, mimic_admission_nihss_db_path, log_dir=log_dir, verbose=True)
