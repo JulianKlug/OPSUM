@@ -21,7 +21,7 @@ def preprocess_labs(lab_df: pd.DataFrame, log_dir:str = '', verbose: bool = True
     :return: preprocessed labs dataframe
     """
 
-    selected_reference_values = pd.read_excel('./selected_lab_values.xlsx')
+    selected_reference_values = pd.read_excel(os.path.join(os.path.dirname(__file__), 'selected_lab_values.xlsx'))
 
     ## ALIGN LABEL NAMES TO DPI LABEL NAMES
     aligned_lab_df = lab_df.copy()
@@ -119,6 +119,7 @@ def preprocess_labs(lab_df: pd.DataFrame, log_dir:str = '', verbose: bool = True
     restricted_lab_df.loc[(restricted_lab_df['valueuom'] == 'm/uL'), 'valueuom'] = 'T/l'
     restricted_lab_df.loc[(restricted_lab_df['valueuom'] == 'K/uL'), 'valueuom'] = 'G/l'
     restricted_lab_df.loc[(restricted_lab_df['valueuom'] == 'pg/mL'), 'valueuom'] = 'ng/l'
+    restricted_lab_df.loc[(restricted_lab_df['valueuom'] == 'mg/L'), 'valueuom'] = 'mg/l'
 
     # Verify that units in selected_reference_values are consistent with those in restricted_lab_df
     for _, row in selected_reference_values.iterrows():

@@ -4,9 +4,10 @@ import os
 import argparse
 
 
-def extract_labs(output_dir: str):
+
+def extract_admission():
     """
-    Extracts lab events from the MIMIC database and returns a dataframe
+    Extracts admission events from the MIMIC database and returns a dataframe
     Applies selection criteria
     """
     # information used to create a database connection
@@ -25,15 +26,23 @@ def extract_labs(output_dir: str):
         patient_selection_query = ''.join(fp.readlines())
 
     query = query_schema + """
-    WITH sel_lab as
+    WITH sel_admission as
     (
     """ + patient_selection_query + """
-    SELECT selection.subject_id, selection.hadm_id, selection.icustay_id,
-            lab.itemid, lab.charttime,	lab.value,	lab.valuenum,	lab.valueuom
-    FROM selection
+    SELECT selection.subject_id, selection.hadm_id, selection.icustay_id, selection.dob, selection.admittime,
+           selection.age, pat.gender, admissions.diagnosis, admissions.admission_type, admissions.admission_location, chart.itemid, chart.value as chart_value
 
-    INNER JOIN labevents as lab
-        on selection.hadm_id = lab.hadm_id
+    FROM selection
+    
+    INNER JOIN patients pat
+      ON selection.subject_id = pat.subject_id
+    
+    INNER JOIN admissions admissions
+      ON selection.hadm_id = admissions.hadm_id
+    
+    LEFT JOIN chartevents as chart
+        ON selection.hadm_id = chart.hadm_id
+        AND (chart.itemid = 225059 OR chart.itemid = 225811)
 
     WHERE selection.exclusion_discharge_diagnosis = 0
         AND selection.exclusion_first_stay = 0
@@ -43,11 +52,14 @@ def extract_labs(output_dir: str):
         AND selection.exclusion_admission_diagnosis = 0
     )
 
-    SELECT sel_lab.subject_id, sel_lab.hadm_id, sel_lab.icustay_id,
-            sel_lab.itemid, d_labitems.label,	sel_lab.charttime,	sel_lab.value,	sel_lab.valuenum,	sel_lab.valueuom
-    FROM sel_lab
-    LEFT JOIN d_labitems as d_labitems
-        on sel_lab.itemid = d_labitems.itemid
+    SELECT sel_admission.subject_id, sel_admission.hadm_id, sel_admission.icustay_id, sel_admission.dob, sel_admission.admittime,
+            sel_admission.age, sel_admission.gender, sel_admission.admission_type, sel_admission.diagnosis, sel_admission.admission_location,
+            sel_admission.itemid, d_items.label, sel_admission.chart_value
+        
+    FROM sel_admission
+    LEFT JOIN d_items as d_items
+        on sel_admission.itemid = d_items.itemid
+
 
     """
 
@@ -59,5 +71,5 @@ if __name__ == '__main__':
     parser.add_argument('--output_dir', '-o', type=str)
     output_dir = parser.parse_args().output_dir
 
-    lab_df = extract_labs(output_dir)
-    lab_df.to_csv(os.path.join(output_dir, 'lab_df.csv'), index=False)
+    admission_df = extract_admission()
+    admission_df.to_csv(os.path.join(output_dir, 'admission_df.csv'), index=False)

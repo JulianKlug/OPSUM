@@ -3,11 +3,11 @@ WITH selection AS
 (
 WITH co AS
 (
-SELECT icu.subject_id, icu.hadm_id, icu.icustay_id, dx.icd9_code
+SELECT icu.subject_id, icu.hadm_id, icu.icustay_id, dx.icd9_code, pat.dob
 , EXTRACT(EPOCH FROM outtime - intime)/60.0/60.0 as icu_length_of_stay_h
 , EXTRACT('epoch' from icu.intime - pat.dob) / 60.0 / 60.0 / 24.0 / 365.242 as age
 , RANK() OVER (PARTITION BY icu.subject_id ORDER BY icu.intime) AS icustay_id_order
-, admissions.diagnosis, admissions.admission_type
+, admissions.diagnosis, admissions.admission_type, admissions.admittime
 
 FROM icustays icu
 INNER JOIN patients pat
@@ -19,7 +19,7 @@ INNER JOIN admissions admissions
 )
 
 SELECT
-  co.subject_id, co.hadm_id, co.icustay_id, co.icu_length_of_stay_h
+  co.subject_id, co.hadm_id, co.icustay_id, co.admittime, co.dob, co.icu_length_of_stay_h
   , co.age
   , co.icustay_id_order
   , co.icd9_code
