@@ -18,7 +18,7 @@ from preprocessing.variable_assembly.relative_timestamps import transform_to_rel
 
 restricted_feature_df = transform_to_relative_timestamps(feature_df, drop_old_columns=False, restrict_to_time_range=True)
 #%%
-from preprocessing.normalisation.normalisation import normalise_data
+from preprocessing_tools.normalisation.normalisation import normalise_data
 
 normalised_restricted_feature_df = normalise_data(restricted_feature_df, verbose=True)
 #%%
