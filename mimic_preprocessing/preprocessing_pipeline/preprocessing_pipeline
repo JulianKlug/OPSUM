@@ -6,10 +6,12 @@ from mimic_preprocessing.database_assembly.relative_timestamps import transform_
 from preprocessing.resample_to_time_bins.resample_to_hourly_features import resample_to_hourly_features
 from preprocessing_tools.encoding_categorical_variables.encode_categorical_variables import encode_categorical_variables
 from preprocessing_tools.handling_missing_values.impute_missing_values import impute_missing_values
+from preprocessing_tools.normalisation.normalisation import normalise_data
 
 
 def preprocess(extracted_tables_path: str, admission_notes_data_path: str,
-               reference_population_stats_path: str,
+               reference_population_imputation_path: str,
+                reference_population_normalisation_parameters_path: str,
                preproccessed_monitoring_data_path: str = '',
                 mimic_admission_nihss_db_path: str = '',
                log_dir: str = '', verbose:bool=True, desired_time_range:int=72) -> pd.DataFrame:
@@ -18,6 +20,8 @@ def preprocess(extracted_tables_path: str, admission_notes_data_path: str,
 
     :param extracted_tables_path: Path to the folder containing the extracted tables from the MIMIC-III dataset.
     :param admission_notes_data_path: Path to the folder containing the data extracted from admission & discharge notes.
+    :param reference_population_imputation_path: Path to the file containing the reference population statistics. This will be used for imputation of missing values (> 2/3 of subjects)
+    :param reference_population_normalisation_parameters_path: Path to the file containing the reference population normalisation parameters. This will be used to normalise this dataset
     :param preproccessed_monitoring_data_path: Path to the folder containing the preprocessed monitoring data.
     :param mimic_admission_nihss_db_path: Path to the folder containing the MIMIC admission nihss database.
     :param log_dir: path to logging directory (this will receive logs of excluded patients and those that were not found)
@@ -61,17 +65,32 @@ def preprocess(extracted_tables_path: str, admission_notes_data_path: str,
 
     # 9. imputation of missing values
     print('IMPUTING MISSING VALUES')
-    imputed_missing_df = impute_missing_values(resampled_df, reference_population_stats_path=reference_population_stats_path,
+    imputed_missing_df = impute_missing_values(resampled_df, reference_population_imputation_path=reference_population_imputation_path,
                                                verbose=verbose, log_dir=log_dir, desired_time_range=desired_time_range)
     print(f'E. Number of patients: {imputed_missing_df.case_admission_id.nunique()}')
+
+    # 10. normalisation
+    print('APPLYING NORMALISATION')
+    normalised_df = normalise_data(imputed_missing_df,
+                                   reference_population_normalisation_parameters_path=reference_population_normalisation_parameters_path,
+                                   verbose=verbose, log_dir=log_dir)
+    print(f'F. Number of patients: {normalised_df.case_admission_id.nunique()}')
+
+    # todo
+    # - verify normalisation
+    #  - outcome preprocessing
+
 
 
 
 tables_path = '/Users/jk1/temp/mimic/extraction'
 admission_notes_path = '/Users/jk1/OneDrive - unige.ch/stroke_research/geneva_stroke_unit_dataset/data/mimic_data/combined_notes_labels.xlsx'
 preprocessed_monitoring_path = '/Users/jk1/temp/mimic/preprocessing/preprocessed_monitoring_df.csv'
-reference_population_stats_path = '/Users/jk1/temp/opsum_prepro_output/logs_27092022_172403/descriptive_stats.csv'
+reference_population_imputation_path = '/Users/jk1/temp/opsum_prepro_output/logs_27122022_191859/tp0_imputation_parameters.csv'
+reference_population_normalisation_parameters_path = '/Users/jk1/temp/opsum_prepro_output/logs_27122022_191859/normalisation_parameters.csv'
 mimic_admission_nihss_db_path = '/Users/jk1/stroke_datasets/national-institutes-of-health-stroke-scale-nihss-annotations-for-the-mimic-iii-database-1.0.0/mimic_nihss_database.csv'
 log_dir = '/Users/jk1/temp/mimic/logging/test'
 
-preprocess(tables_path, admission_notes_path, reference_population_stats_path, preprocessed_monitoring_path, mimic_admission_nihss_db_path, log_dir=log_dir, verbose=True)
+preprocess(tables_path, admission_notes_path,
+           reference_population_imputation_path, reference_population_normalisation_parameters_path,
+           preprocessed_monitoring_path, mimic_admission_nihss_db_path, log_dir=log_dir, verbose=True)
