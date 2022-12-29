@@ -25,6 +25,7 @@ def resample_to_hourly_features(df: pd.DataFrame, verbose=True,
     """
 
     df['relative_sample_date_hourly_cat'] = np.floor(df['relative_sample_date'])
+    df.drop_duplicates(inplace=True)
 
     if verbose:
         print('The following variables will be downsampled to median, max, min per hour:')
@@ -54,6 +55,17 @@ def resample_to_hourly_features(df: pd.DataFrame, verbose=True,
             'relative_sample_date_hourly_cat'
         ])['value'].median().reset_index()
         median_variable_df['sample_label'] = f'median_{variable}'
+
+        # For variables for which the first value is also coming from notes / stroke registry, set first median to the value obtained from there (more reliable)
+        if ('notes' in df[df.sample_label == variable].source.unique()) or ('stroke_registry' in df[df.sample_label == variable].source.unique()):
+            admission_var_df = df[(df.sample_label == variable) & (df.source.isin(['notes', 'stroke_registry']))][['case_admission_id', 'value']]
+            admission_var_df.rename(columns={'value': 'admission_value'}, inplace=True)
+            median_variable_df = median_variable_df.merge(admission_var_df, on=['case_admission_id'], how='left')
+            median_variable_df.loc[(median_variable_df.relative_sample_date_hourly_cat == 0)
+                                    & (~median_variable_df.admission_value.isna()), 'value'] = median_variable_df.loc[(median_variable_df.relative_sample_date_hourly_cat == 0)
+                                    & (~median_variable_df.admission_value.isna()), 'admission_value']
+            median_variable_df.drop(columns=['admission_value'], inplace=True)
+
         # extract max
         max_variable_df = df[
             df.sample_label == variable].groupby([
