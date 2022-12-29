@@ -10,22 +10,22 @@ data_path = '/Users/jk1/stroke_datasets/stroke_unit_dataset/per_value/Extraction
 admission_data_path = '/Users/jk1/OneDrive - unige.ch/stroke_research/geneva_stroke_unit_dataset/data/stroke_registry/post_hoc_modified/stroke_registry_post_hoc_modified.xlsx'
 patient_selection_path = '/Users/jk1/temp/opsum_extration_output/high_frequency_data_patient_selection.csv'
 #%%
-from preprocessing.variable_assembly.variable_database_assembly import assemble_variable_database
+from preprocessing.geneva_stroke_unit_preprocessing.variable_assembly.variable_database_assembly import assemble_variable_database
 
 feature_df = assemble_variable_database(data_path, admission_data_path, patient_selection_path)
 #%%
-from preprocessing.variable_assembly.relative_timestamps import transform_to_relative_timestamps
+from preprocessing.geneva_stroke_unit_preprocessing.variable_assembly.relative_timestamps import transform_to_relative_timestamps
 
 restricted_feature_df = transform_to_relative_timestamps(feature_df, drop_old_columns=False, restrict_to_time_range=True)
 #%%
-from preprocessing_tools.normalisation.normalisation import normalise_data
+from preprocessing.preprocessing_tools.normalisation.normalisation import normalise_data
 
 normalised_restricted_feature_df = normalise_data(restricted_feature_df, verbose=True)
 #%%
 #%%
 normalised_restricted_feature_df['relative_sample_date_hourly_cat'] = np.floor(normalised_restricted_feature_df['relative_sample_date'])
 #%%
-from preprocessing.outcome_preprocessing.outcome_preprocessing import preprocess_outcomes
+from preprocessing.geneva_stroke_unit_preprocessing.outcome_preprocessing.outcome_preprocessing import preprocess_outcomes
 
 stroke_registry_df = pd.read_excel(admission_data_path)
 patient_selection_df = pd.read_csv(patient_selection_path, dtype=str)
@@ -34,7 +34,7 @@ outcome_df = preprocess_outcomes(stroke_registry_df, patient_selection_df)
 # fit PCA on hour0
 hour0_df = normalised_restricted_feature_df[normalised_restricted_feature_df['relative_sample_date_hourly_cat'] == 0]
 #%%
-# for simplicity dropping variables with duplicated values (but ideally duplicates should be replacing by median / mode /min / max in preprocessing)
+# for simplicity dropping variables with duplicated values (but ideally duplicates should be replacing by median / mode /min / max in geneva_stroke_unit_preprocessing)
 hour0_df = hour0_df.drop_duplicates(['case_admission_id', 'sample_label'])
 hour0_df = hour0_df[['case_admission_id', 'sample_label', 'value']].pivot(index='case_admission_id', columns='sample_label', values='value')
 #%%
@@ -66,7 +66,7 @@ model_hour0_params = ppca.C
 for hour_bin in range(0, 72):
     hourX_df = normalised_restricted_feature_df[normalised_restricted_feature_df['relative_sample_date_hourly_cat'] == hour_bin]
     #%%
-    # for simplicity dropping variables with duplicated values (but ideally duplicates should be replacing by median / mode /min / max in preprocessing)
+    # for simplicity dropping variables with duplicated values (but ideally duplicates should be replacing by median / mode /min / max in geneva_stroke_unit_preprocessing)
     hourX_df = hourX_df.drop_duplicates(['case_admission_id', 'sample_label'])
     hourX_df = hourX_df[['case_admission_id', 'sample_label', 'value']].pivot(index='case_admission_id', columns='sample_label', values='value')
     #%%
