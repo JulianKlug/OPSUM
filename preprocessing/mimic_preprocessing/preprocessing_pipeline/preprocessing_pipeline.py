@@ -19,11 +19,12 @@ from preprocessing.preprocessing_tools.preprocessing_verification.variable_prese
 
 
 def preprocess(extracted_tables_path: str, admission_notes_data_path: str,
-               reference_population_imputation_path: str,
+                reference_population_imputation_path: str,
                 reference_population_normalisation_parameters_path: str,
-               preproccessed_monitoring_data_path: str = '',
+                reference_categorical_encoding_path: str,
+                preproccessed_monitoring_data_path: str = '',
                 mimic_admission_nihss_db_path: str = '',
-               log_dir: str = '', verbose:bool=True, desired_time_range:int=72) -> pd.DataFrame:
+                log_dir: str = '', verbose:bool=True, desired_time_range:int=72) -> pd.DataFrame:
     """
     Apply geneva_stroke_unit_preprocessing pipeline detailed in ./geneva_stroke_unit_preprocessing/readme.md to the MIMIC-III dataset.
 
@@ -31,6 +32,7 @@ def preprocess(extracted_tables_path: str, admission_notes_data_path: str,
     :param admission_notes_data_path: Path to the folder containing the data extracted from admission & discharge notes.
     :param reference_population_imputation_path: Path to the file containing the reference population statistics. This will be used for imputation of missing values (> 2/3 of subjects)
     :param reference_population_normalisation_parameters_path: Path to the file containing the reference population normalisation parameters. This will be used to normalise this dataset
+    :param reference_categorical_encoding_path: Path to the file containing the reference population categorical encoding parameters. This will be used to encode categorical variables
     :param preproccessed_monitoring_data_path: Path to the folder containing the preprocessed monitoring data.
     :param mimic_admission_nihss_db_path: Path to the folder containing the MIMIC admission nihss database.
     :param log_dir: path to logging directory (this will receive logs of excluded patients and those that were not found)
@@ -63,8 +65,9 @@ def preprocess(extracted_tables_path: str, admission_notes_data_path: str,
 
     # 7. Encoding categorical variables (one-hot)
     print('ENCODING CATEGORICAL VARIABLES')
-    cat_encoded_restricted_feature_df = encode_categorical_variables(restricted_feature_df, verbose=verbose,
-                                                                     log_dir=log_dir)
+    cat_encoded_restricted_feature_df = encode_categorical_variables(restricted_feature_df,
+                                                                     reference_categorical_encoding_path,
+                                                                     verbose=verbose, log_dir=log_dir)
     print(f'C. Number of patients: {cat_encoded_restricted_feature_df.case_admission_id.nunique()}')
 
     # 8. Resampling to hourly frequency
@@ -97,6 +100,7 @@ def preprocess_and_save(
                 extracted_tables_path: str, admission_notes_data_path: str,
                 reference_population_imputation_path: str,
                 reference_population_normalisation_parameters_path: str,
+                reference_categorical_encoding_path: str,
                 output_dir: str,
                 preproccessed_monitoring_data_path: str = '',
                 mimic_admission_nihss_db_path: str = '',
@@ -116,6 +120,7 @@ def preprocess_and_save(
 
     preprocessed_feature_df, preprocessed_outcome_df = preprocess(extracted_tables_path, admission_notes_data_path,
                            reference_population_imputation_path, reference_population_normalisation_parameters_path,
+                           reference_categorical_encoding_path,
                            preproccessed_monitoring_data_path, mimic_admission_nihss_db_path,
                                                                   log_dir=log_dir, verbose=verbose,
                                                                   desired_time_range=desired_time_range)
@@ -149,13 +154,15 @@ if __name__ == '__main__':
     parser.add_argument('-e','--ehr_tables_path', type=str, help='EHR tables main path')
     parser.add_argument('-a','--admission_notes_path', type=str, help='Data extracted from admission notes')
     parser.add_argument('-ri','--reference_population_imputation_path', type=str, help='Path to imputation stats from reference population')
-    parser.add_argument('-rn','--reference_population_normalisation_parameters_path', type=str, help='Path to normalisation stats from reference population')
+    parser.add_argument('-rn','--reference_population_normalisation_parameters_path', type=str, help='Path to normalisation stats from the reference population')
+    parser.add_argument('-rc','--reference_categorical_encoding_path', type=str, help='Path to the categorical encoding from the reference population')
     parser.add_argument('-o', '--output_dir', type=str, help='Output directory')
     parser.add_argument('-m', '--preprocessed_monitoring_path', type=str, help='Path to preprocessed monitoring data')
     parser.add_argument('-mi', '--mimic_admission_nihss_db_path', type=str, help='Path to the mimic nihss data')
     args = parser.parse_args()
 
     preprocess_and_save(args.ehr_tables_path, args.admission_notes_path,
-           args.reference_population_imputation_path, args.reference_population_normalisation_parameters_path,
-            args.output_dir,
-           args.preprocessed_monitoring_path, args.mimic_admission_nihss_db_path, verbose=True)
+                        args.reference_population_imputation_path, args.reference_population_normalisation_parameters_path,
+                        args.reference_categorical_encoding_path,
+                        args.output_dir,
+                        args.preprocessed_monitoring_path, args.mimic_admission_nihss_db_path, verbose=True)
