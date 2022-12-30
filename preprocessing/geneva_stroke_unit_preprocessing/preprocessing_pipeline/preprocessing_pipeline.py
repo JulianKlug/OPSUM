@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import pandas as pd
 import time
@@ -81,8 +82,15 @@ def preprocess_and_save(ehr_data_path:str, stroke_registry_data_path:str, patien
 
     timestamp = time.strftime("%d%m%Y_%H%M%S")
     desired_time_range = 72
+    output_dir = os.path.join(output_dir, f'gsu_prepro_{timestamp}')
     log_dir = os.path.join(output_dir, f'logs_{timestamp}')
+    saved_args = locals()
     ensure_dir(log_dir)
+
+    # save saved_args to log_dir
+    with open(os.path.join(log_dir, 'preprocessing_arguments.json'), 'w') as fp:
+        json.dump(saved_args, fp)
+
     preprocessed_feature_df, preprocessed_outcome_df = preprocess(ehr_data_path, stroke_registry_data_path,
                                                                   patient_selection_path, verbose=verbose, log_dir=log_dir,
                                                                   desired_time_range=desired_time_range)
