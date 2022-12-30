@@ -11,7 +11,7 @@ from sklearn.utils import resample
 from prediction.mrs_outcome_prediction.LSTM.LSTM import lstm_generator
 from prediction.mrs_outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
     link_patient_id_to_outcome, features_to_numpy, numpy_to_lookup_table
-from prediction.utils.scoring import precision, recall, matthews
+from prediction.utils.scoring import precision, recall, matthews, plot_roc_curve
 from prediction.utils.utils import check_data, save_json, ensure_dir
 
 
@@ -25,9 +25,9 @@ def test_LSTM(X, y, model_weights_path, activation, batch, data, dropout, layers
 
     model.load_weights(model_weights_path)
 
-    # calculate model prediction classes
-    # y_pred_test = model.predict(X)
-    # y_pred_test_binary = (y_pred_test > 0.5).astype('int32')
+    # calculate overall model prediction
+    y_pred_test = model.predict(X)
+    roc_auc_figure = plot_roc_curve(y, y_pred_test, title = "ROC for LSTM model")
 
     # bootstrap predictions
     roc_auc_scores = []
@@ -102,7 +102,7 @@ def test_LSTM(X, y, model_weights_path, activation, batch, data, dropout, layers
         'model_weights_path': model_weights_path
     }], index=[0])
 
-    return result_df
+    return result_df, roc_auc_figure
 
 
 if __name__ == '__main__':
@@ -128,7 +128,7 @@ if __name__ == '__main__':
                            args.data, str(args.dropout), str(args.layers),
                            str(args.masking), args.optimizer, args.outcome,
                            str(args.units), str(args.cv_fold)])
-    model_weights_path = os.path.join(args.model_weights_dir, model_name + '.hdf5')
+    model_weights_path = os.path.join(args.model_weights_dir, f'{model_name}.hdf5')
     output_dir = os.path.join(args.output_dir, f'test_LSTM_{model_name}')
     ensure_dir(output_dir)
     shutil.copy2(model_weights_path, output_dir)
@@ -184,9 +184,11 @@ if __name__ == '__main__':
     # Remove the case_admission_id, sample_label, and time_step_label columns from the data
     test_X_np = test_X_np[:, :, :, -1].astype('float32')
 
-    result_df = test_LSTM(X=test_X_np, y=test_y_np, model_weights_path=model_weights_path,
+    result_df, roc_auc_figure = test_LSTM(X=test_X_np, y=test_y_np, model_weights_path=model_weights_path,
                           activation=args.activation, batch=args.batch, data=args.data, dropout=args.dropout,
                           layers=args.layers, masking=args.masking, optimizer=args.optimizer,
                           outcome=args.outcome, units=args.units, n_time_steps=n_time_steps, n_channels=n_channels)
+
+    roc_auc_figure.savefig(os.path.join(output_dir, 'roc_auc_curve.png'))
 
     result_df.to_csv(os.path.join(output_dir, 'test_LSTM_results.tsv'), sep='\t', index=False)
