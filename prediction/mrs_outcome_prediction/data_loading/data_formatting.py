@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-
+import os
 
 def binarize_to_int(y):
     if (y == 'yes') | (y == True):
@@ -141,6 +141,12 @@ def features_to_numpy(X: pd.DataFrame,
     gb_cid = [x for _, x in df.groupby('case_admission_id')]
     df_np = np.array([[x for _, x in gb_cid_x.groupby('relative_sample_date_hourly_cat')] for gb_cid_x in gb_cid])
     return df_np
+
+def feature_order_verification(X_np: np.ndarray):
+    feature_order = pd.read_excel(os.path.join(os.path.dirname(os.path.dirname(__file__)),'LSTM', 'training', 'lstm_feature_order.xlsx'), header=None)
+    feature_order = feature_order[0].values
+    feature_order_verification = [np.all(feature_order[i] == X_np[0, 0, i, 2]) for i in range(len(feature_order))]
+    assert np.all(feature_order_verification), 'The order of features is not the one expected by the model.'
 
 
 def numpy_to_lookup_table(df_np: np.ndarray) -> dict:

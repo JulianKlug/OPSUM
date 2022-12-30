@@ -1,4 +1,7 @@
 import tensorflow.keras.backend as K
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, auc
+
 
 def precision(y_true, y_pred):
     true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
@@ -27,4 +30,28 @@ def matthews(y_true, y_pred):
     denominator = K.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
     return numerator / (denominator + K.epsilon())
 
+
+def plot_roc_curve(y_true, y_pred, title):
+    fpr, tpr, thresholds = roc_curve(y_true, y_pred)
+    roc_auc = auc(fpr, tpr)
+
+    fig = plt.figure(figsize=(7.5, 5))
+    lw = 2
+    plt.plot(
+        fpr,
+        tpr,
+        color="darkorange",
+        lw=lw,
+        label="ROC curve (area = %0.2f)" % roc_auc,
+    )
+    plt.plot([0, 1], [0, 1], color="navy", lw=lw, linestyle="--")
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title(title)
+    plt.legend(loc="lower right")
+    # adjust figure size
+
+    return fig
 
