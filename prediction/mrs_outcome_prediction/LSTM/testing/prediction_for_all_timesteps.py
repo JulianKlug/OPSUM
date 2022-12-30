@@ -26,12 +26,14 @@ DEFAULT_CONFIG = {
 }
 
 
-def prediction_for_all_timesteps(data, model_weights_path:str, config:dict=DEFAULT_CONFIG):
+def prediction_for_all_timesteps(data, model_weights_path:str, n_time_steps:int, n_channels:int, config:dict=DEFAULT_CONFIG):
     """
     Predicts the outcome for all timesteps for all patients in data.
     Args:
         data: numpy array of shape (n_patients, n_time_steps, n_features)
         model_weights_path: path to the model weights
+        n_time_steps: total number of time steps
+        n_channels: number of channels
         config: model configuration
 
     Returns:
@@ -128,7 +130,7 @@ if __name__ == '__main__':
     test_X_np = test_X_np[:, :, :, -1].astype('float32')
     train_X_np = train_X_np[:, :, :, -1].astype('float32')
 
-    predictions = prediction_for_all_timesteps(test_X_np, args.model_weights_path, config)
+    predictions = prediction_for_all_timesteps(test_X_np, args.model_weights_path, n_time_steps, n_time_steps, config)
 
     # Save predictions as pickle
     with open(os.path.join(args.output_dir, 'predictions_over_timesteps.pkl'), 'wb') as f:

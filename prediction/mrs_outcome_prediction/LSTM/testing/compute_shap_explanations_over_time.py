@@ -21,7 +21,7 @@ DEFAULT_CONFIG = {
     'test_size' : 0.20,
 }
 
-def compute_shap_explanations_over_time(model_weights_path:str, features_path:str, labels_path:str, out_dir:str, config:dict=DEFAULT_CONFIG):
+def compute_shap_explanations_over_time_wrapper(model_weights_path:str, features_path:str, labels_path:str, out_dir:str, config:dict=DEFAULT_CONFIG):
 
     # load the dataset
     X, y = format_to_2d_table_with_time(feature_df_path=features_path, outcome_df_path=labels_path,
@@ -64,6 +64,17 @@ def compute_shap_explanations_over_time(model_weights_path:str, features_path:st
     test_X_np = test_X_np[:, :, :, -1].astype('float32')
     train_X_np = train_X_np[:, :, :, -1].astype('float32')
 
+    shap_values_over_ts = compute_shap_explanations_over_time(model_weights_path=model_weights_path, train_X_np=train_X_np, test_X_np=test_X_np,
+                                                                n_time_steps=n_time_steps, n_channels=n_channels,
+                                                                config=config)
+
+    with open(os.path.join(out_dir, '/deep_explainer_shap_values_over_ts.pkl'),
+              'wb') as handle:
+        pickle.dump(shap_values_over_ts, handle)
+
+
+def compute_shap_explanations_over_time(model_weights_path:str, train_X_np:np.ndarray, test_X_np:np.ndarray,
+                                        n_time_steps:int, n_channels:int, config:dict=DEFAULT_CONFIG):
     shap_values_over_ts = []
 
     # Masking has to be overriden
@@ -90,9 +101,9 @@ def compute_shap_explanations_over_time(model_weights_path:str, features_path:st
 
         shap_values_over_ts.append(shap_values)
 
-    with open(os.path.join(out_dir, '/deep_explainer_shap_values_over_ts.pkl'),
-              'wb') as handle:
-        pickle.dump(shap_values_over_ts, handle)
+
+    return shap_values_over_ts
+
 
 
 if __name__ == '__main__':
@@ -124,7 +135,7 @@ if __name__ == '__main__':
     'test_size' : args.test_size,
     }
 
-    compute_shap_explanations_over_time(model_weights_path=args.model_weights_path,
+    compute_shap_explanations_over_time_wrapper(model_weights_path=args.model_weights_path,
                                         features_path=args.features_path,
                                         labels_path=args.labels_path,
                                         out_dir=args.output_dir,
