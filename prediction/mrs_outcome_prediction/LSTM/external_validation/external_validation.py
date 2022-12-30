@@ -63,7 +63,7 @@ def external_validation(model_weights_dir: str, features_path: str, labels_path:
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='LSTM model for predicting outcome')
+    parser = argparse.ArgumentParser(description='LSTM model for predicting outcome in external validation data')
     parser.add_argument('-t', '--target_outcome', required=True, type=str, help='outcome (ex. 3M Death)')
     parser.add_argument('-o', '--output_dir', required=True, type=str, help='output directory')
     parser.add_argument('-f', '--features_path', required=True, type=str, help='path to features')
