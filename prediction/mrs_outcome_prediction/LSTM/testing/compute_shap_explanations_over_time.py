@@ -1,5 +1,4 @@
 import argparse
-
 import shap
 import os
 from prediction.utils.scoring import precision, recall, matthews
@@ -8,6 +7,17 @@ import numpy as np
 import pickle
 from tqdm import tqdm
 from prediction.mrs_outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time
+
+# Shap values require very specific versions
+# verify versions: TensorFlow 1.14, Python 3.7, Protobuf 3.20, h5py 2.10
+import tensorflow as tf
+import sys
+import google.protobuf
+import h5py
+assert tf.__version__ == '1.14.0'
+assert sys.version_info[0] == 3 and sys.version_info[1] == 7
+assert google.protobuf.__version__ == '3.20.0'
+assert h5py.__version__ == '2.10.0'
 
 DEFAULT_CONFIG = {
     'outcome': '3M mRS 0-2',
