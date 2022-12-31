@@ -1,5 +1,6 @@
 #!/usr/bin/python
-import os, datetime, itertools, shutil, traceback
+import json
+import os, traceback
 import numpy as np
 import pandas as pd
 import keras.backend as K
@@ -9,19 +10,23 @@ from sklearn.metrics import roc_auc_score, matthews_corrcoef
 import argparse
 
 # turn off warnings from Tensorflow
-from prediction.outcome_prediction.LSTM.LSTM import lstm_generator
-
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 from prediction.outcome_prediction.LSTM.training.utils import initiate_log_files
 from prediction.outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
-    link_patient_id_to_outcome, features_to_numpy, numpy_to_lookup_table
+    link_patient_id_to_outcome, features_to_numpy, numpy_to_lookup_table, feature_order_verification
 from prediction.utils.scoring import precision, matthews, recall
 from prediction.utils.utils import generate_balanced_arrays, check_data, ensure_dir, save_json
+from prediction.outcome_prediction.LSTM.LSTM import lstm_generator
 
 
-# define 'train_model'
-def train_model(activation, batch, data, dropout, layers, masking, optimizer, outcome, units):
+def train_model(
+        features_path: str, labels_path:str, output_dir:str,
+        activation, batch, data, dropout, layers, masking, optimizer, outcome, units,
+        test_size, seed, n_splits, n_epochs,
+        save_checkpoint, monitor_checkpoint, early_stopping, monitor_early_stopping, patience_early_stopping,
+        CVheader, errorHeader
+):
     """
     Train a LSTM model on the given data.
     The model is trained using k-fold cross-validation.
@@ -32,6 +37,10 @@ def train_model(activation, batch, data, dropout, layers, masking, optimizer, ou
     Reference: Thorsen-Meyer H-C, Nielsen AB, Nielsen AP, et al. Dynamic and explainable machine learning prediction of mortality in patients in the intensive care unit: a retrospective study of high-frequency data in electronic patient records. Lancet Digital Health 2020; published online March 12. https://doi.org/10.1016/ S2589-7500(20)30018-2.
 
     Arguments:
+        features_path {str} -- Path to the features file.
+        labels_path {str} -- Path to the labels file.
+        output_dir {str} -- Path to the output directory.
+
         activation {str} -- activation function for the LSTM layers
         batch {int} -- batch size
         data {str} -- "balanced" or "unchanged", depending on whether the data should be balanced for training or not
@@ -42,9 +51,64 @@ def train_model(activation, batch, data, dropout, layers, masking, optimizer, ou
         outcome {str} -- outcome to predict
         units {int} -- number of units in the LSTM layers
 
+        test_size {float} -- proportion of data to use for testing
+        seed {int} -- random seed
+        n_splits {int} -- number of folds for cross-validation
+        n_epochs {int} -- number of epochs
+
+        save_checkpoint {bool} -- whether to save model checkpoints
+        monitor_checkpoint {list(str)} -- metrics to monitor for model checkpoints
+        early_stopping {bool} -- whether to use early stopping
+        monitor_early_stopping {list(str)} -- metrics to monitor for early stopping
+        patience_early_stopping {int} -- number of epochs to wait before early stopping
+
+        CVheader {str} -- header for the cross-validation log file
+        errorHeader {str} -- header for the error log file
+
     Returns: void
     """
+    saved_args = locals()
+    saved_args.pop('CVheader')
+    saved_args.pop('errorHeader')
 
+    # save training parameters
+    training_params_dir = os.path.join(output_dir, 'training_parameters')
+    ensure_dir(training_params_dir)
+    training_params_filename = '_'.join(['params', activation, str(batch), data, str(dropout),
+                                            str(layers), str(masking), optimizer, outcome, str(units)]) + '.json'
+    with open(os.path.join(training_params_dir, training_params_filename), 'w') as fp:
+        json.dump(saved_args, fp, indent=4)
+
+    ### LOAD THE DATA
+    X, y = format_to_2d_table_with_time(feature_df_path=features_path, outcome_df_path=labels_path,
+                                        outcome=outcome)
+
+    n_time_steps = X.relative_sample_date_hourly_cat.max() + 1
+    n_channels = X.sample_label.unique().shape[0]
+
+    # test if data is corrupted
+    check_data(X)
+
+    """
+    SPLITTING DATA
+    Splitting is done by patient id (and not admission id) as in case of the rare multiple admissions per patient there
+    would be a risk of data leakage otherwise split 'pid' in TRAIN and TEST pid = unique patient_id
+    """
+    # Reduce every patient to a single outcome (to avoid duplicates)
+    all_pids_with_outcome = link_patient_id_to_outcome(y, outcome)
+    pid_train, pid_test, y_pid_train, y_pid_test = train_test_split(all_pids_with_outcome.patient_id.tolist(),
+                                                                    all_pids_with_outcome.outcome.tolist(),
+                                                                    stratify=all_pids_with_outcome.outcome.tolist(),
+                                                                    test_size=test_size,
+                                                                    random_state=seed)
+
+    test_X = X[X.patient_id.isin(pid_test)]
+    # Here test data is not needed anymore, but for reference should be loaded as such: test_y = y[y.patient_id.isin(pid_test)]
+
+    # define K fold
+    kfold = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+
+    ### DEFINE MODEL
     model = lstm_generator(x_time_shape=n_time_steps, x_channels_shape=n_channels, masking=masking, n_units=units,
                         activation=activation, dropout=dropout, n_layers=layers)
 
@@ -60,9 +124,11 @@ def train_model(activation, batch, data, dropout, layers, masking, optimizer, ou
                                                                      optimizer, outcome, str(units)]) + '.hdf5')
     model.save_weights(initial_weights_path)
 
-    #################
-    ### RUN MODEL ###
-    #################
+    # define header for AUC file
+    AUCheader = list(
+        pd.read_csv(os.path.join(output_dir, 'AUC_history_gridsearch.tsv'), sep='\t', nrows=1).columns.values)
+
+    ### TRAIN MODEL USING K-FOLD CROSS-VALIDATION
     i = 0
     for fold_pid_train_idx, fold_pid_val_idx in kfold.split(pid_train, y_pid_train):
         i += 1
@@ -71,7 +137,6 @@ def train_model(activation, batch, data, dropout, layers, masking, optimizer, ou
 
         # find indexes for train/val admissions
         fold_train_pidx = np.array(pid_train)[fold_pid_train_idx]
-
         fold_val_pidx = np.array(pid_train)[fold_pid_val_idx]
 
         # split in TRAIN and VALIDATION sets
@@ -80,14 +145,17 @@ def train_model(activation, batch, data, dropout, layers, masking, optimizer, ou
         fold_X_val_df = X.loc[X.patient_id.isin(fold_val_pidx)]
         fold_y_val_df = y.loc[y.patient_id.isin(fold_val_pidx)]
 
-        # TODO Remove this check (it is only for debugging purposes and slows down the code)
         # check that case_admission_ids are different in train, test, validation sets
+        # Note: this is fairly slow
         assert len(set(fold_X_train_df.case_admission_id.unique()).intersection(set(fold_X_val_df.case_admission_id.unique()))) == 0
         assert len(set(fold_X_train_df.case_admission_id.unique()).intersection(set(test_X.case_admission_id.unique()))) == 0
 
         # Transform dataframes to numpy arrays
         fold_X_train = features_to_numpy(fold_X_train_df, ['case_admission_id', 'relative_sample_date_hourly_cat', 'sample_label', 'value'])
         fold_X_val = features_to_numpy(fold_X_val_df, ['case_admission_id', 'relative_sample_date_hourly_cat', 'sample_label', 'value'])
+
+        # ensure that the order of features (3rd dimension) is the one predefined for the model
+        feature_order_verification(fold_X_train)
 
         # collect outcomes for all admissions in train and validation sets
         fold_y_train = np.array([fold_y_train_df[fold_y_train_df.case_admission_id == cid].outcome.values[0] for cid in fold_X_train[:, 0, 0, 0]]).astype('float32')
@@ -117,7 +185,7 @@ def train_model(activation, batch, data, dropout, layers, masking, optimizer, ou
                                      mode=monitor_checkpoint[1])
 
         # define early stopping
-        earlystopping = EarlyStopping(monitor=monitor_early_stopping[0], min_delta=0, patience=patience,
+        earlystopping = EarlyStopping(monitor=monitor_early_stopping[0], min_delta=0, patience=patience_early_stopping,
                                       verbose=0, mode=monitor_early_stopping[1])
 
         # define callbacks_list
@@ -155,10 +223,8 @@ def train_model(activation, batch, data, dropout, layers, masking, optimizer, ou
             y_pred_train_binary = (y_pred_train > 0.5).astype('int32')
             y_pred_val_binary = (y_pred_val > 0.5).astype('int32')
 
-
             # append AUC score to existing file
             AUChistory = pd.DataFrame(columns=AUCheader)
-
             AUChistory = AUChistory.append(
                 {'auc_train': roc_auc_score(fold_y_train, y_pred_train),
                  'auc_val': roc_auc_score(fold_y_val, y_pred_val),
@@ -170,7 +236,6 @@ def train_model(activation, batch, data, dropout, layers, masking, optimizer, ou
                  'layers': layers,
                  'masking': masking,
                  'outcome': outcome}, ignore_index=True)
-
             AUChistory.to_csv(os.path.join(output_dir,'AUC_history_gridsearch.tsv'), header=None, index=False, sep='\t', mode='a',
                               columns=AUCheader)
 
@@ -190,11 +255,11 @@ def train_model(activation, batch, data, dropout, layers, masking, optimizer, ou
             model_history.to_csv(os.path.join(output_dir,'CV_history_gridsearch.tsv'), header=None, index=False, sep='\t', mode='a',
                                  columns=CVheader)
 
-        except:
+        except Exception:
             var = traceback.format_exc()
             errorDF = pd.DataFrame(columns=errorHeader)
             errorDF = errorDF.append({'error': var,
-                                      'args': all_args}, ignore_index=True)
+                                      'args': saved_args.values()}, ignore_index=True)
             errorDF.to_csv(os.path.join(output_dir,'error.log'), header=None, index=False,
                            sep='\t', mode='a', columns=errorHeader)
 
@@ -230,59 +295,34 @@ if __name__ == '__main__':
     monitor_early_stopping = ['val_matthews', 'max']
     patience = 200
 
-    # load the dataset
-    outcome = args.outcome
-    X, y = format_to_2d_table_with_time(feature_df_path=args.features_path, outcome_df_path=args.labels_path,
-                                        outcome=outcome)
-
-    n_time_steps = X.relative_sample_date_hourly_cat.max() + 1
-    n_channels = X.sample_label.unique().shape[0]
-
-    # test if data is corrupted
-    check_data(X)
-
-    """
-    SPLITTING DATA
-    Splitting is done by patient id (and not admission id) as in case of the rare multiple admissions per patient there
-    would be a risk of data leakage otherwise split 'pid' in TRAIN and TEST pid = unique patient_id
-    """
-    # Reduce every patient to a single outcome (to avoid duplicates)
-    all_pids_with_outcome = link_patient_id_to_outcome(y, outcome)
-    pid_train, pid_test, y_pid_train, y_pid_test = train_test_split(all_pids_with_outcome.patient_id.tolist(),
-                                                                    all_pids_with_outcome.outcome.tolist(),
-                                                                    stratify=all_pids_with_outcome.outcome.tolist(),
-                                                                    test_size=test_size,
-                                                                    random_state=seed)
-
-    test_X = X[X.patient_id.isin(pid_test)]
-    test_y = y[y.patient_id.isin(pid_test)]
-
-    # define K fold
-    kfold = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
-
     ### RUN MODEL ###
     all_args = [args.activation, args.batch, args.data, args.dropout, args.layers, args.masking, args.optimizer,
                 args.outcome, args.units]
-
     initiate_log_files(output_dir)
-    AUCheader = list(
-        pd.read_csv(os.path.join(output_dir, 'AUC_history_gridsearch.tsv'), sep='\t', nrows=1).columns.values)
+
     CVheader = list(
         pd.read_csv(os.path.join(output_dir, 'CV_history_gridsearch.tsv'), sep='\t', nrows=1).columns.values)
     progressHeader = list(pd.read_csv(os.path.join(output_dir, 'progress.log'), sep='\t', nrows=1).columns.values)
     errorHeader = list(pd.read_csv(os.path.join(output_dir, 'error.log'), sep='\t', nrows=1).columns.values)
 
     try:
-        train_model(activation=args.activation, batch=args.batch, data=args.data, dropout=args.dropout,
-                     layers=args.layers, masking=args.masking, optimizer=args.optimizer,
-                     outcome=args.outcome, units=args.units)
+        train_model(
+            features_path=args.features_path, labels_path=args.labels_path, output_dir=output_dir,
+            activation=args.activation, batch=args.batch, data=args.data, dropout=args.dropout,
+            layers=args.layers, masking=args.masking, optimizer=args.optimizer,
+            outcome=args.outcome, units=args.units,
+            test_size=test_size, seed=seed, n_splits=n_splits, n_epochs=n_epochs,
+            save_checkpoint=save_checkpoint, monitor_checkpoint=monitor_checkpoint,
+            early_stopping=early_stopping, monitor_early_stopping=monitor_early_stopping, patience_early_stopping=patience,
+            CVheader=CVheader, errorHeader=errorHeader
+        )
 
         progressDF = pd.DataFrame(columns=progressHeader)
         progressDF = progressDF.append({'completed': all_args}, ignore_index=True)
         progressDF.to_csv(os.path.join(output_dir, 'progress.log'), header=None, index=False,
                           sep='\t', mode='a', columns=progressHeader)
 
-    except:
+    except Exception:
         var = traceback.format_exc()
         errorDF = pd.DataFrame(columns=errorHeader)
         errorDF = errorDF.append({'error': var,
