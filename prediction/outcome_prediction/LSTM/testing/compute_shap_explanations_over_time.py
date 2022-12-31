@@ -2,13 +2,13 @@ import argparse
 import shap
 import os
 
-from prediction.mrs_outcome_prediction.LSTM.testing.shap_helper_functions import check_shap_version_compatibility
+from prediction.outcome_prediction.LSTM.testing.shap_helper_functions import check_shap_version_compatibility
 from prediction.utils.scoring import precision, recall, matthews
-from prediction.mrs_outcome_prediction.LSTM.LSTM import lstm_generator
+from prediction.outcome_prediction.LSTM.LSTM import lstm_generator
 import numpy as np
 import pickle
 from tqdm import tqdm
-from prediction.mrs_outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time
+from prediction.outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time
 
 # Shap values require very specific versions
 check_shap_version_compatibility()
@@ -35,7 +35,7 @@ def compute_shap_explanations_over_time_wrapper(model_weights_path:str, features
     n_channels = X.sample_label.unique().shape[0]
 
     from sklearn.model_selection import train_test_split
-    from prediction.mrs_outcome_prediction.data_loading.data_formatting import features_to_numpy, \
+    from prediction.outcome_prediction.data_loading.data_formatting import features_to_numpy, \
         link_patient_id_to_outcome, numpy_to_lookup_table
 
     # Reduce every patient to a single outcome (to avoid duplicates)

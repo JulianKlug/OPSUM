@@ -4,10 +4,10 @@ import pickle
 import numpy as np
 from modun.file_io import ensure_dir
 
-from prediction.mrs_outcome_prediction.LSTM.testing.prediction_for_all_timesteps import prediction_for_all_timesteps
-from prediction.mrs_outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
+from prediction.outcome_prediction.LSTM.testing.prediction_for_all_timesteps import prediction_for_all_timesteps
+from prediction.outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
     feature_order_verification
-from prediction.mrs_outcome_prediction.data_loading.data_formatting import features_to_numpy, \
+from prediction.outcome_prediction.data_loading.data_formatting import features_to_numpy, \
     numpy_to_lookup_table
 from prediction.utils.utils import check_data
 

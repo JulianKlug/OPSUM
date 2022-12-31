@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 from modun.file_io import ensure_dir
 
-from prediction.mrs_outcome_prediction.LSTM.testing.test_LSTM import test_LSTM
-from prediction.mrs_outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
+from prediction.outcome_prediction.LSTM.testing.test_LSTM import test_LSTM
+from prediction.outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
     features_to_numpy, numpy_to_lookup_table, feature_order_verification
 from prediction.utils.utils import check_data, save_json
 

@@ -2,12 +2,12 @@ import argparse
 import os
 import pickle
 from sklearn.model_selection import train_test_split
-from prediction.mrs_outcome_prediction.data_loading.data_formatting import features_to_numpy, \
+from prediction.outcome_prediction.data_loading.data_formatting import features_to_numpy, \
     link_patient_id_to_outcome, feature_order_verification
 
-from prediction.mrs_outcome_prediction.LSTM.testing.compute_shap_explanations_over_time import \
+from prediction.outcome_prediction.LSTM.testing.compute_shap_explanations_over_time import \
     compute_shap_explanations_over_time
-from prediction.mrs_outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time
+from prediction.outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time
 from prediction.utils.utils import ensure_dir, check_data
 
 

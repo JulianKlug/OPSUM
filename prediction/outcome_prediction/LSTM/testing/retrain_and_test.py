@@ -7,9 +7,9 @@ from keras.callbacks import ModelCheckpoint, EarlyStopping
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 
-from prediction.mrs_outcome_prediction.LSTM.LSTM import lstm_generator
-from prediction.mrs_outcome_prediction.LSTM.testing.test_LSTM import test_LSTM
-from prediction.mrs_outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
+from prediction.outcome_prediction.LSTM.LSTM import lstm_generator
+from prediction.outcome_prediction.LSTM.testing.test_LSTM import test_LSTM
+from prediction.outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
     link_patient_id_to_outcome, features_to_numpy, numpy_to_lookup_table
 from prediction.utils.scoring import precision, recall, matthews
 from prediction.utils.utils import ensure_dir, check_data, save_json, generate_balanced_arrays
