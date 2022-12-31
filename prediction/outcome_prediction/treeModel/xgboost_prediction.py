@@ -8,7 +8,7 @@ import xgboost as xgb
 from sklearn.metrics import log_loss, roc_auc_score, matthews_corrcoef, accuracy_score
 from sklearn.model_selection import cross_val_score, StratifiedKFold, train_test_split
 
-from prediction.mrs_outcome_prediction.data_loading.data_formatting import format_to_linear_table
+from prediction.outcome_prediction.data_loading.data_formatting import format_to_linear_table
 from prediction.utils.scoring import precision, recall, matthews
 
 

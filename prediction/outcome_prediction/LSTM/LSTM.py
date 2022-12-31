@@ -3,10 +3,28 @@ from tensorflow.keras.layers import Dense, LSTM, Input, Masking
 
 
 def lstm_generator(x_time_shape, x_channels_shape, masking, n_units, activation, dropout, n_layers) -> Model:
+    """
+    Generates a LSTM model
+
+    This code is adapted from an original work by Thorsen-Meyer et al.
+    Reference: Thorsen-Meyer H-C, Nielsen AB, Nielsen AP, et al. Dynamic and explainable machine learning prediction of mortality in patients in the intensive care unit: a retrospective study of high-frequency data in electronic patient records. Lancet Digital Health 2020; published online March 12. https://doi.org/10.1016/ S2589-7500(20)30018-2.
+
+    Arguments:
+        x_time_shape {int} -- Time dimension of the input
+        x_channels_shape {int} -- Number of channels of the input
+        masking {bool} -- Whether to use masking or not
+        n_units {int} -- Number of units in the LSTM layer
+        activation {str} -- Activation function of the LSTM layer
+        dropout {float} -- Dropout rate of the LSTM layer
+        n_layers {int} -- Number of LSTM layers
+
+    Returns:
+        Model {Model}-- LSTM model
+    """
+
     ### MODEL ARCHITECTURE ###
     n_hidden = 1
     input_layer = Input(shape=(x_time_shape, x_channels_shape))
-    # TODO: try 1D convolutional layer without reducing time dimension too much
     if masking:
         # masking layer
         masking_layer = Masking(mask_value=0.)(input_layer)
@@ -33,7 +51,6 @@ def lstm_generator(x_time_shape, x_channels_shape, masking, n_units, activation,
             lstm = LSTM(n_units, activation=activation, recurrent_dropout=dropout,
                         return_sequences=True)(lstm)
 
-    # TODO: try adding more dense layers here
     # add output layer
     output_layer = Dense(1, activation='sigmoid')(lstm)
 

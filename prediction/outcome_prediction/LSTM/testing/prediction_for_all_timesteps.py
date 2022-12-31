@@ -5,12 +5,12 @@ import pickle
 import numpy as np
 from tqdm import tqdm
 
-from prediction.mrs_outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time
+from prediction.outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time
 from sklearn.model_selection import train_test_split
-from prediction.mrs_outcome_prediction.data_loading.data_formatting import features_to_numpy, \
+from prediction.outcome_prediction.data_loading.data_formatting import features_to_numpy, \
     link_patient_id_to_outcome, numpy_to_lookup_table
 from prediction.utils.scoring import precision, recall, matthews
-from prediction.mrs_outcome_prediction.LSTM.LSTM import lstm_generator
+from prediction.outcome_prediction.LSTM.LSTM import lstm_generator
 
 
 DEFAULT_CONFIG = {

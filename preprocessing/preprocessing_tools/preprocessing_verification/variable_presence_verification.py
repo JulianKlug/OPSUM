@@ -33,7 +33,7 @@ def variable_presence_verification(normalised_df: pd.DataFrame, target_feature_p
 
     if target_feature_path == '':
         target_feature_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-                                           'prediction', 'mrs_outcome_prediction', 'LSTM', 'training',
+                                           'prediction', 'outcome_prediction', 'LSTM', 'training',
                                            'lstm_feature_order.xlsx')
     target_features = pd.read_excel(target_feature_path, header=None)[0].tolist()
 

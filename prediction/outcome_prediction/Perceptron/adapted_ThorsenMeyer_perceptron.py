@@ -17,7 +17,7 @@ from keras.layers import Dense, Input
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from sklearn.model_selection import cross_val_score, StratifiedKFold, train_test_split
 
-from prediction.mrs_outcome_prediction.data_loading.data_formatting import format_to_linear_table
+from prediction.outcome_prediction.data_loading.data_formatting import format_to_linear_table
 from prediction.utils.scoring import precision, recall, matthews
 
 '''

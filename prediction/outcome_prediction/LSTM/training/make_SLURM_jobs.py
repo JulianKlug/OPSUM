@@ -1,8 +1,14 @@
 #!/usr/bin/python
 import json
 import os, itertools, time, shutil, sys, stat, subprocess
-from prediction.mrs_outcome_prediction.LSTM.utils import initiate_log_files
+from prediction.outcome_prediction.LSTM.training.utils import initiate_log_files
 from prediction.utils.utils import ensure_dir
+
+"""
+This code is adapted from an original work by Thorsen-Meyer et al.
+Reference: Thorsen-Meyer H-C, Nielsen AB, Nielsen AP, et al. Dynamic and explainable machine learning prediction of mortality in patients in the intensive care unit: a retrospective study of high-frequency data in electronic patient records. Lancet Digital Health 2020; published online March 12. https://doi.org/10.1016/ S2589-7500(20)30018-2.
+"""
+
 
 # check if Python-version > 3.0
 assert (sys.version_info > (3, 0)), "This script only works with Python3!"
@@ -10,7 +16,7 @@ assert (sys.version_info > (3, 0)), "This script only works with Python3!"
 script_dir = os.path.dirname(os.path.abspath(__file__))
 output_dir = '/home/users/k/klug/output/opsum/LSTM_72h'
 
-nnet_file = 'adapted_ThorsenMeyer_LSTM.py'
+nnet_file = 'LSTM_trainer.py'
 batch_file = 'run_models.sh'
 
 # make parameter dictionary

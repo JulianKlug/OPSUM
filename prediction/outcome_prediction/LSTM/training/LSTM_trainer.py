@@ -1,22 +1,20 @@
 #!/usr/bin/python
-import os, sys, time, datetime, itertools, shutil, traceback
+import os, datetime, itertools, shutil, traceback
 import numpy as np
 import pandas as pd
-from keras.models import Model
-from keras.layers import Dense, LSTM, Input, Masking
 import keras.backend as K
-from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
+from keras.callbacks import ModelCheckpoint, EarlyStopping
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.metrics import roc_auc_score, matthews_corrcoef
 import argparse
 
 # turn off warnings from Tensorflow
-from prediction.mrs_outcome_prediction.LSTM.LSTM import lstm_generator
+from prediction.outcome_prediction.LSTM.LSTM import lstm_generator
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-from prediction.mrs_outcome_prediction.LSTM.utils import initiate_log_files
-from prediction.mrs_outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
+from prediction.outcome_prediction.LSTM.training.utils import initiate_log_files
+from prediction.outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
     link_patient_id_to_outcome, features_to_numpy, numpy_to_lookup_table
 from prediction.utils.scoring import precision, matthews, recall
 from prediction.utils.utils import generate_balanced_arrays, check_data, ensure_dir, save_json
@@ -24,6 +22,29 @@ from prediction.utils.utils import generate_balanced_arrays, check_data, ensure_
 
 # define 'train_model'
 def train_model(activation, batch, data, dropout, layers, masking, optimizer, outcome, units):
+    """
+    Train a LSTM model on the given data.
+    The model is trained using k-fold cross-validation.
+
+    Model checkpoints and performance metrics are saved to disk.
+
+    This code is adapted from an original work by Thorsen-Meyer et al.
+    Reference: Thorsen-Meyer H-C, Nielsen AB, Nielsen AP, et al. Dynamic and explainable machine learning prediction of mortality in patients in the intensive care unit: a retrospective study of high-frequency data in electronic patient records. Lancet Digital Health 2020; published online March 12. https://doi.org/10.1016/ S2589-7500(20)30018-2.
+
+    Arguments:
+        activation {str} -- activation function for the LSTM layers
+        batch {int} -- batch size
+        data {str} -- "balanced" or "unchanged", depending on whether the data should be balanced for training or not
+        dropout {float} -- dropout rate
+        layers {int} -- number of LSTM layers
+        masking {bool} -- whether to use masking
+        optimizer {str} -- optimizer
+        outcome {str} -- outcome to predict
+        units {int} -- number of units in the LSTM layers
+
+    Returns: void
+    """
+
     model = lstm_generator(x_time_shape=n_time_steps, x_channels_shape=n_channels, masking=masking, n_units=units,
                         activation=activation, dropout=dropout, n_layers=layers)
 
