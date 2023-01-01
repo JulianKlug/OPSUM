@@ -116,7 +116,7 @@ def preprocess_and_save(
 
     # save saved_args to log_dir
     with open(os.path.join(log_dir, 'preprocessing_arguments.json'), 'w') as fp:
-        json.dump(saved_args, fp)
+        json.dump(saved_args, fp, indent=4)
 
     preprocessed_feature_df, preprocessed_outcome_df = preprocess(extracted_tables_path, admission_notes_data_path,
                            reference_population_imputation_path, reference_population_normalisation_parameters_path,

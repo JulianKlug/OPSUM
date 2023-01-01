@@ -1,8 +1,28 @@
-pandas~=1.3.2
-numpy~=1.21.2
-seaborn~=0.11.2
-matplotlib~=3.4.2
+h5py==3.6.0
+keras==2.8.0
+Keras-Preprocessing==1.1.2
+libclang==14.0.1
+matplotlib==3.5.1
+numba==0.55.2
+numpy==1.21.2
+openpyxl==3.0.7
+pandas==1.3.3
+Pillow==9.1.1
+protobuf==3.20.1
+scikit-image==0.19.2
+scikit-learn==1.0.2
+scipy==1.7.3
+seaborn==0.11.2
+tensorboard==2.8.0
+tensorboard-data-server==0.6.1
+tensorboard-plugin-wit==1.8.1
+tensorflow==2.8.0
+tensorflow-io-gcs-filesystem==0.25.0
+termcolor==1.1.0
+terminado==0.9.4
+tf-estimator-nightly==2.8.0.dev2021122109
+torch==1.11.0
+xgboost==1.6.1
 
--e git+https://github.com/AndreCNF/shap.git@f0777334bd82a1bacad578eaf1931c3ecbf40ec6#egg=shap
-git+git://github.com/Jimmy2027/MODUN#egg=modun
-git+https://github.com/slundberg/shap.git@690245c6ab043edf40cfce3d8438a62e29ab599f#egg=shap
+modun @ git+git://github.com/Jimmy2027/MODUN@b106ed60d97bcab0dc629030447c73011d06a3f9
+
