@@ -321,6 +321,7 @@ if __name__ == '__main__':
         progressDF = progressDF.append({'completed': all_args}, ignore_index=True)
         progressDF.to_csv(os.path.join(output_dir, 'progress.log'), header=None, index=False,
                           sep='\t', mode='a', columns=progressHeader)
+        print('TRAINING COMPLETE')
 
     except Exception:
         var = traceback.format_exc()
@@ -329,3 +330,5 @@ if __name__ == '__main__':
                                   'args': all_args}, ignore_index=True)
         errorDF.to_csv(os.path.join(output_dir, 'error.log'), header=None, index=False,
                        sep='\t', mode='a', columns=errorHeader)
+        print('ERROR WHILE TRAINING')
+        print(f'Please see {os.path.join(output_dir, "error.log")} for details')
