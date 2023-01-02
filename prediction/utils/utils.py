@@ -8,10 +8,18 @@ import pandas as pd
 # define function for balanced training
 def generate_balanced_arrays(X_train, y_train):
     while True:
-        positive = np.where(y_train == 1)[0].tolist()
-        negative = np.random.choice(np.where(y_train == 0)[0].tolist(),
-                                            size = len(positive),
-                                            replace = False)
+        initial_positive = np.where(y_train == 1)[0].tolist()
+        initial_negative = np.where(y_train == 0)[0].tolist()
+
+        if len(initial_positive) < len(initial_negative):
+            # if there are more negative samples than positive samples
+            positive = initial_positive
+            negative = np.random.choice(initial_negative, len(initial_positive), replace=False).tolist()
+        else:
+            # If there are more positive samples than negative samples, we need to downsample the positive samples
+            positive = np.random.choice(initial_positive, len(initial_negative), replace=False).tolist()
+            negative = initial_negative
+
         balance = np.concatenate((positive, negative), axis = 0)
         np.random.shuffle(balance)
         input_ = X_train[balance]
