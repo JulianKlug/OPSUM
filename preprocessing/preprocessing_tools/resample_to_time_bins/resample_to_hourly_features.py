@@ -56,10 +56,12 @@ def resample_to_hourly_features(df: pd.DataFrame, verbose=True,
         ])['value'].median().reset_index()
         median_variable_df['sample_label'] = f'median_{variable}'
 
-        # For variables for which the first value is also coming from notes / stroke registry, set first median to the value obtained from there (more reliable)
-        if ('notes' in df[df.sample_label == variable].source.unique()) or ('stroke_registry' in df[df.sample_label == variable].source.unique()):
+        # For NIHSS variables for which the first value is also coming from notes / stroke registry, set first median to the value obtained from there (more reliable)
+        if (('notes' in df[df.sample_label == variable].source.unique()) or ('stroke_registry' in df[df.sample_label == variable].source.unique()) &
+                (variable == 'NIHSS')):
             admission_var_df = df[(df.sample_label == variable) & (df.source.isin(['notes', 'stroke_registry']))][['case_admission_id', 'value']]
             admission_var_df.rename(columns={'value': 'admission_value'}, inplace=True)
+            admission_var_df.drop_duplicates(inplace=True)
             median_variable_df = median_variable_df.merge(admission_var_df, on=['case_admission_id'], how='left')
             median_variable_df.loc[(median_variable_df.relative_sample_date_hourly_cat == 0)
                                     & (~median_variable_df.admission_value.isna()), 'value'] = median_variable_df.loc[(median_variable_df.relative_sample_date_hourly_cat == 0)
@@ -83,12 +85,9 @@ def resample_to_hourly_features(df: pd.DataFrame, verbose=True,
         temp_df = pd.concat([median_variable_df, max_variable_df, min_variable_df], axis=0)
         # all variables to downsample are from EHR
         temp_df['source'] = 'EHR'
-        resampled_df = resampled_df.append(
-            temp_df)
+        resampled_df = resampled_df.append(temp_df)
         # drop all rows of sample label variable
-        resampled_df = \
-            resampled_df[
-                resampled_df.sample_label != variable]
+        resampled_df = resampled_df[resampled_df.sample_label != variable]
 
     all_other_vars = [sample_label for sample_label in
                       df.sample_label.unique()
