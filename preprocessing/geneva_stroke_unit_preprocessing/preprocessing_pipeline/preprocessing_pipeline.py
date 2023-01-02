@@ -82,7 +82,7 @@ def preprocess_and_save(ehr_data_path:str, stroke_registry_data_path:str, patien
 
     timestamp = time.strftime("%d%m%Y_%H%M%S")
     desired_time_range = 72
-    output_dir = os.path.join(output_dir, f'gsu_prepro_{timestamp}')
+    output_dir = os.path.join(output_dir, f'gsu_{os.path.basename(ehr_data_path)}_prepro_{timestamp}')
     log_dir = os.path.join(output_dir, f'logs_{timestamp}')
     saved_args = locals()
     ensure_dir(log_dir)
