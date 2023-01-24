@@ -112,6 +112,10 @@ def preprocess_admission(admission_notes_data_path:str, admission_table_path:str
 
     # preprocess timings
     date_format = '%Y-%m-%d %H:%M:%S'
+    # Use time last seen well as reference stroke onset time
+    admission_data_df['last seen well'].fillna(admission_data_df['stroke onset time'], inplace=True)
+    admission_data_df['stroke onset time'] = admission_data_df['last seen well']
+
     admission_data_df['onset_to_admission_min'] = (pd.to_datetime(admission_data_df['admittime'], format=date_format) -
                                                   pd.to_datetime(admission_data_df['stroke onset time']
                                                                  .replace(to_replace=r"unk(nown|own)", value=np.nan, regex=True),
