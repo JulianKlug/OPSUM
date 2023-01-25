@@ -1,6 +1,3 @@
-
-
-
 ### A. Feature preprocessing
 
 1. Select variables
@@ -71,3 +68,7 @@
 ## Complete pipeline
 
 Path: ./preprocessing_pipeline
+
+Manual checks:
+- Check the following file: verify_monitoring_too_distant_from_lab.csv
+- Check visual representations
