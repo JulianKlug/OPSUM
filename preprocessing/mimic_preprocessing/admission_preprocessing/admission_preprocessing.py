@@ -98,12 +98,21 @@ def preprocess_admission(admission_notes_data_path:str, admission_table_path:str
     for col in med_hist_columns:
         admission_data_df[col] = admission_data_df[col].apply(lambda x: 'yes' if x == 'y' else x)
         admission_data_df[col] = admission_data_df[col].apply(lambda x: 'no' if x == 'n' else x)
+        if len(set(admission_data_df[col]) - set(['yes', 'no', np.nan])) != 0:
+            raise ValueError(f"Values in column {col}, should be one of: ['yes', 'no', np.nan, 'y', 'n'], "
+                             f"instead found value {set(admission_data_df[col]) - set(['yes', 'no', np.nan])}")
 
     admission_data_df['MedHist cerebrovascular_event'] = admission_data_df['MedHist cerebrovascular_event'].apply(lambda x: 'True' if x == 'y' else x)
     admission_data_df['MedHist cerebrovascular_event'] = admission_data_df['MedHist cerebrovascular_event'].apply(lambda x: 'False' if x == 'n' else x)
+    if len(set(admission_data_df['MedHist cerebrovascular_event']) - set(['True', 'False', np.nan])) != 0:
+        raise ValueError("Values in column 'MedHist cerebrovascular_event', should be one of: ['True', 'False', np.nan, 'y', 'n'],"
+                         f"instead found value {set(admission_data_df['MedHist cerebrovascular_event']) - set(['True', 'False', np.nan])}")
 
     admission_data_df['wake up stroke'] = admission_data_df['wake up stroke'].apply(lambda x: 'True' if x == 'yes' else x)
     admission_data_df['wake up stroke'] = admission_data_df['wake up stroke'].apply(lambda x: 'False' if x == 'no' else x)
+    if len(set(admission_data_df['wake up stroke']) - set(['True', 'False', np.nan])) != 0:
+        raise ValueError("Values in column 'wake up stroke', should be one of: ['True', 'False', np.nan, 'y', 'n']"
+                         f"instead found value {set(admission_data_df['wake up stroke']) - set(['True', 'False', np.nan])}")
 
     # rename variables to DPI variables naming
     admission_data_df.rename(columns={'prestroke mRS': 'Prestroke disability (Rankin)',
@@ -112,6 +121,10 @@ def preprocess_admission(admission_notes_data_path:str, admission_table_path:str
 
     # preprocess timings
     date_format = '%Y-%m-%d %H:%M:%S'
+    # Use time last seen well as reference stroke onset time
+    admission_data_df['last seen well'].fillna(admission_data_df['stroke onset time'], inplace=True)
+    admission_data_df['stroke onset time'] = admission_data_df['last seen well']
+
     admission_data_df['onset_to_admission_min'] = (pd.to_datetime(admission_data_df['admittime'], format=date_format) -
                                                   pd.to_datetime(admission_data_df['stroke onset time']
                                                                  .replace(to_replace=r"unk(nown|own)", value=np.nan, regex=True),

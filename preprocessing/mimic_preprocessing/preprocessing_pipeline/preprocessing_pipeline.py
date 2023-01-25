@@ -128,8 +128,8 @@ def preprocess_and_save(
     features_save_path = os.path.join(output_dir, f'{feature_file_prefix}_{timestamp}.csv')
     outcomes_save_path = os.path.join(output_dir, f'{outcome_file_prefix}_{timestamp}.csv')
 
-    preprocessed_feature_df.to_csv(features_save_path)
-    preprocessed_outcome_df.to_csv(outcomes_save_path)
+    preprocessed_feature_df.to_csv(features_save_path, index=False)
+    preprocessed_outcome_df.to_csv(outcomes_save_path, index=False)
 
     if preproccessed_monitoring_data_path != '':
         # copy file to log dir
