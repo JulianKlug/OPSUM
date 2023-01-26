@@ -30,7 +30,9 @@ def extract_admission():
     (
     """ + patient_selection_query + """
     SELECT selection.subject_id, selection.hadm_id, selection.icustay_id, selection.dob, selection.admittime,
-           selection.age, pat.gender, admissions.diagnosis, admissions.admission_type, admissions.admission_location, chart.itemid, chart.value as chart_value
+           selection.age, pat.gender, admissions.diagnosis, admissions.admission_type, admissions.admission_location, 
+            icustays.outtime, admissions.deathtime,
+           chart.itemid, chart.value as chart_value
 
     FROM selection
     
@@ -39,6 +41,9 @@ def extract_admission():
     
     INNER JOIN admissions admissions
       ON selection.hadm_id = admissions.hadm_id
+      
+    LEFT JOIN icustays icustays
+        ON selection.icustay_id = icustays.icustay_id
     
     LEFT JOIN chartevents as chart
         ON selection.hadm_id = chart.hadm_id
@@ -54,6 +59,7 @@ def extract_admission():
 
     SELECT sel_admission.subject_id, sel_admission.hadm_id, sel_admission.icustay_id, sel_admission.dob, sel_admission.admittime,
             sel_admission.age, sel_admission.gender, sel_admission.admission_type, sel_admission.diagnosis, sel_admission.admission_location,
+            sel_admission.outtime, sel_admission.deathtime,
             sel_admission.itemid, d_items.label, sel_admission.chart_value
         
     FROM sel_admission
@@ -68,7 +74,7 @@ def extract_admission():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output_dir', '-o', type=str)
+    parser.add_argument('--output_dir', '-o', type=str, required=True)
     output_dir = parser.parse_args().output_dir
 
     admission_df = extract_admission()
