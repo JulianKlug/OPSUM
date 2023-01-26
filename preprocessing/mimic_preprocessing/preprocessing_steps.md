@@ -6,7 +6,9 @@
 2. Preprocessing & database creation
    - Path: ./database_assembly/database_assembly.py
    - Details: 
-     - Restrict to patient selection (& filter out patients with no data extracted from admission/discharge notes)
+     - Restrict to patient selection 
+       - filter out patients with no data extracted from admission/discharge notes
+       - filter out patients with time of death during the monitoring period (in ICU and < 72h admission)
      - Preprocess EHR and stroke registry variables
        - Preprocessing involves restriction to plausible ranges: ./possible_ranges_for_variables.xlsx
      - Restrict to variable selection

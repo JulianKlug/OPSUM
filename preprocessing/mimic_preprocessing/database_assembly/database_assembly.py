@@ -2,6 +2,8 @@ import os
 import pandas as pd
 
 from preprocessing.mimic_preprocessing.admission_preprocessing.admission_preprocessing import preprocess_admission
+from preprocessing.mimic_preprocessing.database_assembly.further_exclusion_criteria import \
+    apply_further_exclusion_criteria
 from preprocessing.mimic_preprocessing.lab_preprocessing.lab_preprocessing import preprocess_labs
 from preprocessing.mimic_preprocessing.monitoring_preprocessing.monitoring_preprocessing import preprocess_monitoring
 
@@ -32,6 +34,10 @@ def assemble_variable_database(extracted_tables_path: str, admission_notes_data_
         raise ValueError('Date format is not correct. Please check the date format in the admission data.')
     admission_data_df['source'] = 'notes'
     admission_data_df = admission_data_df[target_columns]
+
+    # Apply further exclusion criteria
+    hadm_ids_to_exclude = apply_further_exclusion_criteria(admission_data_df['case_admission_id'].unique(), admission_table_path, log_dir=log_dir)
+    admission_data_df = admission_data_df[~admission_data_df['case_admission_id'].isin(hadm_ids_to_exclude)]
 
     # Deduce patient selection from admission data
     patient_selection = admission_data_df['case_admission_id'].unique()
