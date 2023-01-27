@@ -65,7 +65,8 @@ pd.DataFrame, pd.DataFrame):
     # Load the data
     features_df = pd.read_csv(feature_df_path)
     outcome_df = pd.read_csv(outcome_df_path)
-    features_df.drop(['Unnamed: 0'], axis=1, inplace=True)
+    if 'Unnamed: 0' in features_df.columns:
+        features_df.drop(['Unnamed: 0'], axis=1, inplace=True)
 
     # add a patient id column
     features_df['patient_id'] = features_df['case_admission_id'].apply(lambda x: x.split('_')[0])
