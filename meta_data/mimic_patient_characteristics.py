@@ -3,6 +3,9 @@ import os
 import numpy as np
 import pandas as pd
 
+from preprocessing.mimic_preprocessing.database_assembly.further_exclusion_criteria import \
+    apply_further_exclusion_criteria
+
 CONTINUOUS_CHARACTERISTICS = [
     'Age (calc.)',
     'Prestroke disability (Rankin)',
@@ -47,7 +50,11 @@ def extract_patient_characteristics(admission_notes_data_path: str, extracted_mo
     admission_data_df = admission_data_df[admission_data_df['onset to ICU admission > 7d'] == 'n']
     admission_data_df['case_admission_id'] = admission_data_df['hadm_id'].astype(str) + '_' + admission_data_df[
         'icustay_id'].astype(str)
+
     # Deduce patient selection from admission data
+    # Apply further exclusion criteria
+    hadm_ids_to_exclude = apply_further_exclusion_criteria(admission_data_df['case_admission_id'].unique(), extracted_admission_table_path, log_dir='')
+    admission_data_df = admission_data_df[~admission_data_df['case_admission_id'].isin(hadm_ids_to_exclude)]
     patient_selection = admission_data_df['case_admission_id'].unique()
 
     # extract BMI from monitoring data
