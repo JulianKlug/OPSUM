@@ -74,12 +74,16 @@ def extract_patient_characteristics(patient_id_path: str, stroke_registry_data_p
 
 
 if __name__ == '__main__':
-    patient_id_path = '../pid_test.tsv'
-    stroke_registry_data_path = '../stroke_registry_post_hoc_modified.xlsx'
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-p', '--patient_id_path', type=str, default='../pid_test.tsv')
+    parser.add_argument('-s', '--stroke_registry_data_path', type=str, default='../stroke_registry_post_hoc_modified.xlsx')
+    parser.add_argument('-o', '--output_path', type=str, default='.')
+    args = parser.parse_args()
 
-    patient_characteristics_df = extract_patient_characteristics(patient_id_path, stroke_registry_data_path)
-    patient_characteristics_df.to_csv(os.path.join('.',
-                                                   f'patient_characteristics_{os.path.basename(patient_id_path).split("_")[1]}'), sep='\t', index=False)
+    patient_characteristics_df = extract_patient_characteristics(args.patient_id_path, args.stroke_registry_data_path)
+    patient_characteristics_df.to_csv(os.path.join(args.output_path,
+                                                   f'patient_characteristics_{os.path.basename(args.patient_id_path).split("_")[1]}'), sep='\t', index=False)
 
     print()
 
