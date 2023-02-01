@@ -1,7 +1,7 @@
 import argparse
 import os
 import pickle
-
+import pandas as pd
 import numpy as np
 from tqdm import tqdm
 
@@ -64,20 +64,43 @@ def prediction_for_all_timesteps(data, model_weights_path:str, n_time_steps:int,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='LSTM model for predicting outcome')
-    parser.add_argument('--activation', required=True, type=str, help='activation function')
+    parser.add_argument('-hy', '--hyperparameters_path', type=str, help='hyperparameters selection file', default='')
+    parser.add_argument('--activation', type=str, help='activation function')
     parser.add_argument('--test_size', required=False, type=float, help='test set size [0-1]', default=0.2)
     parser.add_argument('--seed', required=False, type=int, help='Seed', default=42)
-    parser.add_argument('--dropout', required=True, type=float, help='dropout fraction')
-    parser.add_argument('--layers', required=True, type=int, help='number of LSTM layers')
-    parser.add_argument('--masking', required=True, type=bool, help='masking true/false')
-    parser.add_argument('--optimizer', required=True, type=str, help='optimizer function')
+    parser.add_argument('--dropout', type=float, help='dropout fraction')
+    parser.add_argument('--layers', type=int, help='number of LSTM layers')
+    parser.add_argument('--masking', type=bool, help='masking true/false')
+    parser.add_argument('--optimizer', type=str, help='optimizer function')
     parser.add_argument('--outcome', required=True, type=str, help='outcome (ex. 3M mRS 0-2)')
-    parser.add_argument('--units', required=True, type=int, help='number of units in each LSTM layer')
+    parser.add_argument('--units', type=int, help='number of units in each LSTM layer')
     parser.add_argument('--output_dir', required=True, type=str, help='output directory')
     parser.add_argument('--features_path', required=True, type=str, help='path to features')
     parser.add_argument('--labels_path', required=True, type=str, help='path to labels')
     parser.add_argument('--model_weights_path', required=True, type=str, help='path to model weights')
     args = parser.parse_args()
+
+    if args.hyperparameters_path != '':
+        hyperparameters_df = pd.read_csv(args.hyperparameters_path)
+        hyperparameters_df = hyperparameters_df[hyperparameters_df['outcome'] == args.outcome]
+        args.activation = hyperparameters_df['activation'].values[0]
+        args.batch = hyperparameters_df['batch'].values[0]
+        args.data = hyperparameters_df['data'].values[0]
+        args.dropout = hyperparameters_df['dropout'].values[0]
+        args.layers = hyperparameters_df['layers'].values[0]
+        args.masking = hyperparameters_df['masking'].values[0]
+        args.optimizer = hyperparameters_df['optimizer'].values[0]
+        args.units = hyperparameters_df['units'].values[0]
+    else:
+        # verify that all arguments are provided
+        assert args.activation is not None, 'activation function or hyperparameters_path not provided'
+        assert args.batch is not None, 'batch size or hyperparameters_path not provided'
+        assert args.data is not None, 'data to use or hyperparameters_path not provided'
+        assert args.dropout is not None, 'dropout fraction or hyperparameters_path not provided'
+        assert args.layers is not None, 'number of LSTM layers or hyperparameters_path not provided'
+        assert args.masking is not None, 'masking true/false or hyperparameters_path not provided'
+        assert args.optimizer is not None, 'optimizer function or hyperparameters_path not provided'
+        assert args.units is not None, 'number of units in each LSTM layer or hyperparameters_path not provided'
 
     config = {
     'outcome': args.outcome,
@@ -130,7 +153,7 @@ if __name__ == '__main__':
     test_X_np = test_X_np[:, :, :, -1].astype('float32')
     train_X_np = train_X_np[:, :, :, -1].astype('float32')
 
-    predictions = prediction_for_all_timesteps(test_X_np, args.model_weights_path, n_time_steps, n_time_steps, config)
+    predictions = prediction_for_all_timesteps(test_X_np, args.model_weights_path, n_time_steps, n_channels, config)
 
     # Save predictions as pickle
     with open(os.path.join(args.output_dir, 'predictions_over_timesteps.pkl'), 'wb') as f:
