@@ -33,7 +33,7 @@ def create_model(max_depth:int, learning_rate:float, n_estimators:int, outcome:s
 
     # split into training and independent test sets
     X_model, X_test, y_model, y_test, ix_model, ix_test = train_test_split(X, y,
-                                                                           range(X.shape[0]), test_size=0.15,
+                                                                           range(X.shape[0]), test_size=0.2,
                                                                            random_state=seed)
 
     # run CV-folds
@@ -100,7 +100,7 @@ def create_model(max_depth:int, learning_rate:float, n_estimators:int, outcome:s
 
         optimal_model_df = optimal_model_df.append(run_performance_df)
 
-    optimal_model_df.to_csv(os.path.join(output_dir, f'xgboost_{outcome}_d{max_depth}_nE{n_estimators}.tsv'), sep='\t', index=False)
+    optimal_model_df.to_csv(os.path.join(output_dir, f'xgboost_{outcome}_d{max_depth}_nE{n_estimators}.csv'), sep=',', index=False)
 
 
 def get_model(args):
