@@ -1,6 +1,8 @@
 #!/usr/bin/python
 import json
 import os
+import traceback
+
 import numpy as np
 import pandas as pd
 from keras.callbacks import ModelCheckpoint, EarlyStopping
@@ -11,12 +13,11 @@ import argparse
 from tensorflow import keras
 
 from prediction.outcome_prediction.transformer.transformer import transformer_generator
-from prediction.utils.training_utils import WarmUpScheduler
+from prediction.utils.training_utils import WarmUpScheduler, initiate_log_files
 
 # turn off warnings from Tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-from prediction.outcome_prediction.LSTM.training.utils import initiate_log_files
 from prediction.outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
     link_patient_id_to_outcome, features_to_numpy, numpy_to_lookup_table, feature_order_verification
 from prediction.utils.scoring import precision, matthews, recall
@@ -260,71 +261,71 @@ def train_model(
                                    batch_size=batch_size,
                                    verbose=0)
 
-        # try:
-        # reload best weights
-        model.load_weights(filepath)
+        try:
+            # reload best weights
+            model.load_weights(filepath)
 
-        # calculate model prediction classes
-        y_pred_train = model.predict(fold_X_train)
-        y_pred_val = model.predict(fold_X_val)
+            # calculate model prediction classes
+            y_pred_train = model.predict(fold_X_train)
+            y_pred_val = model.predict(fold_X_val)
 
-        y_pred_train_binary = (y_pred_train > 0.5).astype('int32')
-        y_pred_val_binary = (y_pred_val > 0.5).astype('int32')
+            y_pred_train_binary = (y_pred_train > 0.5).astype('int32')
+            y_pred_val_binary = (y_pred_val > 0.5).astype('int32')
 
-        # append AUC score to existing file
-        AUChistory = pd.DataFrame(columns=AUCheader)
-        AUChistory = AUChistory.append(
-            {'auc_train': roc_auc_score(fold_y_train, y_pred_train),
-                'auc_val': roc_auc_score(fold_y_val, y_pred_val),
-                'matthews_train': matthews_corrcoef(fold_y_train, y_pred_train_binary),
-                'matthews_val': matthews_corrcoef(fold_y_val, y_pred_val_binary),
-                'outcome': outcome,
-                'batch': batch,
-                'data': data,
-                'atn_head_size': atn_head_size,
-                'n_atn_heads': n_atn_heads,
-                'atn_feed_forward_dim': atn_feed_forward_dim,
-                'n_transformer_blocks': n_transformer_blocks,
-                'transformer_dropout': transformer_dropout,
-                'mlp_units': mlp_units,
-                'mlp_dropout': mlp_dropout,
-                'optimizer': optimizer,
-                'learning_rate': learning_rate,
-                'warmup_epochs': warmup_epochs,
-                'cv_num': i
-            }, ignore_index=True)
-        AUChistory.to_csv(os.path.join(output_dir,'AUC_history_gridsearch.tsv'), header=None, index=False, sep='\t', mode='a',
-                          columns=AUCheader)
+            # append AUC score to existing file
+            AUChistory = pd.DataFrame(columns=AUCheader)
+            AUChistory = AUChistory.append(
+                {'auc_train': roc_auc_score(fold_y_train, y_pred_train),
+                    'auc_val': roc_auc_score(fold_y_val, y_pred_val),
+                    'matthews_train': matthews_corrcoef(fold_y_train, y_pred_train_binary),
+                    'matthews_val': matthews_corrcoef(fold_y_val, y_pred_val_binary),
+                    'outcome': outcome,
+                    'batch': batch,
+                    'data': data,
+                    'atn_head_size': atn_head_size,
+                    'n_atn_heads': n_atn_heads,
+                    'atn_feed_forward_dim': atn_feed_forward_dim,
+                    'n_transformer_blocks': n_transformer_blocks,
+                    'transformer_dropout': transformer_dropout,
+                    'mlp_units': mlp_units,
+                    'mlp_dropout': mlp_dropout,
+                    'optimizer': optimizer,
+                    'learning_rate': learning_rate,
+                    'warmup_epochs': warmup_epochs,
+                    'cv_num': i
+                }, ignore_index=True)
+            AUChistory.to_csv(os.path.join(output_dir,'AUC_history_gridsearch.tsv'), header=None, index=False, sep='\t', mode='a',
+                              columns=AUCheader)
 
-        # append other scores to existing file
-        model_history = pd.DataFrame.from_dict(train_hist.history)
-        model_history['epoch'] = train_hist.epoch
-        model_history['data'] = data
-        model_history['cv_num'] = i
-        model_history['batch'] = batch
-        model_history['outcome'] = outcome
-        model_history['max epochs'] = n_epochs
-        model_history['optimizer'] = optimizer
-        model_history['learning_rate'] = learning_rate
-        model_history['warmup_epochs'] = warmup_epochs
-        model_history['atn_head_size'] = atn_head_size
-        model_history['n_atn_heads'] = n_atn_heads
-        model_history['atn_feed_forward_dim'] = atn_feed_forward_dim
-        model_history['n_transformer_blocks'] = n_transformer_blocks
-        model_history['transformer_dropout'] = transformer_dropout
-        model_history['mlp_units'] = str(mlp_units)
-        model_history['mlp_dropout'] = mlp_dropout
+            # append other scores to existing file
+            model_history = pd.DataFrame.from_dict(train_hist.history)
+            model_history['epoch'] = train_hist.epoch
+            model_history['data'] = data
+            model_history['cv_num'] = i
+            model_history['batch'] = batch
+            model_history['outcome'] = outcome
+            model_history['max epochs'] = n_epochs
+            model_history['optimizer'] = optimizer
+            model_history['learning_rate'] = learning_rate
+            model_history['warmup_epochs'] = warmup_epochs
+            model_history['atn_head_size'] = atn_head_size
+            model_history['n_atn_heads'] = n_atn_heads
+            model_history['atn_feed_forward_dim'] = atn_feed_forward_dim
+            model_history['n_transformer_blocks'] = n_transformer_blocks
+            model_history['transformer_dropout'] = transformer_dropout
+            model_history['mlp_units'] = str(mlp_units)
+            model_history['mlp_dropout'] = mlp_dropout
 
-        model_history.to_csv(os.path.join(output_dir,'CV_history_gridsearch.tsv'), header=None, index=False, sep='\t', mode='a',
-                             columns=CVheader)
+            model_history.to_csv(os.path.join(output_dir,'CV_history_gridsearch.tsv'), header=None, index=False, sep='\t', mode='a',
+                                 columns=CVheader)
 
-        # except Exception:
-        #     var = traceback.format_exc()
-        #     errorDF = pd.DataFrame(columns=errorHeader)
-        #     errorDF = errorDF.append({'error': var,
-        #                               'args': saved_args.values()}, ignore_index=True)
-        #     errorDF.to_csv(os.path.join(output_dir,'error.log'), header=None, index=False,
-        #                    sep='\t', mode='a', columns=errorHeader)
+        except Exception:
+            var = traceback.format_exc()
+            errorDF = pd.DataFrame(columns=errorHeader)
+            errorDF = errorDF.append({'error': var,
+                                      'args': saved_args.values()}, ignore_index=True)
+            errorDF.to_csv(os.path.join(output_dir,'error.log'), header=None, index=False,
+                           sep='\t', mode='a', columns=errorHeader)
 
 
 if __name__ == '__main__':
@@ -382,41 +383,37 @@ if __name__ == '__main__':
     progressHeader = list(pd.read_csv(os.path.join(output_dir, 'progress.log'), sep='\t', nrows=1).columns.values)
     errorHeader = list(pd.read_csv(os.path.join(output_dir, 'error.log'), sep='\t', nrows=1).columns.values)
 
-    # try:
-    train_model(
-        features_path=args.features_path, labels_path=args.labels_path, output_dir=output_dir, outcome=args.outcome,
-        batch=args.batch, data=args.data,
+    try:
+        train_model(
+            features_path=args.features_path, labels_path=args.labels_path, output_dir=output_dir, outcome=args.outcome,
+            batch=args.batch, data=args.data,
 
-        atn_head_size=args.atn_head_size, n_atn_heads=args.n_atn_heads, atn_feed_forward_dim=args.atn_feed_forward_dim,
-        n_transformer_blocks=args.n_transformer_blocks, transformer_dropout=args.transformer_dropout,
-        mlp_units=args.mlp_units, mlp_dropout=args.mlp_dropout,
-        optimizer=args.optimizer, learning_rate=args.learning_rate,
+            atn_head_size=args.atn_head_size, n_atn_heads=args.n_atn_heads, atn_feed_forward_dim=args.atn_feed_forward_dim,
+            n_transformer_blocks=args.n_transformer_blocks, transformer_dropout=args.transformer_dropout,
+            mlp_units=args.mlp_units, mlp_dropout=args.mlp_dropout,
+            optimizer=args.optimizer, learning_rate=args.learning_rate,
 
-        test_size=test_size, seed=seed, n_splits=n_splits, n_epochs=n_epochs,
-        save_checkpoint=save_checkpoint, monitor_checkpoint=monitor_checkpoint,
-        early_stopping=early_stopping, monitor_early_stopping=monitor_early_stopping, patience_early_stopping=patience,
-        warmup=warmup, warmup_epochs=warmup_epochs,
-        CVheader=CVheader, errorHeader=errorHeader,
-        verbose=args.verbose
-    )
+            test_size=test_size, seed=seed, n_splits=n_splits, n_epochs=n_epochs,
+            save_checkpoint=save_checkpoint, monitor_checkpoint=monitor_checkpoint,
+            early_stopping=early_stopping, monitor_early_stopping=monitor_early_stopping, patience_early_stopping=patience,
+            warmup=warmup, warmup_epochs=warmup_epochs,
+            CVheader=CVheader, errorHeader=errorHeader,
+            verbose=args.verbose
+        )
 
-    progressDF = pd.DataFrame(columns=progressHeader)
-    progressDF = progressDF.append({'completed': all_args}, ignore_index=True)
-    progressDF.to_csv(os.path.join(output_dir, 'progress.log'), header=None, index=False,
-                      sep='\t', mode='a', columns=progressHeader)
-    print('TRAINING COMPLETE')
+        progressDF = pd.DataFrame(columns=progressHeader)
+        progressDF = progressDF.append({'completed': all_args}, ignore_index=True)
+        progressDF.to_csv(os.path.join(output_dir, 'progress.log'), header=None, index=False,
+                          sep='\t', mode='a', columns=progressHeader)
+        print('TRAINING COMPLETE')
 
-    # except Exception:
-    #     var = traceback.format_exc()
-    #     errorDF = pd.DataFrame(columns=errorHeader)
-    #     errorDF = errorDF.append({'error': var,
-    #                               'args': all_args}, ignore_index=True)
-    #     errorDF.to_csv(os.path.join(output_dir, 'error.log'), header=None, index=False,
-    #                    sep='\t', mode='a', columns=errorHeader)
-    #     print('ERROR WHILE TRAINING')
-    #     print(f'Please see {os.path.join(output_dir, "error.log")} for details')
+    except Exception:
+        var = traceback.format_exc()
+        errorDF = pd.DataFrame(columns=errorHeader)
+        errorDF = errorDF.append({'error': var,
+                                  'args': all_args}, ignore_index=True)
+        errorDF.to_csv(os.path.join(output_dir, 'error.log'), header=None, index=False,
+                       sep='\t', mode='a', columns=errorHeader)
+        print('ERROR WHILE TRAINING')
+        print(f'Please see {os.path.join(output_dir, "error.log")} for details')
 
-
-# TODO
-# - reset n_epochs to 1000
-# - uncomment try/except

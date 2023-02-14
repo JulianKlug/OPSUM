@@ -20,7 +20,7 @@
 | max timescale        | 1000.0      | 100.0       | 100.0    | 100.0 - 100.0 |
 
 Missing parameters:
-- atn_feed_forward_dim,
+- atn_feed_forward_dim
 
 Notes: 
 - A warmup scheduler is used
