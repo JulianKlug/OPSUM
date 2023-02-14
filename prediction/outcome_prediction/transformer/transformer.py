@@ -1,0 +1,49 @@
+from tensorflow import keras
+from keras import layers
+
+"""
+Sources: 
+- https://keras.io/examples/timeseries/timeseries_transformer_classification/
+- [Attention Is All You Need](https://arxiv.org/abs/1706.03762)
+"""
+
+def transformer_encoder(inputs, head_size, num_heads, ff_dim, dropout=0):
+    # Attention and Normalization
+    x = layers.MultiHeadAttention(
+        key_dim=head_size, num_heads=num_heads, dropout=dropout
+    )(inputs, inputs)
+    x = layers.Dropout(dropout)(x)
+    x = layers.LayerNormalization(epsilon=1e-6)(x)
+    res = x + inputs
+
+    # Feed Forward Part
+    x = layers.Conv1D(filters=ff_dim, kernel_size=1, activation="relu")(res)
+    x = layers.Dropout(dropout)(x)
+    x = layers.Conv1D(filters=inputs.shape[-1], kernel_size=1)(x)
+    x = layers.LayerNormalization(epsilon=1e-6)(x)
+    return x + res
+
+
+def transformer_generator(
+    input_shape,
+    n_output_dimensions,
+    head_size,
+    num_heads,
+    feed_forward_dim,
+    num_transformer_blocks,
+    mlp_units: list,
+    transformer_dropout=0,
+    mlp_dropout=0,
+):
+    inputs = keras.Input(shape=input_shape)
+    x = inputs
+    for _ in range(num_transformer_blocks):
+        x = transformer_encoder(x, head_size, num_heads, feed_forward_dim, transformer_dropout)
+
+    x = layers.GlobalAveragePooling1D(data_format="channels_first")(x)
+    for dim in mlp_units:
+        x = layers.Dense(dim, activation="relu")(x)
+        x = layers.Dropout(mlp_dropout)(x)
+    outputs = layers.Dense(n_output_dimensions, activation="sigmoid")(x)
+    # outputs = layers.Dense(n_output_dimensions, activation="softmax")(x)
+    return keras.Model(inputs, outputs)

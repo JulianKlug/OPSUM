@@ -9,10 +9,11 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.metrics import roc_auc_score, matthews_corrcoef
 import argparse
 
+from prediction.utils.training_utils import initiate_log_files
+
 # turn off warnings from Tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-from prediction.outcome_prediction.LSTM.training.utils import initiate_log_files
 from prediction.outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
     link_patient_id_to_outcome, features_to_numpy, numpy_to_lookup_table, feature_order_verification
 from prediction.utils.scoring import precision, matthews, recall
@@ -298,7 +299,8 @@ if __name__ == '__main__':
     ### RUN MODEL ###
     all_args = [args.activation, args.batch, args.data, args.dropout, args.layers, args.masking, args.optimizer,
                 args.outcome, args.units]
-    initiate_log_files(output_dir)
+    initiate_log_files(output_dir, param_path=os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                             'parameter_space.json'))
 
     CVheader = list(
         pd.read_csv(os.path.join(output_dir, 'CV_history_gridsearch.tsv'), sep='\t', nrows=1).columns.values)
