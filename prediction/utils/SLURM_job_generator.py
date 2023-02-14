@@ -55,12 +55,13 @@ def generate_SLURM_jobs(output_dir, param_path, script_dir, nnet_file_name, batc
     os.chmod(os.path.join(working_dir, batch_file_name), st.st_mode | stat.S_IEXEC)
 
     # Load SLURM setup
-    slurm_setup_path = os.path.join(script_dir, "./ygdrassil_slurm_setup.txt")
+    slurm_setup_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ygdrassil_slurm_setup.txt")
     slurm_setup_file = open(slurm_setup_path, "r")
     slurm_setup = slurm_setup_file.read()
     slurm_setup_file.close()
     shutil.copy2(slurm_setup_path, working_dir)
 
+    print(f'Generating {len(list(all_args))} SLURM jobs in {working_dir}')
 
     for arg in all_args:
         shell_arg = 'srun python ' + os.path.join(script_dir, nnet_file_name) + ' --date_string=' + date_string \
