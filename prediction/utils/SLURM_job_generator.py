@@ -1,6 +1,6 @@
 import json
 import os, itertools, time, shutil, sys, stat, subprocess
-
+from tqdm import tqdm
 from prediction.utils.training_utils import initiate_log_files
 from prediction.utils.utils import ensure_dir
 
@@ -61,9 +61,7 @@ def generate_SLURM_jobs(output_dir, param_path, script_dir, nnet_file_name, batc
     slurm_setup_file.close()
     shutil.copy2(slurm_setup_path, working_dir)
 
-    print(f'Generating {len(list(all_args))} SLURM jobs in {working_dir}')
-
-    for arg in all_args:
+    for arg in tqdm(all_args):
         shell_arg = 'srun python ' + os.path.join(script_dir, nnet_file_name) + ' --date_string=' + date_string \
                     + ' --output_dir=' + working_dir \
                     + ' --features_path=' + '$OPSUM_FEATURES_PATH' \

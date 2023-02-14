@@ -4,7 +4,8 @@ from prediction.utils.SLURM_job_generator import generate_SLURM_jobs
 
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
-output_dir = '/home/users/k/klug/output/opsum/transformer_72h'
+# output_dir = '/home/users/k/klug/output/opsum/transformer_72h'
+output_dir = '/Users/jk1/temp/opsum_prediction_output/transformer_test'
 
 nnet_file = 'transformer_trainer.py'
 batch_file = 'run_models.sh'
