@@ -2,6 +2,7 @@
 import json
 import os
 import traceback
+from datetime import time
 
 import numpy as np
 import pandas as pd
@@ -144,7 +145,6 @@ def train_model(
     else:
         raise ValueError(f'Optimizer {optimizer} not implemented.')
 
-    # TODO: loss as hyperparameter? (sparse_categorical_crossentropy vs. binary_crossentropy)
     model.compile(
         loss="binary_crossentropy",
         optimizer=optimizer_function,
@@ -352,6 +352,8 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', '-v', action='store_true', help='verbose', default=False)
     args = parser.parse_args()
 
+    start_time = time.time()
+
     # define constants
     output_dir = args.output_dir
     seed = 42
@@ -402,7 +404,8 @@ if __name__ == '__main__':
         )
 
         progressDF = pd.DataFrame(columns=progressHeader)
-        progressDF = progressDF.append({'completed': all_args}, ignore_index=True)
+        end_time = time.time()
+        progressDF = progressDF.append({'completed': all_args, 'time_elapsed': (end_time - start_time) / 60 }, ignore_index=True)
         progressDF.to_csv(os.path.join(output_dir, 'progress.log'), header=None, index=False,
                           sep='\t', mode='a', columns=progressHeader)
         print('TRAINING COMPLETE')
