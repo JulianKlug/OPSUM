@@ -2,8 +2,7 @@
 import json
 import os
 import traceback
-from datetime import time
-
+import time
 import numpy as np
 import pandas as pd
 from keras.callbacks import ModelCheckpoint, EarlyStopping
@@ -30,7 +29,7 @@ def train_model(
         batch, data,
         atn_head_size, n_atn_heads, atn_feed_forward_dim, n_transformer_blocks, transformer_dropout,
         mlp_units, mlp_dropout,
-        optimizer, learning_rate,
+        optimizer, learning_rate, weight_decay,
         test_size, seed, n_splits, n_epochs,
         save_checkpoint, monitor_checkpoint, early_stopping, monitor_early_stopping, patience_early_stopping,
         warmup, warmup_epochs,
@@ -62,6 +61,7 @@ def train_model(
         mlp_dropout {float} -- dropout rate for the MLP
         optimizer {str} -- optimizer to use
         learning_rate {float} -- learning rate
+        weight_decay {float} -- weight decay
 
         test_size {float} -- proportion of data to use for testing
         seed {int} -- random seed
@@ -141,7 +141,7 @@ def train_model(
             )
 
     if optimizer == 'Adam':
-        optimizer_function = keras.optimizers.Adam(learning_rate=learning_rate)
+        optimizer_function = keras.optimizers.Adam(learning_rate=learning_rate, weight_decay=weight_decay)
     else:
         raise ValueError(f'Optimizer {optimizer} not implemented.')
 
@@ -343,6 +343,7 @@ if __name__ == '__main__':
     parser.add_argument('--mlp_dropout', required=True, type=float, help='mlp dropout')
     parser.add_argument('--optimizer', required=True, type=str, help='optimizer')
     parser.add_argument('--learning_rate', required=True, type=float, help='learning rate')
+    parser.add_argument('--weight_decay', required=True, type=float, help='weight decay')
 
     parser.add_argument('--outcome', required=True, type=str, help='outcome (ex. 3M mRS 0-2)')
     parser.add_argument('--output_dir', required=True, type=str, help='output directory')
@@ -369,7 +370,7 @@ if __name__ == '__main__':
     patience = 200
     # warmup
     warmup = True
-    warmup_epochs = 1000
+    warmup_epochs = 200
     if warmup:
         n_epochs = n_epochs + warmup_epochs
 
@@ -393,8 +394,7 @@ if __name__ == '__main__':
             atn_head_size=args.atn_head_size, n_atn_heads=args.n_atn_heads, atn_feed_forward_dim=args.atn_feed_forward_dim,
             n_transformer_blocks=args.n_transformer_blocks, transformer_dropout=args.transformer_dropout,
             mlp_units=args.mlp_units, mlp_dropout=args.mlp_dropout,
-            optimizer=args.optimizer, learning_rate=args.learning_rate,
-
+            optimizer=args.optimizer, learning_rate=args.learning_rate, weight_decay=args.weight_decay,
             test_size=test_size, seed=seed, n_splits=n_splits, n_epochs=n_epochs,
             save_checkpoint=save_checkpoint, monitor_checkpoint=monitor_checkpoint,
             early_stopping=early_stopping, monitor_early_stopping=monitor_early_stopping, patience_early_stopping=patience,
