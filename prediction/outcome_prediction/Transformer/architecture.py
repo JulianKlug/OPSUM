@@ -147,13 +147,15 @@ class OPSUMTransformer(nn.Module):
         self.embedder = nn.Linear(input_dim, model_dim)
         self.pe = PositionalEncoding(model_dim, dropout, max_dim, factor=pos_encode_factor)
         ff = PositionwiseFeedForward(model_dim, ff_dim, dropout)
-        attn = MultiHeadedAttention(attention_heads, model_dim)
+        attn = MultiHeadedAttention(num_heads, model_dim)
         c = copy.deepcopy
         self.encoder = Encoder(EncoderLayer(model_dim, c(attn), c(ff), dropout), num_layers)
         self.classifier = FinalClassification(model_dim, 1)
         
     def forward(self, x):
-        x = self.embedder(x)
+        bs, t, f = x.shape
+        x = self.embedder(x.reshape(-1, f))
+        x = x.reshape(bs, t, -1)
         x = self.pe(x)
         x = self.encoder(x)
         x = self.classifier(x)
