@@ -40,7 +40,7 @@ def initiate_log_files(output_dir, param_path):
     progress_log_path = os.path.join(output_dir,'progress.log')
     if not os.path.exists(progress_log_path):
         progress_log = open(progress_log_path, 'w')
-        progressHeader = ['completed']
+        progressHeader = ['completed', 'time_elapsed']
         progress_log.write('\t'.join(progressHeader) + '\n')
         progress_log.close()
 

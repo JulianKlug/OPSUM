@@ -5,7 +5,7 @@ import traceback
 import time
 import numpy as np
 import pandas as pd
-from keras.callbacks import ModelCheckpoint, EarlyStopping
+from keras.callbacks import ModelCheckpoint, EarlyStopping, TensorBoard
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.metrics import roc_auc_score, matthews_corrcoef
 import argparse
@@ -34,7 +34,7 @@ def train_model(
         save_checkpoint, monitor_checkpoint, early_stopping, monitor_early_stopping, patience_early_stopping,
         warmup, warmup_epochs,
         CVheader, errorHeader,
-        verbose
+        verbose, use_tensorboard
 ):
     """
     Train a Transformer model on the given data.
@@ -90,11 +90,12 @@ def train_model(
     # save training parameters
     training_params_dir = os.path.join(output_dir, 'training_parameters')
     ensure_dir(training_params_dir)
-    training_params_filename = '_'.join(['params', outcome, str(batch), str(data),
+    model_name = 'transformer_' + '_'.join([outcome, str(batch), str(data),
                                             str(atn_head_size), str(n_atn_heads), str(atn_feed_forward_dim),
                                             str(n_transformer_blocks), str(transformer_dropout),
                                             str(mlp_units), str(mlp_dropout),
-                                            optimizer, str(learning_rate)]) + '.json'
+                                            optimizer, str(learning_rate)])
+    training_params_filename = f'params_{model_name}.json'
     with open(os.path.join(training_params_dir, training_params_filename), 'w') as fp:
         json.dump(saved_args, fp, indent=4)
 
@@ -157,11 +158,7 @@ def train_model(
     # define filepath for initial weights
     weights_dir = os.path.join(output_dir, 'best_weights')
     ensure_dir(weights_dir)
-    initial_weights_path = os.path.join(weights_dir, '_'.join(['initial_weights', outcome, str(batch), str(data),
-                                            str(atn_head_size), str(n_atn_heads), str(atn_feed_forward_dim),
-                                            str(n_transformer_blocks), str(transformer_dropout),
-                                            str(mlp_units), str(mlp_dropout),
-                                            optimizer, str(learning_rate)]) + '.hdf5')
+    initial_weights_path = os.path.join(weights_dir, f'initial_weights_{model_name}.hdf5')
     model.save_weights(initial_weights_path)
 
     # define header for AUC file
@@ -215,11 +212,7 @@ def train_model(
             batch_size = int(batch)
 
         # define checkpoint
-        filepath = os.path.join(weights_dir, '_'.join([outcome, str(batch), str(data),
-                                            str(atn_head_size), str(n_atn_heads), str(atn_feed_forward_dim),
-                                            str(n_transformer_blocks), str(transformer_dropout),
-                                            str(mlp_units), str(mlp_dropout),
-                                            optimizer, str(learning_rate), str(i)]) + '.hdf5')
+        filepath = os.path.join(weights_dir, f'{model_name}_{str(i)}.hdf5')
 
         checkpoint = ModelCheckpoint(filepath, monitor=monitor_checkpoint[0],
                                      verbose=0, save_best_only=True,
@@ -243,6 +236,11 @@ def train_model(
             callbacks_list.append(checkpoint)
         if warmup:
             callbacks_list.append(warmupscheduler)
+        if use_tensorboard:
+            tensorboard_dir = os.path.join(output_dir, 'tensorboard_logs', f'{model_name}_{str(i)}')
+            ensure_dir(tensorboard_dir)
+            tensorboard_callback = TensorBoard(log_dir=tensorboard_dir, histogram_freq=1)
+            callbacks_list.append(tensorboard_callback)
 
         # TRAIN MODEL
         if data == "balanced":
@@ -291,6 +289,7 @@ def train_model(
                     'mlp_dropout': mlp_dropout,
                     'optimizer': optimizer,
                     'learning_rate': learning_rate,
+                    'weight_decay': weight_decay,
                     'warmup_epochs': warmup_epochs,
                     'cv_num': i
                 }, ignore_index=True)
@@ -351,6 +350,7 @@ if __name__ == '__main__':
     parser.add_argument('--labels_path', required=True, type=str, help='path to labels')
 
     parser.add_argument('--verbose', '-v', action='store_true', help='verbose', default=False)
+    parser.add_argument('--use_tensorboard', '-tb', action='store_true', help='log onto tensorboard', default=False)
     args = parser.parse_args()
 
     start_time = time.time()
@@ -359,7 +359,7 @@ if __name__ == '__main__':
     output_dir = args.output_dir
     seed = 42
     n_splits = 5
-    n_epochs = 1000
+    n_epochs = 3000
     test_size = 0.20
     # checkpoint
     save_checkpoint = True
@@ -367,7 +367,7 @@ if __name__ == '__main__':
     # early_stopping
     early_stopping = True
     monitor_early_stopping = ['val_matthews', 'max']
-    patience = 200
+    patience = 400
     # warmup
     warmup = True
     warmup_epochs = 200
@@ -400,7 +400,7 @@ if __name__ == '__main__':
             early_stopping=early_stopping, monitor_early_stopping=monitor_early_stopping, patience_early_stopping=patience,
             warmup=warmup, warmup_epochs=warmup_epochs,
             CVheader=CVheader, errorHeader=errorHeader,
-            verbose=args.verbose
+            verbose=args.verbose, use_tensorboard=args.use_tensorboard
         )
 
         progressDF = pd.DataFrame(columns=progressHeader)
