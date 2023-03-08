@@ -16,7 +16,7 @@ from prediction.outcome_prediction.Transformer.architecture import OPSUMTransfor
 from prediction.outcome_prediction.Transformer.utils import prepare_torch_dataset, DictLogger
 from prediction.outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
     link_patient_id_to_outcome, features_to_numpy, numpy_to_lookup_table
-from prediction.utils.utils import check_data, save_json
+from prediction.utils.utils import check_data, save_json, ensure_dir
 
 
 def prepare_train_data(features_path: str, labels_path:str, output_dir:str, outcome:str, test_size:float, seed=0, use_cross_validation=False, n_splits=5):
@@ -73,6 +73,10 @@ def prepare_train_data(features_path: str, labels_path:str, output_dir:str, outc
     else:
         # define K fold
         kfold = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+        X_train_folds = []
+        y_train_folds = []
+        X_val_folds = []
+        y_val_folds = []
 
         ### TRAIN MODEL USING K-FOLD CROSS-VALIDATION
         for fold_pid_train_idx, fold_pid_val_idx in kfold.split(pid_train, y_pid_train):
@@ -100,8 +104,11 @@ def prepare_train_data(features_path: str, labels_path:str, output_dir:str, outc
             fold_X_train = fold_X_train[:, :, :, -1].astype('float32')
             fold_X_val = fold_X_val[:, :, :, -1].astype('float32')
 
-            return fold_X_train, fold_y_train, fold_X_val, fold_y_val
-
+            X_train_folds.append(fold_X_train)
+            y_train_folds.append(fold_y_train)
+            X_val_folds.append(fold_X_val)
+            y_val_folds.append(fold_y_val)
+        return X_train_folds, y_train_folds, X_val_folds, y_val_folds
 
 # define the LightningModule
 class LitModel(pl.LightningModule):
@@ -156,46 +163,52 @@ def train_transformer(features_path: str, labels_path: str, outcome: str, test_s
 
     ff_dim = ff_factor * model_dim
 
-    model = OPSUMTransformer(
-        input_dim=84,
-        num_layers=num_layers,
-        model_dim=model_dim,
-        dropout=dropout,
-        ff_dim=ff_dim,
-        num_heads=num_heads,
-        num_classes=1,
-        max_dim=max_dim,
-        pos_encode_factor=pos_encode_factor
-    )
+    train_X_folds, train_y_folds, val_X_folds, val_y_folds = prepare_train_data(features_path=features_path, labels_path=labels_path, output_dir=output_dir,
+                                                                outcome=outcome, test_size=test_size, seed=seed, use_cross_validation=True)
 
-    train_X, train_y, val_X, val_y = prepare_train_data(features_path=features_path, labels_path=labels_path, output_dir=output_dir,
-                                            outcome=outcome, test_size=test_size, seed=seed, use_cross_validation=True)
+    best_scores, best_epochs, best_train_scores = [], [], []
 
-    train_dataset, val_dataset = prepare_torch_dataset(train_X, train_y, val_X, val_y)
+    for i, (train_X, train_y, val_X, val_y) in enumerate(zip(train_X_folds, train_y_folds, val_X_folds, val_y_folds)):
+        checkpoint_dir = os.path.join(output_dir, f'checkpoints_opsum_transformer_{timestamp}_cv_{i}')
+        ensure_dir(checkpoint_dir)
 
-    train_loader = DataLoader(train_dataset, batch_size=bs)
-    val_loader = DataLoader(val_dataset, batch_size=256)
+        train_dataset, val_dataset = prepare_torch_dataset(train_X, train_y, val_X, val_y)
 
-    module = LitModel(model, lr, weight_decay, train_noise)
-    logger = DictLogger(0)
+        train_loader = DataLoader(train_dataset, batch_size=bs)
+        val_loader = DataLoader(val_dataset, batch_size=256)
 
-    checkpoint_callback = ModelCheckpoint(
-        save_top_k=2,
-        monitor="val_auroc",
-        mode="max",
-        dirpath=output_dir,
-        filename=f"opsum_transformer_{timestamp}" + "_{epoch:02d}_{val_auroc:.4f}",
-    )
+        model = OPSUMTransformer(
+            input_dim=84,
+            num_layers=num_layers,
+            model_dim=model_dim,
+            dropout=dropout,
+            ff_dim=ff_dim,
+            num_heads=num_heads,
+            num_classes=1,
+            max_dim=max_dim,
+            pos_encode_factor=pos_encode_factor
+        )
 
-    trainer = pl.Trainer(accelerator='gpu', devices=1, max_epochs=max_epochs, logger=logger,
-                         callbacks=[checkpoint_callback], default_root_dir=output_dir)
-    trainer.fit(model=module, train_dataloaders=train_loader, val_dataloaders=val_loader)
+        module = LitModel(model, lr, weight_decay, train_noise)
+        logger = DictLogger(0)
 
-    best_score = np.max([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x])
-    best_epoch = np.argmax([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x])
-    train_score = np.max([x['train_auroc'] for x in logger.metrics if 'train_auroc' in x])
+        checkpoint_callback = ModelCheckpoint(
+            save_top_k=2,
+            monitor="val_auroc",
+            mode="max",
+            dirpath=checkpoint_dir,
+            filename="opsum_transformer_{epoch:02d}_{val_auroc:.4f}",
+        )
 
-    return best_epoch, best_score, train_score
+        trainer = pl.Trainer(accelerator='gpu', devices=1, max_epochs=max_epochs, logger=logger,
+                             callbacks=[checkpoint_callback], default_root_dir=output_dir)
+        trainer.fit(model=module, train_dataloaders=train_loader, val_dataloaders=val_loader)
+
+        best_scores.append(np.max([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x]))
+        best_epochs.append(np.argmax([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x]))
+        best_train_scores.append(np.max([x['train_auroc'] for x in logger.metrics if 'train_auroc' in x]))
+
+    return best_epochs, best_scores, best_train_scores
 
 
 features_path = '/home/klug/data/opsum/72h_input_data/gsu_prepro_01012023_233050/preprocessed_features_01012023_233050.csv'
@@ -215,9 +228,13 @@ lr = 1e-3
 weight_decay = 0.000496
 train_noise = 2.64
 
-best_epoch, best_score, train_score = train_transformer(features_path=features_path, labels_path=labels_path, outcome=outcome,
+best_epochs, best_scores, best_train_scores = train_transformer(features_path=features_path, labels_path=labels_path, outcome=outcome,
                                 test_size=test_size, seed=seed, output_dir=output_dir, num_layers=num_layers,
                                 model_dim=model_dim, dropout=dropout, ff_factor=ff_factor, num_heads=num_heads,
                                 pos_encode_factor=pos_encode_factor, bs=bs, lr=lr, weight_decay=weight_decay,
                                 train_noise=train_noise, max_epochs=50, max_dim=500)
-print(f'Best epoch: {best_epoch}, best score: {best_score}, train score: {train_score}')
+print(f'Best epochs: {best_epochs}, with median {np.median(best_epochs)}')
+print(f'Best scores: {best_scores}, with median {np.median(best_scores)}')
+print(f'Best train scores: {best_train_scores}, with median {np.median(best_train_scores)}')
+
+
