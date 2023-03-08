@@ -22,6 +22,24 @@ CATEGORICAL_CHARACTERISTICS = [
 ]
 
 
+def outcome_preprocessing(df: pd.DataFrame):
+    # if death in hospital, set mRs to 6
+    df.loc[df['Death in hospital'] == 'yes', '3M mRS'] = 6
+    # if 3M Death and 3M mRS nan, set mrs to 6
+    df.loc[(df['3M Death'] == 'yes') & (df['3M mRS'].isna()), '3M mRS'] = 6
+
+    # if death in hospital set 3M Death to yes
+    df.loc[df['Death in hospital'] == 'yes', '3M Death'] = 'yes'
+    # if 3M mRs == 6, set 3M Death to yes
+    df.loc[df['3M mRS'] == 6, '3M Death'] = 'yes'
+    # if 3M mRs not nan and not 6, set 3M Death to no
+    df.loc[(df['3M mRS'] != 6) &
+                                      (~df['3M mRS'].isna())
+                                      & (df['3M Death'].isna()), '3M Death'] = 'no'
+
+    return df
+
+
 def extract_patient_characteristics(patient_id_path: str, stroke_registry_data_path: str,
                                     continuous_characteristics: list = CONTINUOUS_CHARACTERISTICS,
                                     categorical_characteristics: list = CATEGORICAL_CHARACTERISTICS) -> pd.DataFrame:
@@ -37,8 +55,11 @@ def extract_patient_characteristics(patient_id_path: str, stroke_registry_data_p
     stroke_registry_df = pd.read_excel(stroke_registry_data_path)
     stroke_registry_df['patient_id'] = stroke_registry_df['Case ID'].apply(lambda x: x[8:-4]).astype(str)
 
-    # only keep firs admission for duplicate patients
+    # only keep first admission for duplicate patients
     stroke_registry_df = stroke_registry_df.drop_duplicates(subset=['patient_id'], keep='first')
+
+    # preprocess outcome variables
+    stroke_registry_df = outcome_preprocessing(stroke_registry_df)
 
     patient_id_df = pd.read_csv(patient_id_path, sep='\t')
     patient_id_df['patient_id'] = patient_id_df['patient_id'].astype(str)
