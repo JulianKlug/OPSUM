@@ -26,6 +26,24 @@ def generate_balanced_arrays(X_train, y_train):
         target = y_train[balance]
         yield input_, target
 
+def aggregrate_features_over_time(features, labels):
+    """
+    This function aggregates the features over time. Instead of having one row per case_admission_id and one column per feature over time,
+    we have one row per case_admission_id and one column per feature aggregated over time (mean, min, max).
+
+    :param features: a numpy array of shape (n_samples, n_time_steps, n_features)
+    :param labels: a numpy array of shape (n_samples, 1)
+    """
+    avg_features = np.cumsum(features, 1) / (np.arange(1, features.shape[1] + 1)[None, :, None])
+    min_features = np.minimum.accumulate(features, 1)
+    max_features = np.maximum.accumulate(features, 1)
+    all_features = np.concatenate([features, avg_features, min_features, max_features], 2)
+    all_features = all_features.reshape(-1, all_features.shape[-1])
+
+    labels = labels[:, None].repeat(72, 1).ravel()
+
+    return all_features, labels
+
 
 def check_data(data):
     """
