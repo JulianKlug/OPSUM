@@ -9,6 +9,21 @@ def precision(y_true, y_pred):
     precision = true_positives / (predicted_positives + K.epsilon())
     return precision
 
+def specificity(y_true, y_pred):
+    """
+    param:
+    y_pred - Predicted labels
+    y_true - True labels
+    Returns:
+    Specificity score
+    """
+    neg_y_true = 1 - y_true
+    neg_y_pred = 1 - y_pred
+    fp = K.sum(neg_y_true * y_pred)
+    tn = K.sum(neg_y_true * neg_y_pred)
+    specificity = tn / (tn + fp + K.epsilon())
+    return specificity
+
 
 def recall(y_true, y_pred):
     true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))

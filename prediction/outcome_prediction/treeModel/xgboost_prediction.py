@@ -7,11 +7,10 @@ import itertools
 import xgboost as xgb
 from sklearn.metrics import log_loss, roc_auc_score, matthews_corrcoef, accuracy_score
 from sklearn.model_selection import cross_val_score, StratifiedKFold, train_test_split
-from torchmetrics.classification import BinarySpecificity
 
 from prediction.outcome_prediction.data_loading.data_formatting import format_to_linear_table, \
     format_to_2d_table_with_time, link_patient_id_to_outcome, features_to_numpy
-from prediction.utils.scoring import precision, recall, matthews
+from prediction.utils.scoring import precision, recall, matthews, specificity
 from prediction.utils.utils import aggregrate_features_over_time
 
 # define constants
@@ -20,7 +19,6 @@ n_epochs = 5000
 seed = 42
 test_size = 0.2
 
-specificity = BinarySpecificity()
 
 # define K fold
 kfold = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
@@ -64,6 +62,8 @@ def create_model(max_depth:int, learning_rate:float, n_estimators:int, feature_a
                               test_X_np[:, 0, 0, 0]]).astype('float32')
         # Remove the case_admission_id, sample_label, and time_step_label columns from the data
         X_test = test_X_np[:, :, :, -1].astype('float32')
+        X_test, y_test = aggregrate_features_over_time(X_test, y_test)
+
         for fold_pid_train_idx, fold_pid_val_idx in kfold.split(pid_train, y_pid_train):
             folds.append((fold_pid_train_idx, fold_pid_val_idx))
 
@@ -107,7 +107,6 @@ def create_model(max_depth:int, learning_rate:float, n_estimators:int, feature_a
             # aggregate features over time so that one timepoint is one sample
             X_train, y_train = aggregrate_features_over_time(fold_X_train, fold_y_train)
             X_val, y_val = aggregrate_features_over_time(fold_X_val, fold_y_val)
-            X_test, y_test = aggregrate_features_over_time(X_test, y_test)
 
         ### MODEL ARCHITECTURE ###
         xgb_model = xgb.XGBClassifier(learning_rate=learning_rate, max_depth=max_depth, n_estimators=n_estimators,
@@ -231,7 +230,7 @@ if __name__=='__main__':
     all_args = [dict(zip(keys, v)) for v in itertools.product(*values)]
 
     # ## run multiprocessing
-    number_processes = 30
+    number_processes = 1
     pool = multiprocessing.Pool(number_processes)
     # # for args in all_args make model
     pool.map(get_model, all_args)
