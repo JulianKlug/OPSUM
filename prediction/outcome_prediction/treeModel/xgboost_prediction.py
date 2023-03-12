@@ -63,6 +63,9 @@ def create_model(max_depth:int, learning_rate:float, n_estimators:int, feature_a
         # Remove the case_admission_id, sample_label, and time_step_label columns from the data
         X_test = test_X_np[:, :, :, -1].astype('float32')
         X_test, y_test = aggregrate_features_over_time(X_test, y_test)
+        # only keep prediction at last timepoint
+        X_test = X_test.reshape(-1, 72, X_test.shape[-1])[:, -1, :].astype('float32')
+        y_test = y_test.reshape(-1, 72)[:, -1].astype('float32')
 
         for fold_pid_train_idx, fold_pid_val_idx in kfold.split(pid_train, y_pid_train):
             folds.append((fold_pid_train_idx, fold_pid_val_idx))
@@ -124,8 +127,6 @@ def create_model(max_depth:int, learning_rate:float, n_estimators:int, feature_a
 
         if feature_aggregation:
             # only keep prediction at last timepoint
-            X_test = X_test.reshape(-1, 72, X_test.shape[-1])[:,-1,:].astype('float32')
-            y_test = y_test.reshape(-1, 72)[:,-1].astype('float32')
             X_train = X_train.reshape(-1, 72, X_train.shape[-1])[:,-1,:].astype('float32')
             y_train = y_train.reshape(-1, 72)[:,-1].astype('float32')
             X_val = X_val.reshape(-1, 72, X_val.shape[-1])[:,-1,:].astype('float32')
