@@ -119,9 +119,9 @@ def create_model(max_depth:int, learning_rate:float, n_estimators:int, feature_a
 
         # define checkpoint
         if feature_aggregation:
-            model_name = f'xgboost_{outcome}_d{max_depth}_nE{n_estimators}_agg'
+            model_name = f'xgboost_{outcome}_d{max_depth}_nE{n_estimators}_lr{learning_rate}_agg'
         else:
-            model_name = f'xgboost_{outcome}_d{max_depth}_nE{n_estimators}'
+            model_name = f'xgboost_{outcome}_d{max_depth}_nE{n_estimators}_lr{learning_rate}'
         filepath1 = os.path.join(output_dir, f'{model_name}_{i}.json')
         trained_xgb.save_model(filepath1)
 
@@ -166,6 +166,7 @@ def create_model(max_depth:int, learning_rate:float, n_estimators:int, feature_a
         run_performance_df['CV'] = i
         run_performance_df['max_depth'] = max_depth
         run_performance_df['n_estimators'] = n_estimators
+        run_performance_df['learning_rate'] = learning_rate
         run_performance_df['outcome'] = outcome
         run_performance_df['auc_train'] = model_auc_train
         run_performance_df['auc_val'] = model_auc_val
@@ -216,7 +217,7 @@ if __name__=='__main__':
     param_dict['max_depth'] = [2, 4, 6]
     param_dict['n_estimators'] = [50, 100, 200]
     param_dict['learning_rate'] = [0.1, 0.001]
-    param_dict['feature_aggregation'] = [True, False]
+    param_dict['feature_aggregation'] = [True]
     param_dict['outcome'] = [cli_args.outcome]
     param_dict['feature_df_path'] = [cli_args.feature_df_path]
     param_dict['outcome_df_path'] = [cli_args.outcome_df_path]
