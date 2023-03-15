@@ -104,8 +104,8 @@ def evaluate_model(max_depth:int, learning_rate:float, n_estimators:int, reg_lam
         # Define the model
         xgb_model = xgb.XGBClassifier(learning_rate=learning_rate, max_depth=max_depth, n_estimators=n_estimators,
                                       reg_lambda=reg_lambda, alpha=alpha)
-        trained_xgb = xgb_model.fit(X_train, y_train, early_stopping_rounds=50, eval_metric=["auc"],
-                                    eval_set=[(X_train, y_train), (X_val, y_val)])
+        trained_xgb = xgb_model.fit(fold_X_train, fold_y_train, early_stopping_rounds=50, eval_metric=["auc"],
+                                    eval_set=[(fold_X_train, fold_y_train), (fold_X_val, fold_y_val)])
 
         # only keep prediction at last timepoint
         X_train = fold_X_train.reshape(-1, 72, fold_X_train.shape[-1])[:, -1, :].astype('float32')
@@ -198,7 +198,7 @@ if __name__=='__main__':
     param_dict['max_depth'] = [2, 4, 6]
     param_dict['n_estimators'] = [50, 100, 200]
     param_dict['learning_rate'] = [0.1, 0.001]
-    param_dict['reg_lamda'] = [1, 10, 50]
+    param_dict['reg_lambda'] = [1, 10, 50]
     param_dict['alpha']= [0, 50, 70, 100]
     param_dict['outcome'] = [cli_args.outcome]
     param_dict['feature_df_path'] = [cli_args.feature_df_path]
@@ -206,7 +206,7 @@ if __name__=='__main__':
     param_dict['output_dir'] = [cli_args.output_dir]
 
     # save parameters as json
-    with open(os.path.join(cli_args.output_dir, 'agg_mlp_parameters.json'), 'w') as f:
+    with open(os.path.join(cli_args.output_dir, 'agg_xgb_parameters.json'), 'w') as f:
         json.dump(param_dict, f)
 
     # create permutations
