@@ -6,52 +6,21 @@ import numpy as np
 # %%
 
 
-import optuna
-from functools import partial
 import torch as ch
-import json
-import torch as ch
-import matplotlib.pyplot as plt
-import os, traceback
 from os import path
 import numpy as np
-import pandas as pd
-from sklearn.model_selection import StratifiedKFold, train_test_split
-from sklearn.metrics import roc_auc_score, matthews_corrcoef
-import argparse
-import sys
-import os
 from functools import partial
 from torch import optim, nn, utils, Tensor
 from torch.utils.data import TensorDataset, DataLoader
-import optuna
-from torchvision.datasets import MNIST
-from torchvision.transforms import ToTensor
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-import pytorch_lightning as pl
-import os
-from functools import partial
-from torch import optim, nn, utils, Tensor
-from torch.utils.data import TensorDataset, DataLoader
-from torchvision.datasets import MNIST
-from torchvision.transforms import ToTensor
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import pytorch_lightning as pl
 from torchmetrics import AUROC
 from torchmetrics.classification import Accuracy
 from pytorch_lightning.callbacks.callback import Callback
 from sklearn.preprocessing import StandardScaler
 
-FOLDER = '/home/guillaume/julian/OPSUM/'
+INPUT_FOLDER = '/home/gl/gsu_prepro_01012023_233050/data_splits'
+OUTPUT_FOLDER = '/home/klug/output/opsum/transformer_evaluation/guillaume_v1'
 
-sys.path.insert(0, FOLDER)
-
-
-from prediction.outcome_prediction.LSTM.training.utils import initiate_log_files
-from prediction.outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time,     link_patient_id_to_outcome, features_to_numpy, numpy_to_lookup_table, feature_order_verification
-from prediction.utils.scoring import precision, matthews, recall
-from prediction.utils.utils import generate_balanced_arrays, check_data, ensure_dir, save_json
-from prediction.outcome_prediction.LSTM.LSTM import lstm_generator
 from prediction.outcome_prediction.Transformer.architecture import OPSUMTransformer
 
 
@@ -115,8 +84,6 @@ class MyEarlyStopping(Callback):
         self.best_so_far = max(val_auroc, self.best_so_far)
 
 
-study = optuna.create_study(direction='maximize')
-
 
 def prepare_dataset(scenario, balanced=False):
     X_train, X_val, y_train, y_val = scenario
@@ -132,7 +99,7 @@ def prepare_dataset(scenario, balanced=False):
     val_dataset = TensorDataset(ch.from_numpy(X_val).cuda(), ch.from_numpy(y_val.astype(np.int32)).cuda())
     return train_dataset, val_dataset
 
-scenarios = ch.load(path.join(FOLDER, '../data_splits_death.pth'))
+scenarios = ch.load(path.join(INPUT_FOLDER, '../train_data_splits_3M_mRS_0-2_ts0.8_rs42_ns5.pth.pth'))
 all_datasets = [prepare_dataset(x) for x in scenarios]
 all_datasets_balanced = [prepare_dataset(x, True) for x in scenarios]
 
@@ -189,26 +156,44 @@ class LitModel(pl.LightningModule):
 # %%
 
 
-from uuid import uuid4
 import json
 
-def get_score(trial, all_ds):
+def get_score(all_ds):
     ds_ub, ds_b = all_ds
-    bs = trial.suggest_categorical("batch_size", choices=[16, 32])
-    num_layers = trial.suggest_categorical("num_layers", choices=[1, 2, 3])
-    model_dim = trial.suggest_categorical("model_dim", choices=[16, 32, 64])
-    train_noise = trial.suggest_loguniform("train_noise", 1e-5, 7)
-    is_balanced = trial.suggest_categorical("balanced", [True, False])
-    wd = trial.suggest_loguniform("weight_decay", 1e-5, 10)
+    bs = 32
+    num_layers = 3
+    model_dim = 512
+    train_noise = 0.078178
+    is_balanced = False
+    wd = 0.00001
     ff_factor = 2
     ff_dim = ff_factor * model_dim
-    dropout = trial.suggest_uniform("dropout", 0, 1)
-    num_heads = trial.suggest_categorical("num_head", [4])
+    dropout = 0.300437
+    num_heads = 8
     pos_encode_factor = 1
-    lr = trial.suggest_loguniform("lr", 1e-5, 1e-3)
-    grad_clip = trial.suggest_loguniform('grad_clip_value', 1e-3, 2)
-    scores = [] 
+    lr = 0.000345
+    grad_clip = 0.078574
+
+    trial_params = {
+        'bs': bs,
+        'num_layers': num_layers,
+        'model_dim': model_dim,
+        'train_noise': train_noise,
+        'is_balanced': is_balanced,
+        'wd': wd,
+        'ff_factor': ff_factor,
+        'ff_dim': ff_dim,
+        'dropout': dropout,
+        'num_heads': num_heads,
+        'pos_encode_factor': pos_encode_factor,
+        'lr': lr,
+        'grad_clip': grad_clip
+    }
+
+    val_scores = []
     ts = []
+    best_epochs = []
+    rolling_val_scores = []
 
     ds = ds_b if is_balanced else ds_ub
     
@@ -236,17 +221,33 @@ def get_score(trial, all_ds):
         val_aurocs = np.array([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x])
         best_idx = np.argmax(val_aurocs)
         actual_score = np.median(val_aurocs[max(0, best_idx -1): best_idx + 2])
-        break
 
-    d = dict(trial.params)
-    d['score'] = actual_score
+        best_val_score = np.max([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x])
+        best_epoch = np.argmax([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x])
+        train_score = np.max([x['train_auroc'] for x in logger.metrics if 'train_auroc' in x])
+        val_scores.append(best_val_score)
+        ts.append(train_score)
+        best_epochs.append(best_epoch)
+        rolling_val_scores.append(actual_score)
+
+    d = trial_params
+    d['median_rolling_val_scores'] = np.median(rolling_val_scores)
+    d['median_val_scores'] = np.median(val_scores)
+    d['median_train_scores'] = np.median(ts)
+    d['median_best_epochs'] = np.median(best_epochs)
+
+    print(f'val_scores: {val_scores}, with median {np.median(val_scores)}')
+    print(f'train_scores: {ts}, with median {np.median(ts)}')
+    print(f'best_epochs: {best_epochs}, with median {np.median(best_epochs)}')
+    print(f'rolling_val_scores: {rolling_val_scores}, with median {np.median(rolling_val_scores)}')
+
     text = json.dumps(d)
     text += '\n'
-    dest = path.join(FOLDER, '../gridsearch.jsonl')
+    dest = path.join(OUTPUT_FOLDER, '../gridsearch.jsonl')
     with open(dest, 'a') as handle:
         handle.write(text)
     print("WRITTEN in ", dest)
     return actual_score
 
-study.optimize(partial(get_score, all_ds=(all_datasets, all_datasets_balanced)), n_trials=1000)
+get_score(all_datasets)
 

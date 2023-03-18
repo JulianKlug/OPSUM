@@ -26,9 +26,9 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
         
     def forward(self, x):
-        x = x + Variable(self.pe[:, :x.size(1)], 
-                         requires_grad=False)
-        return self.dropout(x)
+        b = Variable(self.pe[:, :x.size(1)], 
+                         requires_grad=False).repeat(x.shape[0], 1, 1)
+        return ch.concat([x, b], 2)
     
 def clones(module, N):
     "Produce N identical layers."
@@ -41,6 +41,7 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         self.layers = clones(layer, N)
         self.norm = LayerNorm(layer.size)
+        # self.norm = lambda x: x
         
     def forward(self, x):
         "Pass the input (and mask) through each layer in turn."
@@ -56,6 +57,7 @@ class SublayerConnection(nn.Module):
     def __init__(self, size, dropout):
         super(SublayerConnection, self).__init__()
         self.norm = LayerNorm(size)
+        # self.norm = lambda x: x
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, sublayer):
@@ -146,6 +148,7 @@ class OPSUMTransformer(nn.Module):
         super().__init__()
         self.embedder = nn.Linear(input_dim, model_dim)
         self.pe = PositionalEncoding(model_dim, dropout, max_dim, factor=pos_encode_factor)
+        model_dim *= 2
         ff = PositionwiseFeedForward(model_dim, ff_dim, dropout)
         attn = MultiHeadedAttention(num_heads, model_dim)
         c = copy.deepcopy
