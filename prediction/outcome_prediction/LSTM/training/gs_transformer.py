@@ -1,59 +1,25 @@
-import numpy as np
-
-# coding: utf-8
-# %%
-
-# %%
-
-
-import optuna
+import os
 from functools import partial
+from datetime import datetime
+import optuna
 import torch as ch
-import json
-import torch as ch
-import matplotlib.pyplot as plt
-import os, traceback
 from os import path
 import numpy as np
-import pandas as pd
-from sklearn.model_selection import StratifiedKFold, train_test_split
-from sklearn.metrics import roc_auc_score, matthews_corrcoef
-import argparse
-import sys
-import os
-from functools import partial
+from pytorch_lightning.callbacks import ModelCheckpoint
 from torch import optim, nn, utils, Tensor
 from torch.utils.data import TensorDataset, DataLoader
-import optuna
-from torchvision.datasets import MNIST
-from torchvision.transforms import ToTensor
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-import pytorch_lightning as pl
-import os
-from functools import partial
-from torch import optim, nn, utils, Tensor
-from torch.utils.data import TensorDataset, DataLoader
-from torchvision.datasets import MNIST
-from torchvision.transforms import ToTensor
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import pytorch_lightning as pl
 from torchmetrics import AUROC
 from torchmetrics.classification import Accuracy
 from pytorch_lightning.callbacks.callback import Callback
 from sklearn.preprocessing import StandardScaler
 
-FOLDER = '/home/guillaume/julian/OPSUM/'
+from prediction.utils.utils import ensure_dir
 
-sys.path.insert(0, FOLDER)
+INPUT_FOLDER = '/home/gl/gsu_prepro_01012023_233050/data_splits'
+OUTPUT_FOLDER = '/home/klug/output/opsum/transformer_evaluation/guillaume_v1'
 
-
-from prediction.outcome_prediction.LSTM.training.utils import initiate_log_files
-from prediction.outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time,     link_patient_id_to_outcome, features_to_numpy, numpy_to_lookup_table, feature_order_verification
-from prediction.utils.scoring import precision, matthews, recall
-from prediction.utils.utils import generate_balanced_arrays, check_data, ensure_dir, save_json
-from prediction.outcome_prediction.LSTM.LSTM import lstm_generator
 from prediction.outcome_prediction.Transformer.architecture import OPSUMTransformer
-
 
 try:
     from pytorch_lightning.loggers import LightningLoggerBase
@@ -132,7 +98,7 @@ def prepare_dataset(scenario, balanced=False):
     val_dataset = TensorDataset(ch.from_numpy(X_val).cuda(), ch.from_numpy(y_val.astype(np.int32)).cuda())
     return train_dataset, val_dataset
 
-scenarios = ch.load(path.join(FOLDER, '../data_splits_death.pth'))
+scenarios = ch.load(path.join(INPUT_FOLDER, 'train_data_splits_3M_mRS_0-2_ts0.8_rs42_ns5.pth'))
 all_datasets = [prepare_dataset(x) for x in scenarios]
 all_datasets_balanced = [prepare_dataset(x, True) for x in scenarios]
 
@@ -189,10 +155,10 @@ class LitModel(pl.LightningModule):
 # %%
 
 
-from uuid import uuid4
 import json
 
 def get_score(trial, all_ds):
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     ds_ub, ds_b = all_ds
     bs = trial.suggest_categorical("batch_size", choices=[16, 32])
     num_layers = trial.suggest_categorical("num_layers", choices=[1, 2, 3])
@@ -207,12 +173,16 @@ def get_score(trial, all_ds):
     pos_encode_factor = 1
     lr = trial.suggest_loguniform("lr", 1e-5, 1e-3)
     grad_clip = trial.suggest_loguniform('grad_clip_value', 1e-3, 2)
-    scores = [] 
-    ts = []
+
+    val_scores = []
+    best_epochs = []
+    rolling_val_scores = []
 
     ds = ds_b if is_balanced else ds_ub
     
     for i, (train_dataset, val_dataset) in enumerate(ds):
+        checkpoint_dir = os.path.join(OUTPUT_FOLDER, f'checkpoints_opsum_transformer_{timestamp}_cv_{i}')
+        ensure_dir(checkpoint_dir)
         model = OPSUMTransformer(
             input_dim=84,
             num_layers=num_layers,
@@ -228,25 +198,43 @@ def get_score(trial, all_ds):
         train_loader = DataLoader(train_dataset, batch_size=bs, shuffle=True, drop_last=True )
         val_loader = DataLoader(val_dataset, batch_size=1024)
         logger = DictLogger(0)
+
+        checkpoint_callback = ModelCheckpoint(
+            save_top_k=1,
+            monitor="val_auroc",
+            mode="max",
+            dirpath=checkpoint_dir,
+            filename="opsum_transformer_{epoch:02d}_{val_auroc:.4f}",
+        )
+
         module = LitModel(model, lr, wd, train_noise)
         trainer = pl.Trainer(accelerator='gpu', devices=1, max_epochs=1000,logger=logger,
                              log_every_n_steps = 25, enable_checkpointing=False,
-                             callbacks=[MyEarlyStopping()], gradient_clip_val=grad_clip)
+                             callbacks=[MyEarlyStopping(), checkpoint_callback], gradient_clip_val=grad_clip)
         trainer.fit(model=module, train_dataloaders=train_loader, val_dataloaders=val_loader)
         val_aurocs = np.array([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x])
         best_idx = np.argmax(val_aurocs)
         actual_score = np.median(val_aurocs[max(0, best_idx -1): best_idx + 2])
-        break
+
+        best_val_score = np.max([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x])
+        best_epoch = np.argmax([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x])
+        val_scores.append(best_val_score)
+        best_epochs.append(best_epoch)
+        rolling_val_scores.append(actual_score)
 
     d = dict(trial.params)
-    d['score'] = actual_score
+    d['median_rolling_val_scores'] = np.median(rolling_val_scores)
+    d['median_val_scores'] = np.median(val_scores)
+    d['median_best_epochs'] = np.median(best_epochs)
+    d['timestamp'] = timestamp
+    d['best_cv_fold'] = np.argmax(val_scores)
     text = json.dumps(d)
     text += '\n'
-    dest = path.join(FOLDER, '../gridsearch.jsonl')
+    dest = path.join(OUTPUT_FOLDER, '../gridsearch.jsonl')
     with open(dest, 'a') as handle:
         handle.write(text)
     print("WRITTEN in ", dest)
-    return actual_score
+    return np.median(rolling_val_scores)
 
 study.optimize(partial(get_score, all_ds=(all_datasets, all_datasets_balanced)), n_trials=1000)
 

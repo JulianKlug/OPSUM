@@ -1,4 +1,3 @@
-import numpy as np
 
 # coding: utf-8
 # %%
@@ -9,7 +8,6 @@ import numpy as np
 import torch as ch
 from os import path
 import numpy as np
-from functools import partial
 from torch import optim, nn, utils, Tensor
 from torch.utils.data import TensorDataset, DataLoader
 import pytorch_lightning as pl
@@ -191,7 +189,6 @@ def get_score(all_ds):
     }
 
     val_scores = []
-    ts = []
     best_epochs = []
     rolling_val_scores = []
 
