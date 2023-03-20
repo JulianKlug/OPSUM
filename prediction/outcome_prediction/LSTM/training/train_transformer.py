@@ -99,7 +99,7 @@ def prepare_dataset(scenario, balanced=False):
     val_dataset = TensorDataset(ch.from_numpy(X_val).cuda(), ch.from_numpy(y_val.astype(np.int32)).cuda())
     return train_dataset, val_dataset
 
-scenarios = ch.load(path.join(INPUT_FOLDER, '../train_data_splits_3M_mRS_0-2_ts0.8_rs42_ns5.pth.pth'))
+scenarios = ch.load(path.join(INPUT_FOLDER, 'train_data_splits_3M_Death_ts0.8_rs42_ns5.pth'))
 all_datasets = [prepare_dataset(x) for x in scenarios]
 all_datasets_balanced = [prepare_dataset(x, True) for x in scenarios]
 
@@ -224,20 +224,16 @@ def get_score(all_ds):
 
         best_val_score = np.max([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x])
         best_epoch = np.argmax([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x])
-        train_score = np.max([x['train_auroc'] for x in logger.metrics if 'train_auroc' in x])
         val_scores.append(best_val_score)
-        ts.append(train_score)
         best_epochs.append(best_epoch)
         rolling_val_scores.append(actual_score)
 
     d = trial_params
     d['median_rolling_val_scores'] = np.median(rolling_val_scores)
     d['median_val_scores'] = np.median(val_scores)
-    d['median_train_scores'] = np.median(ts)
     d['median_best_epochs'] = np.median(best_epochs)
 
     print(f'val_scores: {val_scores}, with median {np.median(val_scores)}')
-    print(f'train_scores: {ts}, with median {np.median(ts)}')
     print(f'best_epochs: {best_epochs}, with median {np.median(best_epochs)}')
     print(f'rolling_val_scores: {rolling_val_scores}, with median {np.median(rolling_val_scores)}')
 
@@ -249,5 +245,5 @@ def get_score(all_ds):
     print("WRITTEN in ", dest)
     return actual_score
 
-get_score(all_datasets)
+get_score((all_datasets, all_datasets_balanced))
 
