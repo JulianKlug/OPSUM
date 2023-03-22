@@ -17,7 +17,7 @@ from sklearn.preprocessing import StandardScaler
 from prediction.utils.utils import ensure_dir
 
 INPUT_FOLDER = '/home/gl/gsu_prepro_01012023_233050/data_splits'
-OUTPUT_FOLDER = '/home/klug/output/opsum/transformer_evaluation/guillaume_v1'
+OUTPUT_FOLDER = '/home/klug/output/opsum/transformer_evaluation/guillaume_v2'
 
 from prediction.outcome_prediction.Transformer.architecture import OPSUMTransformer
 
@@ -161,8 +161,8 @@ def get_score(trial, all_ds):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     ds_ub, ds_b = all_ds
     bs = trial.suggest_categorical("batch_size", choices=[16, 32])
-    num_layers = trial.suggest_categorical("num_layers", choices=[1, 2, 3])
-    model_dim = trial.suggest_categorical("model_dim", choices=[16, 32, 64])
+    num_layers = trial.suggest_categorical("num_layers", choices=[3, 4, 5])
+    model_dim = trial.suggest_categorical("model_dim", choices=[64, 128, 256])
     train_noise = trial.suggest_loguniform("train_noise", 1e-5, 7)
     is_balanced = trial.suggest_categorical("balanced", [True, False])
     wd = trial.suggest_loguniform("weight_decay", 1e-5, 10)
@@ -209,7 +209,7 @@ def get_score(trial, all_ds):
 
         module = LitModel(model, lr, wd, train_noise)
         trainer = pl.Trainer(accelerator='gpu', devices=1, max_epochs=1000,logger=logger,
-                             log_every_n_steps = 25, enable_checkpointing=False,
+                             log_every_n_steps = 25, enable_checkpointing=True,
                              callbacks=[MyEarlyStopping(), checkpoint_callback], gradient_clip_val=grad_clip)
         trainer.fit(model=module, train_dataloaders=train_loader, val_dataloaders=val_loader)
         val_aurocs = np.array([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x])
@@ -223,14 +223,14 @@ def get_score(trial, all_ds):
         rolling_val_scores.append(actual_score)
 
     d = dict(trial.params)
-    d['median_rolling_val_scores'] = np.median(rolling_val_scores)
-    d['median_val_scores'] = np.median(val_scores)
-    d['median_best_epochs'] = np.median(best_epochs)
+    d['median_rolling_val_scores'] = float(np.median(rolling_val_scores))
+    d['median_val_scores'] = float(np.median(val_scores))
+    d['median_best_epochs'] = float(np.median(best_epochs))
     d['timestamp'] = timestamp
-    d['best_cv_fold'] = np.argmax(val_scores)
+    d['best_cv_fold'] = int(np.argmax(val_scores))
     text = json.dumps(d)
     text += '\n'
-    dest = path.join(OUTPUT_FOLDER, '../gridsearch.jsonl')
+    dest = path.join(OUTPUT_FOLDER, 'gridsearch.jsonl')
     with open(dest, 'a') as handle:
         handle.write(text)
     print("WRITTEN in ", dest)
