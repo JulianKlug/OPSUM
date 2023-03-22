@@ -17,7 +17,8 @@ from sklearn.preprocessing import StandardScaler
 from prediction.utils.utils import ensure_dir
 
 INPUT_FOLDER = '/home/gl/gsu_prepro_01012023_233050/data_splits'
-OUTPUT_FOLDER = '/home/klug/output/opsum/transformer_evaluation/guillaume_v2'
+OUTPUT_FOLDER = '/home/klug/output/opsum/transformer_evaluation/guillaume_v3'
+OUTPUT_FOLDER = path.join(OUTPUT_FOLDER, f'transformer_gs_{datetime.now().strftime("%Y%m%d_%H%M%S")}')
 
 from prediction.outcome_prediction.Transformer.architecture import OPSUMTransformer
 
