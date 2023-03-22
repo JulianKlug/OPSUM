@@ -83,17 +83,32 @@ class MyEarlyStopping(Callback):
 
 study = optuna.create_study(direction='maximize')
 
+def feature_aggregation(x):
+    # given an array of shape (batch_size, seq_len, feature_dim), for each feature_dim, compute the cumulative average / max / min and add them to the feature_dim
+    time_avg = np.cumsum(x, axis=1) / np.arange(1, x.shape[1] + 1)[:, np.newaxis]
+    time_max = np.maximum.accumulate(x, axis=1)
+    time_min = np.minimum.accumulate(x, axis=1)
+    return np.concatenate([x, time_avg, time_max, time_min], axis=-1)
 
-def prepare_dataset(scenario, balanced=False):
+
+def prepare_dataset(scenario, balanced=False, aggregate=False, rescale=True):
     X_train, X_val, y_train, y_val = scenario
     scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train.reshape(-1, 84)).reshape(X_train.shape)
+
+    if rescale:
+        X_train = scaler.fit_transform(X_train.reshape(-1, 84)).reshape(X_train.shape)
+        X_val = scaler.transform(X_val.reshape(-1, 84)).reshape(X_val.shape)
+
     if balanced:
         X_train_neg = X_train[y_train == 0]
         X_train_pos = X_train[np.random.choice(np.where(y_train==1)[0], X_train_neg.shape[0])]
         X_train = np.concatenate([X_train_neg, X_train_pos])
         y_train = np.concatenate([np.zeros(X_train_neg.shape[0]), np.ones(X_train_pos.shape[0])])
-    X_val = scaler.transform(X_val.reshape(-1, 84)).reshape(X_val.shape)
+
+    if aggregate:
+        X_train = feature_aggregation(X_train)
+        X_val = feature_aggregation(X_val)
+
     train_dataset = TensorDataset(ch.from_numpy(X_train).cuda(), ch.from_numpy(y_train.astype(np.int32)).cuda())
     val_dataset = TensorDataset(ch.from_numpy(X_val).cuda(), ch.from_numpy(y_val.astype(np.int32)).cuda())
     return train_dataset, val_dataset
@@ -101,7 +116,7 @@ def prepare_dataset(scenario, balanced=False):
 scenarios = ch.load(path.join(INPUT_FOLDER, 'train_data_splits_3M_mRS_0-2_ts0.8_rs42_ns5.pth'))
 all_datasets = [prepare_dataset(x) for x in scenarios]
 all_datasets_balanced = [prepare_dataset(x, True) for x in scenarios]
-
+all_datasets_aggregated = [prepare_dataset(x, False, True) for x in scenarios]
 
 class LitModel(pl.LightningModule):
     def __init__(self, model, lr, wd, train_noise):
@@ -159,12 +174,13 @@ import json
 
 def get_score(trial, all_ds):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    ds_ub, ds_b = all_ds
+    ds_ub, ds_b, ds_a = all_ds
     bs = trial.suggest_categorical("batch_size", choices=[16, 32])
     num_layers = trial.suggest_categorical("num_layers", choices=[3, 4, 5])
     model_dim = trial.suggest_categorical("model_dim", choices=[64, 128, 256])
     train_noise = trial.suggest_loguniform("train_noise", 1e-5, 7)
-    is_balanced = trial.suggest_categorical("balanced", [True, False])
+    is_balanced = trial.suggest_categorical("balanced", [False])
+    is_aggregated = trial.suggest_categorical("feature_aggregation", [True])
     wd = trial.suggest_loguniform("weight_decay", 1e-5, 10)
     ff_factor = 2
     ff_dim = ff_factor * model_dim
@@ -179,12 +195,15 @@ def get_score(trial, all_ds):
     rolling_val_scores = []
 
     ds = ds_b if is_balanced else ds_ub
+    ds = ds_a if is_aggregated else ds
+
+    input_dim = 84 * 3 if is_aggregated else 84
     
     for i, (train_dataset, val_dataset) in enumerate(ds):
         checkpoint_dir = os.path.join(OUTPUT_FOLDER, f'checkpoints_opsum_transformer_{timestamp}_cv_{i}')
         ensure_dir(checkpoint_dir)
         model = OPSUMTransformer(
-            input_dim=84,
+            input_dim=input_dim,
             num_layers=num_layers,
             model_dim=model_dim,
             dropout=dropout,
@@ -236,5 +255,5 @@ def get_score(trial, all_ds):
     print("WRITTEN in ", dest)
     return np.median(rolling_val_scores)
 
-study.optimize(partial(get_score, all_ds=(all_datasets, all_datasets_balanced)), n_trials=1000)
+study.optimize(partial(get_score, all_ds=(all_datasets, all_datasets_balanced, all_datasets_aggregated)), n_trials=1000)
 
