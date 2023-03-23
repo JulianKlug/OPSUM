@@ -24,7 +24,7 @@ kfold = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
 
 
 def evaluate_model(max_depth:int, learning_rate:float, n_estimators:int, reg_lambda:int, alpha:int,
-                 outcome:str, features_df_path:str, outcomes_df_path:str, output_dir:str):
+                 outcome:str, features_df_path:str, outcomes_df_path:str, output_dir:str, save_models:bool=False):
     np.random.seed(seed)
     optimal_model_df = pd.DataFrame()
 
@@ -63,6 +63,7 @@ def evaluate_model(max_depth:int, learning_rate:float, n_estimators:int, reg_lam
     y_test = y_test.reshape(-1, 72)[:, -1].astype('float32')
 
     ### TRAIN MODEL USING K-FOLD CROSS-VALIDATION
+    trained_models = []
     i = 0
     for fold_pid_train_idx, fold_pid_val_idx in kfold.split(pid_train, y_pid_train):
         i += 1
@@ -106,6 +107,7 @@ def evaluate_model(max_depth:int, learning_rate:float, n_estimators:int, reg_lam
                                       reg_lambda=reg_lambda, alpha=alpha)
         trained_xgb = xgb_model.fit(fold_X_train, fold_y_train, early_stopping_rounds=50, eval_metric=["auc"],
                                     eval_set=[(fold_X_train, fold_y_train), (fold_X_val, fold_y_val)])
+        trained_models.append(trained_xgb)
 
         # only keep prediction at last timepoint
         X_train = fold_X_train.reshape(-1, 72, fold_X_train.shape[-1])[:, -1, :].astype('float32')
@@ -172,6 +174,12 @@ def evaluate_model(max_depth:int, learning_rate:float, n_estimators:int, reg_lam
         optimal_model_df = optimal_model_df.append(run_performance_df)
 
     optimal_model_df.to_csv(os.path.join(output_dir, f'{model_name}.csv'), sep=',', index=False)
+
+    if save_models:
+        for idx, model in enumerate(trained_models):
+            model.save_model(os.path.join(output_dir, f'{model_name}_cv{idx}.json'))
+
+    return optimal_model_df, trained_models, (X_test, y_test)
 
 def evaluate_args(args):
     evaluate_model(max_depth=args['max_depth'], learning_rate=args['learning_rate'], n_estimators=args['n_estimators'],
