@@ -17,15 +17,19 @@ from sklearn.preprocessing import StandardScaler
 from prediction.utils.utils import ensure_dir
 
 INPUT_FOLDER = '/home/gl/gsu_prepro_01012023_233050/data_splits'
-OUTPUT_FOLDER = '/home/klug/output/opsum/transformer_evaluation/guillaume_v3'
+OUTPUT_FOLDER = '/mnt/data1/klug/output/transformer_evaluation/guillaume_v5'
 OUTPUT_FOLDER = path.join(OUTPUT_FOLDER, f'transformer_gs_{datetime.now().strftime("%Y%m%d_%H%M%S")}')
 
 from prediction.outcome_prediction.Transformer.architecture import OPSUMTransformer
+
+ch.set_float32_matmul_precision('high')
 
 try:
     from pytorch_lightning.loggers import LightningLoggerBase
 except: 
     from pytorch_lightning.loggers.logger import Logger as LightningLoggerBase
+
+
 
 class DictLogger(LightningLoggerBase):
     """PyTorch Lightning `dict` logger."""
@@ -89,7 +93,7 @@ def feature_aggregation(x):
     time_avg = np.cumsum(x, axis=1) / np.arange(1, x.shape[1] + 1)[:, np.newaxis]
     time_max = np.maximum.accumulate(x, axis=1)
     time_min = np.minimum.accumulate(x, axis=1)
-    return np.concatenate([x, time_avg, time_max, time_min], axis=-1)
+    return np.concatenate([x, time_avg, time_max, time_min], axis=-1).astype(np.float32)
 
 
 def prepare_dataset(scenario, balanced=False, aggregate=False, rescale=True):
@@ -136,7 +140,8 @@ class LitModel(pl.LightningModule):
     def training_step(self, batch, batch_idx, mode='train'):
         x, y = batch
         if self.train_noise != 0:
-            x = x + ch.randn_like(x) * self.train_noise
+            #x = x + ch.randn_like(x) * self.train_noise
+            x = x + ch.randn(x.shape[0], x.shape[1], device=x.device)[:, :, None].repeat(1, 1, x.shape[2]) * self.train_noise
         predictions = self.model(x).squeeze().ravel()
         y = y.unsqueeze(1).repeat(1, x.shape[1]).ravel()
         loss = self.criterion(predictions, y.float()).ravel()
@@ -177,16 +182,16 @@ def get_score(trial, all_ds):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     ds_ub, ds_b, ds_a = all_ds
     bs = trial.suggest_categorical("batch_size", choices=[16, 32])
-    num_layers = trial.suggest_categorical("num_layers", choices=[3, 4, 5])
-    model_dim = trial.suggest_categorical("model_dim", choices=[64, 128, 256])
+    num_layers = trial.suggest_categorical("num_layers", choices=[3, 6, 9])
+    model_dim = trial.suggest_categorical("model_dim", choices=[512, 1024, 2048])
     train_noise = trial.suggest_loguniform("train_noise", 1e-5, 7)
     is_balanced = trial.suggest_categorical("balanced", [False])
-    is_aggregated = trial.suggest_categorical("feature_aggregation", [True])
-    wd = trial.suggest_loguniform("weight_decay", 1e-5, 10)
+    is_aggregated = trial.suggest_categorical("feature_aggregation", [False])
+    wd = trial.suggest_loguniform("weight_decay", 1e-5, 1e-2)
     ff_factor = 2
     ff_dim = ff_factor * model_dim
-    dropout = trial.suggest_uniform("dropout", 0, 1)
-    num_heads = trial.suggest_categorical("num_head", [4])
+    dropout = trial.suggest_uniform("dropout", 0 ,0.5)
+    num_heads = trial.suggest_categorical("num_head", [2, 4, 8])
     pos_encode_factor = 1
     lr = trial.suggest_loguniform("lr", 1e-5, 1e-3)
     grad_clip = trial.suggest_loguniform('grad_clip_value', 1e-3, 2)
@@ -198,7 +203,7 @@ def get_score(trial, all_ds):
     ds = ds_b if is_balanced else ds_ub
     ds = ds_a if is_aggregated else ds
 
-    input_dim = 84 * 3 if is_aggregated else 84
+    input_dim = 84 * 4 if is_aggregated else 84
     
     for i, (train_dataset, val_dataset) in enumerate(ds):
         checkpoint_dir = os.path.join(OUTPUT_FOLDER, f'checkpoints_opsum_transformer_{timestamp}_cv_{i}')
@@ -248,6 +253,7 @@ def get_score(trial, all_ds):
     d['median_best_epochs'] = float(np.median(best_epochs))
     d['timestamp'] = timestamp
     d['best_cv_fold'] = int(np.argmax(val_scores))
+    d['worst_cv_fold_val_score'] = float(np.min(val_scores))
     text = json.dumps(d)
     text += '\n'
     dest = path.join(OUTPUT_FOLDER, 'gridsearch.jsonl')
