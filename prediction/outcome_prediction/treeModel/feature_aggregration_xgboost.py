@@ -11,7 +11,7 @@ import xgboost as xgb
 from prediction.outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
     link_patient_id_to_outcome, features_to_numpy
 from prediction.utils.scoring import precision, recall, specificity
-from prediction.utils.utils import aggregrate_features_over_time
+from prediction.utils.utils import aggregate_features_over_time
 
 # define constants
 n_splits = 5
@@ -23,12 +23,12 @@ test_size = 0.2
 kfold = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
 
 
-def evaluate_model(max_depth:int, learning_rate:float, n_estimators:int, reg_lambda:int, alpha:int,
+def evaluate_model(max_depth:int, learning_rate:float, n_estimators:int, reg_lambda:int, alpha:int, moving_average:bool,
                  outcome:str, features_df_path:str, outcomes_df_path:str, output_dir:str, save_models:bool=False):
     np.random.seed(seed)
     optimal_model_df = pd.DataFrame()
 
-    model_name = f'feature_aggregration_xgb_{outcome}_{max_depth}_{learning_rate}_{n_estimators}_{alpha}_{reg_lambda}'
+    model_name = f'feature_aggregation_xgb_{outcome}_{max_depth}_{learning_rate}_{n_estimators}_{alpha}_{reg_lambda}'
 
     ### LOAD THE DATA
     X, y = format_to_2d_table_with_time(feature_df_path=features_df_path, outcome_df_path=outcomes_df_path,
@@ -57,7 +57,7 @@ def evaluate_model(max_depth:int, learning_rate:float, n_estimators:int, reg_lam
 
     # Remove the case_admission_id, sample_label, and time_step_label columns from the data
     test_X_np = test_X_np[:, :, :, -1].astype('float32')
-    X_test, y_test = aggregrate_features_over_time(test_X_np, test_y_np)
+    X_test, y_test = aggregate_features_over_time(test_X_np, test_y_np, moving_average=moving_average)
     # only keep prediction at last timepoint
     X_test = X_test.reshape(-1, 72, X_test.shape[-1])[:, -1, :].astype('float32')
     y_test = y_test.reshape(-1, 72)[:, -1].astype('float32')
@@ -99,8 +99,8 @@ def evaluate_model(max_depth:int, learning_rate:float, n_estimators:int, reg_lam
         fold_X_val = fold_X_val[:, :, :, -1].astype('float32')
 
         # aggregate features over time so that one timepoint is one sample
-        fold_X_train, fold_y_train = aggregrate_features_over_time(fold_X_train, fold_y_train)
-        fold_X_val, fold_y_val = aggregrate_features_over_time(fold_X_val, fold_y_val)
+        fold_X_train, fold_y_train = aggregate_features_over_time(fold_X_train, fold_y_train, moving_average=moving_average)
+        fold_X_val, fold_y_val = aggregate_features_over_time(fold_X_val, fold_y_val, moving_average=moving_average)
 
         # Define the model
         xgb_model = xgb.XGBClassifier(learning_rate=learning_rate, max_depth=max_depth, n_estimators=n_estimators,
@@ -151,6 +151,7 @@ def evaluate_model(max_depth:int, learning_rate:float, n_estimators:int, reg_lam
         run_performance_df['learning_rate'] = learning_rate
         run_performance_df['alpha'] = alpha
         run_performance_df['reg_lambda'] = reg_lambda
+        run_performance_df['moving_average'] = moving_average
         run_performance_df['outcome'] = outcome
         run_performance_df['auc_train'] = model_auc_train
         run_performance_df['auc_val'] = model_auc_val
@@ -183,7 +184,7 @@ def evaluate_model(max_depth:int, learning_rate:float, n_estimators:int, reg_lam
 
 def evaluate_args(args):
     evaluate_model(max_depth=args['max_depth'], learning_rate=args['learning_rate'], n_estimators=args['n_estimators'],
-                   reg_lambda=args['reg_lambda'], alpha=args['alpha'],
+                   reg_lambda=args['reg_lambda'], alpha=args['alpha'], moving_average=args['moving_average'],
                     outcome = args['outcome'], features_df_path = args['feature_df_path'],
                  outcomes_df_path = args['outcome_df_path'], output_dir = args['output_dir'])
     print('\nDONE: {}'.format(args))
@@ -208,6 +209,7 @@ if __name__=='__main__':
     param_dict['learning_rate'] = [0.1, 0.001]
     param_dict['reg_lambda'] = [1, 10, 50]
     param_dict['alpha']= [0, 50, 70, 100]
+    param_dict['moving_average'] = [True]
     param_dict['outcome'] = [cli_args.outcome]
     param_dict['feature_df_path'] = [cli_args.feature_df_path]
     param_dict['outcome_df_path'] = [cli_args.outcome_df_path]
