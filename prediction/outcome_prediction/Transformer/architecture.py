@@ -154,7 +154,7 @@ class OPSUMTransformer(nn.Module):
         c = copy.deepcopy
         self.encoder = Encoder(EncoderLayer(model_dim, c(attn), c(ff), dropout), num_layers)
         self.classifier = FinalClassification(model_dim, 1)
-        
+
     def forward(self, x):
         bs, t, f = x.shape
         x = self.embedder(x.reshape(-1, f))
