@@ -1,10 +1,12 @@
 import argparse
 import os
 import shutil
-
+from tqdm import tqdm
 import numpy as np
 import pandas as pd
-from sklearn.metrics import roc_auc_score, matthews_corrcoef, accuracy_score, precision_score, recall_score
+import pickle
+from sklearn.metrics import roc_auc_score, matthews_corrcoef, accuracy_score, precision_score, recall_score, \
+    multilabel_confusion_matrix
 from sklearn.model_selection import train_test_split
 from sklearn.utils import resample
 
@@ -35,12 +37,21 @@ def test_LSTM(X, y, model_weights_path, activation, batch, data, dropout, layers
     accuracy_scores = []
     precision_scores = []
     recall_scores = []
+    specificity_scores = []
+    neg_pred_value_scores = []
+
+    bootstrapped_ground_truth = []
+    bootstrapped_predictions = []
+
     n_iterations = 1000
-    for i in range(n_iterations):
+    for i in tqdm(range(n_iterations)):
         X_bs, y_bs = resample(X, y, replace=True)
         # make predictions
         y_pred_bs = model.predict(X_bs)
         y_pred_bs_binary = (y_pred_bs > 0.5).astype('int32')
+
+        bootstrapped_ground_truth.append(y_bs)
+        bootstrapped_predictions.append(y_pred_bs)
 
         # evaluate model
         roc_auc_bs = roc_auc_score(y_bs, y_pred_bs)
@@ -49,13 +60,21 @@ def test_LSTM(X, y, model_weights_path, activation, batch, data, dropout, layers
         matthews_scores.append(matthews_bs)
         accuracy_bs = accuracy_score(y_bs, y_pred_bs_binary)
         accuracy_scores.append(accuracy_bs)
-        precision_bs = precision_score(y_bs, y_pred_bs_binary)
-        recall_bs = recall_score(y_bs, y_pred_bs_binary)
+        precision_bs = precision_score(y_bs, y_pred_bs_binary)  # == PPV
+        recall_bs = recall_score(y_bs, y_pred_bs_binary) # == sensitivity
         precision_scores.append(precision_bs)
         recall_scores.append(recall_bs)
 
-        # TODO add variables:
-        # PPV=positive predictive value. NPV=negative predictive value. LRP=likelihood ratio positive. LRN=likelihood ratio negative.
+        mcm = multilabel_confusion_matrix(y_bs, y_pred_bs_binary)
+        tn = mcm[:, 0, 0]
+        tp = mcm[:, 1, 1]
+        fn = mcm[:, 1, 0]
+        fp = mcm[:, 0, 1]
+        specificity_bs = tn / (tn + fp)
+        specificity_scores.append(specificity_bs)
+        neg_pred_value_bs = tn / (tn + fn)
+        neg_pred_value_scores.append(neg_pred_value_bs)
+
 
     # get medians
     median_roc_auc = np.percentile(roc_auc_scores, 50)
@@ -63,6 +82,8 @@ def test_LSTM(X, y, model_weights_path, activation, batch, data, dropout, layers
     median_accuracy = np.percentile(accuracy_scores, 50)
     median_precision = np.percentile(precision_scores, 50)
     median_recall = np.percentile(recall_scores, 50)
+    median_specificity = np.percentile(specificity_scores, 50)
+    median_neg_pred_value = np.percentile(neg_pred_value_scores, 50)
 
     # get 95% interval
     alpha = 100 - 95
@@ -76,6 +97,10 @@ def test_LSTM(X, y, model_weights_path, activation, batch, data, dropout, layers
     upper_ci_precision = np.percentile(precision_scores, 100 - alpha / 2)
     lower_ci_recall = np.percentile(recall_scores, alpha / 2)
     upper_ci_recall = np.percentile(recall_scores, 100 - alpha / 2)
+    lower_ci_specificity = np.percentile(specificity_scores, alpha / 2)
+    upper_ci_specificity = np.percentile(specificity_scores, 100 - alpha / 2)
+    lower_ci_neg_pred_value = np.percentile(neg_pred_value_scores, alpha / 2)
+    upper_ci_neg_pred_value = np.percentile(neg_pred_value_scores, 100 - alpha / 2)
 
     result_df = pd.DataFrame([{
         'auc_test': median_roc_auc,
@@ -93,6 +118,12 @@ def test_LSTM(X, y, model_weights_path, activation, batch, data, dropout, layers
         'recall_test': median_recall,
         'recall_test_lower_ci': lower_ci_recall,
         'recall_test_upper_ci': upper_ci_recall,
+        'specificity_test': median_specificity,
+        'specificity_test_lower_ci': lower_ci_specificity,
+        'specificity_test_upper_ci': upper_ci_specificity,
+        'neg_pred_value_test': median_neg_pred_value,
+        'neg_pred_value_test_lower_ci': lower_ci_neg_pred_value,
+        'neg_pred_value_test_upper_ci': upper_ci_neg_pred_value,
         'data': data,
         'activation': activation, 'dropout': dropout, 'units': units, 'optimizer': optimizer,
         'batch': batch,
@@ -102,7 +133,7 @@ def test_LSTM(X, y, model_weights_path, activation, batch, data, dropout, layers
         'model_weights_path': model_weights_path
     }], index=[0])
 
-    return result_df, roc_auc_figure
+    return result_df, roc_auc_figure, (bootstrapped_ground_truth, bootstrapped_predictions), (y, y_pred_test)
 
 
 if __name__ == '__main__':
@@ -209,7 +240,7 @@ if __name__ == '__main__':
     # Remove the case_admission_id, sample_label, and time_step_label columns from the data
     test_X_np = test_X_np[:, :, :, -1].astype('float32')
 
-    result_df, roc_auc_figure = test_LSTM(X=test_X_np, y=test_y_np, model_weights_path=model_weights_path,
+    result_df, roc_auc_figure, bootstrapping_data, testing_data = test_LSTM(X=test_X_np, y=test_y_np, model_weights_path=model_weights_path,
                           activation=args.activation, batch=args.batch, data=args.data, dropout=args.dropout,
                           layers=args.layers, masking=args.masking, optimizer=args.optimizer,
                           outcome=args.outcome, units=args.units, n_time_steps=n_time_steps, n_channels=n_channels)
@@ -217,3 +248,7 @@ if __name__ == '__main__':
     roc_auc_figure.savefig(os.path.join(output_dir, 'roc_auc_curve.png'))
 
     result_df.to_csv(os.path.join(output_dir, 'test_LSTM_results.tsv'), sep='\t', index=False)
+
+    # save bootstrapped ground truth and predictions
+    pickle.dump(bootstrapping_data, open(os.path.join(output_dir, 'bootstrapped_gt_and_pred.pkl'), 'wb'))
+    pickle.dump(testing_data, open(os.path.join(output_dir, 'test_gt_and_pred.pkl'), 'wb'))
