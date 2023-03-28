@@ -10,9 +10,9 @@ from sklearn.metrics import roc_auc_score, matthews_corrcoef, accuracy_score, pr
 from prediction.outcome_prediction.treeModel.feature_aggregration_xgboost import evaluate_model
 
 
-def test_model(max_depth:int, learning_rate:float, n_estimators:int, reg_lambda:int, alpha:int,
+def test_model(max_depth:int, learning_rate:float, n_estimators:int, reg_lambda:int, alpha:int, moving_average:bool,
                  outcome:str, features_df_path:str, outcomes_df_path:str, output_dir:str):
-    optimal_model_df, trained_models, test_dataset = evaluate_model(max_depth, learning_rate, n_estimators, reg_lambda, alpha,
+    optimal_model_df, trained_models, test_dataset = evaluate_model(max_depth, learning_rate, n_estimators, reg_lambda, alpha, moving_average,
                                                         outcome, features_df_path, outcomes_df_path, output_dir, save_models=True)
 
     X_test, y_test = test_dataset
@@ -21,6 +21,11 @@ def test_model(max_depth:int, learning_rate:float, n_estimators:int, reg_lambda:
     best_cv_fold = int(optimal_model_df.sort_values(by='auc_val', ascending=False).iloc[0]['CV'])
     best_cv_fold_idx = best_cv_fold - 1
     selected_model = trained_models[best_cv_fold_idx]
+
+    # save selected model
+    model_path = os.path.join(output_dir, f'selected_xgb_model_cv{best_cv_fold}.pkl')
+    with open(model_path, 'wb') as f:
+        pickle.dump(selected_model, f)
 
     # calculate overall model prediction
     y_pred_test = selected_model.predict_proba(X_test)[:, 1].astype('float32')
@@ -138,8 +143,13 @@ if __name__ == '__main__':
 
     best_parameters_df = pd.read_csv(cli_args.best_parameters_path)
 
+    # check if moving_average exists in best_parameters_df
+    if 'moving_average' not in best_parameters_df.columns:
+        best_parameters_df['moving_average'] = False
+
     result_df, bootstrapping_data, testing_data = test_model(int(best_parameters_df['max_depth'][0]), best_parameters_df['learning_rate'][0], int(best_parameters_df['n_estimators'][0]), best_parameters_df['reg_lambda'][0], best_parameters_df['alpha'][0],
-                cli_args.outcome, cli_args.feature_df_path, cli_args.outcome_df_path, cli_args.output_dir)
+                                                             bool(best_parameters_df['moving_average'][0]),
+                                                            cli_args.outcome, cli_args.feature_df_path, cli_args.outcome_df_path, cli_args.output_dir)
 
     result_df.to_csv(os.path.join(cli_args.output_dir, 'test_XGB_results.csv'), sep=',', index=False)
 
