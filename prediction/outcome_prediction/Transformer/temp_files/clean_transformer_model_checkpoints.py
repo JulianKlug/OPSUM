@@ -50,11 +50,6 @@ def verify_selected_model_presence(target_dir, model_selection_path):
     print(model_selection_timestamps)
 
 
-
-
-
-
-
 if __name__ == '__main__':
     data_dir = '/mnt/data1/klug/output/transformer_evaluation'
     model_selection_path = '~/temp/model_timestamps_to_retain.csv'
