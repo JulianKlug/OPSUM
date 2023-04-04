@@ -34,20 +34,21 @@ all_datasets_aggregated = [prepare_dataset(x, False, True) for x in scenarios]
 def get_score(trial, all_ds):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     ds_ub, ds_b, ds_a = all_ds
-    bs = trial.suggest_categorical("batch_size", choices=[16, 32])
-    num_layers = trial.suggest_categorical("num_layers", choices=[3, 6, 9])
+    bs = trial.suggest_categorical("batch_size", choices=[16])
+    num_layers = trial.suggest_categorical("num_layers", choices=[5, 6, 7])
     model_dim = trial.suggest_categorical("model_dim", choices=[512, 1024, 2048])
     train_noise = trial.suggest_loguniform("train_noise", 1e-5, 7)
     is_balanced = trial.suggest_categorical("balanced", [False])
     is_aggregated = trial.suggest_categorical("feature_aggregation", [False])
-    wd = trial.suggest_loguniform("weight_decay", 1e-5, 1e-2)
+    wd = trial.suggest_loguniform("weight_decay", 1e-5, 0.002)
     ff_factor = 2
     ff_dim = ff_factor * model_dim
-    dropout = trial.suggest_uniform("dropout", 0 ,0.5)
-    num_heads = trial.suggest_categorical("num_head", [2, 4, 8])
+    dropout = trial.suggest_uniform("dropout", 0.3, 0.5)
+    num_heads = trial.suggest_categorical("num_head", [8, 16, 32])
     pos_encode_factor = 1
     lr = trial.suggest_loguniform("lr", 1e-5, 1e-3)
-    grad_clip = trial.suggest_loguniform('grad_clip_value', 1e-3, 2)
+    n_lr_warm_up_steps = trial.suggest_categorical("n_lr_warm_up_steps", [50, 100, 200])
+    grad_clip = trial.suggest_loguniform('grad_clip_value', 1e-3, 0.5)
 
     val_scores = []
     best_epochs = []
@@ -85,20 +86,20 @@ def get_score(trial, all_ds):
             filename="opsum_transformer_{epoch:02d}_{val_auroc:.4f}",
         )
 
-        module = LitModel(model, lr, wd, train_noise)
-        trainer = pl.Trainer(accelerator='gpu', devices=1, max_epochs=1000,logger=logger,
+        module = LitModel(model, lr, wd, train_noise, lr_warmup_steps=n_lr_warm_up_steps)
+        trainer = pl.Trainer(accelerator='gpu', devices=1, max_epochs=1000, logger=logger,
                              log_every_n_steps = 25, enable_checkpointing=True,
                              callbacks=[MyEarlyStopping(), checkpoint_callback], gradient_clip_val=grad_clip)
         trainer.fit(model=module, train_dataloaders=train_loader, val_dataloaders=val_loader)
+
         val_aurocs = np.array([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x])
         best_idx = np.argmax(val_aurocs)
-        actual_score = np.median(val_aurocs[max(0, best_idx -1): best_idx + 2])
-
+        rolling_val_auroc = np.median(val_aurocs[max(0, best_idx -1): best_idx + 2])
         best_val_score = np.max([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x])
         best_epoch = np.argmax([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x])
         val_scores.append(best_val_score)
         best_epochs.append(best_epoch)
-        rolling_val_scores.append(actual_score)
+        rolling_val_scores.append(rolling_val_auroc)
 
     d = dict(trial.params)
     d['median_rolling_val_scores'] = float(np.median(rolling_val_scores))
@@ -115,6 +116,7 @@ def get_score(trial, all_ds):
         handle.write(text)
     print("WRITTEN in ", dest)
     return np.median(rolling_val_scores)
+
 
 study.optimize(partial(get_score, all_ds=(all_datasets, all_datasets_balanced, all_datasets_aggregated)), n_trials=1000)
 
