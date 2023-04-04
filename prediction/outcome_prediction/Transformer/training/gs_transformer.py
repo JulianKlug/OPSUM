@@ -50,7 +50,7 @@ def get_score(trial, all_ds):
     n_lr_warm_up_steps = trial.suggest_categorical("n_lr_warm_up_steps", [50, 100, 200])
     grad_clip = trial.suggest_loguniform('grad_clip_value', 1e-3, 0.5)
 
-    if model_dim > 1024 and num_heads > 16:
+    if (model_dim > 1024 and num_heads > 16) or (model_dim > 1024 and num_layers > 6 and num_heads > 8):
         raise optuna.exceptions.TrialPruned
 
     val_scores = []

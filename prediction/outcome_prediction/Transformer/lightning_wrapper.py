@@ -47,6 +47,12 @@ class LitModel(pl.LightningModule):
         return predictions
 
     def configure_optimizers(self):
+        """
+        Refs:
+        - https://stackoverflow.com/questions/65343377/adam-optimizer-with-warmup-on-pytorch
+        - https://github.com/Lightning-AI/lightning/issues/328#issuecomment-782845008
+        """
+
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.wd)
 
         train_scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.99)
