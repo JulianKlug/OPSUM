@@ -4,11 +4,13 @@ import pytorch_lightning as pl
 from torchmetrics import AUROC
 from torchmetrics.classification import Accuracy
 
+
 class LitModel(pl.LightningModule):
-    def __init__(self, model, lr, wd, train_noise):
+    def __init__(self, model, lr, wd, train_noise, lr_warmup_steps=0):
         super().__init__()
         self.model = model
         self.lr = lr
+        self.lr_warmup_steps = lr_warmup_steps
         self.wd = wd
         self.train_noise = train_noise
         self.criterion = ch.nn.BCEWithLogitsLoss()
@@ -46,6 +48,24 @@ class LitModel(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.wd)
-        # optimizer = optim.SGD(self.parameters(), lr=self.lr, weight_decay=self.wd)
 
-        return [optimizer], [optim.lr_scheduler.ExponentialLR(optimizer, 0.99)]
+        train_scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.99)
+
+        def warmup(current_step: int):
+            return 1 / (10 ** (float(self.lr_warmup_steps - current_step)))
+
+        warmup_scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup)
+
+        if self.lr_warmup_steps == 0:
+            scheduler = train_scheduler
+        else:
+            scheduler = optim.lr_scheduler.SequentialLR(optimizer, [warmup_scheduler, train_scheduler],
+                                                        [self.lr_warmup_steps])
+
+        return [optimizer], [
+            {
+                'scheduler': scheduler,
+                'interval': 'step',
+                'frequency': 1
+            }
+        ]

@@ -9,6 +9,7 @@ from copy import deepcopy
 from torch.nn import LayerNorm
 import torch.nn.functional as F
 
+
 class PositionalEncoding(nn.Module):
     "Implement the PE function."
     def __init__(self, d_model, dropout, max_len=5000, factor=0.1):
@@ -29,7 +30,8 @@ class PositionalEncoding(nn.Module):
         b = Variable(self.pe[:, :x.size(1)], 
                          requires_grad=False).repeat(x.shape[0], 1, 1)
         return ch.concat([x, b], 2)
-    
+
+
 def clones(module, N):
     "Produce N identical layers."
     return nn.ModuleList([copy.deepcopy(module) for _ in range(N)])
@@ -48,7 +50,8 @@ class Encoder(nn.Module):
         for layer in self.layers:
             x = layer(x)
         return self.norm(x)
-    
+
+
 class SublayerConnection(nn.Module):
     """
     A residual connection followed by a layer norm.
@@ -63,7 +66,8 @@ class SublayerConnection(nn.Module):
     def forward(self, x, sublayer):
         "Apply residual connection to any sublayer with the same size."
         return x + self.dropout(sublayer(self.norm(x)))
-    
+
+
 def attention(query, key, value, dropout=None):
     "Compute 'Scaled Dot Product Attention'"
     d_k = query.size(-1)
@@ -74,6 +78,7 @@ def attention(query, key, value, dropout=None):
     if dropout is not None:
         p_attn = dropout(p_attn)
     return torch.matmul(p_attn, value), p_attn
+
 
 class EncoderLayer(nn.Module):
     "Encoder is made up of self-attn and feed forward (defined below)"
@@ -88,6 +93,7 @@ class EncoderLayer(nn.Module):
         "Follow Figure 1 (left) for connections."
         x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x))
         return self.sublayer[1](x, self.feed_forward)
+
 
 class MultiHeadedAttention(nn.Module):
     def __init__(self, h, d_model, dropout=0.1):
@@ -117,7 +123,8 @@ class MultiHeadedAttention(nn.Module):
         x = x.transpose(1, 2).contiguous() \
              .view(nbatches, -1, self.h * self.d_k)
         return self.linears[-1](x)                   
-                   
+
+
 class PositionwiseFeedForward(nn.Module):
     "Implements FFN equation."
     def __init__(self, d_model, d_ff, dropout=0.1):
@@ -128,7 +135,8 @@ class PositionwiseFeedForward(nn.Module):
 
     def forward(self, x):
         return self.w_2(self.dropout(F.relu(self.w_1(x))))
-    
+
+
 class FinalClassification(nn.Module):
     
     def __init__(self, model_dim, num_classes=1):
@@ -139,7 +147,8 @@ class FinalClassification(nn.Module):
     def forward(self, x):
         bs = x.shape[0]
         return self.projector(x.reshape(-1, x.shape[2])).reshape(bs, -1, self.num_classes)
-    
+
+
 class OPSUMTransformer(nn.Module):
     
     def __init__(self, input_dim, num_layers, model_dim, ff_dim,
