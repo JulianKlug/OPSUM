@@ -57,15 +57,16 @@ class LitModel(pl.LightningModule):
 
         train_scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.99)
 
+        if self.lr_warmup_steps == 0:
+            return [optimizer], [train_scheduler]
+
+        # using warmup scheduler
         def warmup(current_step: int):
             return 1 / (10 ** (float(self.lr_warmup_steps - current_step)))
 
         warmup_scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup)
 
-        if self.lr_warmup_steps == 0:
-            scheduler = train_scheduler
-        else:
-            scheduler = optim.lr_scheduler.SequentialLR(optimizer, [warmup_scheduler, train_scheduler],
+        scheduler = optim.lr_scheduler.SequentialLR(optimizer, [warmup_scheduler, train_scheduler],
                                                         [self.lr_warmup_steps])
 
         return [optimizer], [
