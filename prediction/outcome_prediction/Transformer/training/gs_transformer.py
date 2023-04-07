@@ -35,23 +35,21 @@ def get_score(trial, all_ds):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     ds_ub, ds_b, ds_a = all_ds
     bs = trial.suggest_categorical("batch_size", choices=[16])
-    num_layers = trial.suggest_categorical("num_layers", choices=[5, 6, 7])
-    model_dim = trial.suggest_categorical("model_dim", choices=[512, 1024, 2048])
-    train_noise = trial.suggest_loguniform("train_noise", 1e-5, 7)
+    num_layers = trial.suggest_categorical("num_layers", choices=[6])
+    model_dim = trial.suggest_categorical("model_dim", choices=[1024])
+    train_noise = trial.suggest_loguniform("train_noise", 1e-5, 1e-3)
     is_balanced = trial.suggest_categorical("balanced", [False])
     is_aggregated = trial.suggest_categorical("feature_aggregation", [False])
-    wd = trial.suggest_loguniform("weight_decay", 1e-5, 0.002)
+    wd = trial.suggest_loguniform("weight_decay", 1e-5, 0.0002)
     ff_factor = 2
     ff_dim = ff_factor * model_dim
-    dropout = trial.suggest_uniform("dropout", 0.3, 0.5)
-    num_heads = trial.suggest_categorical("num_head", [8, 16, 32])
+    dropout = trial.suggest_uniform("dropout", 0.2, 0.5)
+    num_heads = trial.suggest_categorical("num_head", [16])
     pos_encode_factor = 1
-    lr = trial.suggest_loguniform("lr", 1e-5, 1e-3)
-    n_lr_warm_up_steps = trial.suggest_categorical("n_lr_warm_up_steps", [50, 100, 200])
-    grad_clip = trial.suggest_loguniform('grad_clip_value', 1e-3, 0.5)
-
-    if (model_dim > 1024 and num_heads > 16) or (model_dim > 1024 and num_layers > 6 and num_heads > 8):
-        raise optuna.exceptions.TrialPruned
+    lr = trial.suggest_loguniform("lr", 0.0001, 0.001)
+    n_lr_warm_up_steps = trial.suggest_categorical("n_lr_warm_up_steps", [0, 5, 10])
+    grad_clip = trial.suggest_loguniform('grad_clip_value', 1e-3, 0.2)
+    early_stopping_step_limit = trial.suggest_categorical('early_stopping_step_limit', [10, 20, 30])
 
     val_scores = []
     best_epochs = []
@@ -92,7 +90,7 @@ def get_score(trial, all_ds):
         module = LitModel(model, lr, wd, train_noise, lr_warmup_steps=n_lr_warm_up_steps)
         trainer = pl.Trainer(accelerator='gpu', devices=1, max_epochs=1000, logger=logger,
                              log_every_n_steps = 25, enable_checkpointing=True,
-                             callbacks=[MyEarlyStopping(), checkpoint_callback], gradient_clip_val=grad_clip)
+                             callbacks=[MyEarlyStopping(step_limit=early_stopping_step_limit), checkpoint_callback], gradient_clip_val=grad_clip)
         trainer.fit(model=module, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
         val_aurocs = np.array([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x])
