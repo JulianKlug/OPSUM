@@ -30,7 +30,7 @@ N.B: the model originally had as input min/max from the first 24h hours
 # define constants
 n_splits = 5
 n_epochs = 5000
-seed = 1234
+seed = 42
 
 # define K fold
 kfold = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
