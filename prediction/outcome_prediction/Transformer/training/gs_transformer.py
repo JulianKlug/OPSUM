@@ -19,16 +19,7 @@ from prediction.utils.utils import ensure_dir
 ch.set_float32_matmul_precision('high')
 
 
-INPUT_FOLDER = '/home/gl/gsu_prepro_01012023_233050/data_splits'
-OUTPUT_FOLDER = '/mnt/data1/klug/output/transformer_evaluation/guillaume_v7'
-OUTPUT_FOLDER = path.join(OUTPUT_FOLDER, f'transformer_gs_{datetime.now().strftime("%Y%m%d_%H%M%S")}')
-SPLIT_FILE = 'train_data_splits_3M_mRS_0-2_ts0.8_rs42_ns5.pth'
 
-study = optuna.create_study(direction='maximize')
-scenarios = ch.load(path.join(INPUT_FOLDER, SPLIT_FILE))
-all_datasets = [prepare_dataset(x) for x in scenarios]
-all_datasets_balanced = [prepare_dataset(x, True) for x in scenarios]
-all_datasets_aggregated = [prepare_dataset(x, False, True) for x in scenarios]
 
 
 def get_score(trial, all_ds):
@@ -47,9 +38,9 @@ def get_score(trial, all_ds):
     num_heads = trial.suggest_categorical("num_head", [16])
     pos_encode_factor = 1
     lr = trial.suggest_loguniform("lr", 0.0001, 0.001)
-    n_lr_warm_up_steps = trial.suggest_categorical("n_lr_warm_up_steps", [0, 5, 10])
+    n_lr_warm_up_steps = trial.suggest_categorical("n_lr_warm_up_steps", [0])
     grad_clip = trial.suggest_loguniform('grad_clip_value', 1e-3, 0.2)
-    early_stopping_step_limit = trial.suggest_categorical('early_stopping_step_limit', [10, 20, 30])
+    early_stopping_step_limit = trial.suggest_categorical('early_stopping_step_limit', [10])
 
     val_scores = []
     best_epochs = []
@@ -119,5 +110,22 @@ def get_score(trial, all_ds):
     return np.median(rolling_val_scores)
 
 
-study.optimize(partial(get_score, all_ds=(all_datasets, all_datasets_balanced, all_datasets_aggregated)), n_trials=1000)
+if __name__ == '__main__':
+    INPUT_FOLDER = '/home/gl/gsu_prepro_01012023_233050/data_splits'
+    SPLIT_FILE = 'train_data_splits_3M_Death_ts0.8_rs42_ns5.pth'
+    outcome = '_'.join(SPLIT_FILE.split('_')[3:6])
+    if outcome.startswith('3M_Death'):
+        outcome = '3M_Death'
+
+    OUTPUT_FOLDER = '/mnt/data1/klug/output/opsum/transformer_evaluation/'
+    OUTPUT_FOLDER = path.join(OUTPUT_FOLDER, outcome)
+    ensure_dir(OUTPUT_FOLDER)
+    OUTPUT_FOLDER = path.join(OUTPUT_FOLDER, f'transformer_gs_{datetime.now().strftime("%Y%m%d_%H%M%S")}')
+
+    study = optuna.create_study(direction='maximize')
+    scenarios = ch.load(path.join(INPUT_FOLDER, SPLIT_FILE))
+    all_datasets = [prepare_dataset(x) for x in scenarios]
+    all_datasets_balanced = [prepare_dataset(x, True) for x in scenarios]
+    all_datasets_aggregated = [prepare_dataset(x, False, True) for x in scenarios]
+    study.optimize(partial(get_score, all_ds=(all_datasets, all_datasets_balanced, all_datasets_aggregated)), n_trials=1000)
 
