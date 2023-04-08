@@ -100,36 +100,24 @@ def test_model_from_trained_folds(features_path, labels_path, model_weights_dir,
 if __name__ == '__main__':
     import argparse
 
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('--features_path', type=str, required=True)
-    # parser.add_argument('--labels_path', type=str, required=True)
-    # parser.add_argument('--model_weights_dir', type=str, required=True)
-    # parser.add_argument('--model_config_path', type=str, required=True)
-    # parser.add_argument('--outcome', type=str, required=True)
-    # parser.add_argument('--output_dir', type=str, required=True)
-    # parser.add_argument('--seed', type=int, default=42)
-    # parser.add_argument('--test_size', type=float, default=0.2)
-    # parser.add_argument('--n_splits', type=int, default=5)
-    # parser.add_argument('--use_gpu', type=bool, default=False)
-    #
-    # args = parser.parse_args()
-    #
-    # test_model_from_trained_folds(**vars(args))
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--features_path', type=str, required=True)
+    parser.add_argument('--labels_path', type=str, required=True)
+    parser.add_argument('--model_weights_dir', type=str, required=True)
+    parser.add_argument('--model_config_path', type=str, required=True)
+    parser.add_argument('--outcome', type=str, required=True)
+    parser.add_argument('--output_dir', type=str, required=True)
+    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--test_size', type=float, default=0.2)
+    parser.add_argument('--n_splits', type=int, default=5)
+    parser.add_argument('--use_gpu', type=bool, default=False)
 
-    # features_path = '/Users/jk1/temp/opsum_prepro_output/gsu_prepro_01012023_233050/preprocessed_features_01012023_233050.csv'
-    # labels_path = '/Users/jk1/temp/opsum_prepro_output/gsu_prepro_01012023_233050/preprocessed_outcomes_01012023_233050.csv'
-    # model_dir = '/Users/jk1/Downloads/trained_models'
-    # model_config_path = '/Users/jk1/Downloads/hyperopt_selected_transformer_20230328_004215.json'
+    args = parser.parse_args()
 
-    features_path = '/home/klug/data/opsum/72h_input_data/gsu_prepro_01012023_233050/preprocessed_features_01012023_233050.csv'
-    labels_path = '/home/klug/data/opsum/72h_input_data/gsu_prepro_01012023_233050/preprocessed_outcomes_01012023_233050.csv'
-    model_dir = '/mnt/hdd1/klug/output/opsum/transformer_gridsearch/transformer_20230402_184459'
-    model_config_path = '/mnt/hdd1/klug/output/opsum/transformer_gridsearch/transformer_20230402_184459/hyperopt_selected_transformer_20230402_184459.json'
-    outcome = '3M mRS 0-2'
-    output_dir = os.path.join(model_dir, 'test_set_evaluation')
-    ensure_dir(output_dir)
+    ensure_dir(args.output_dir)
 
-    test_model_from_trained_folds(features_path, labels_path, model_dir, model_config_path, outcome, output_dir, use_gpu=True)
+    test_model_from_trained_folds(**vars(args))
+
 
 
 
