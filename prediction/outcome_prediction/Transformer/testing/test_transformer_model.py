@@ -42,8 +42,7 @@ def test_transformer_model(trained_model, X_train, y_train, X_test, y_test, outc
     bootstrapped_ground_truth = []
     bootstrapped_predictions = []
 
-    # n_iterations = 1000
-    n_iterations = 2
+    n_iterations = 1000
     for i in tqdm(range(n_iterations)):
         X_bs, y_bs = resample(X_test, y_test, replace=True)
 
@@ -108,7 +107,7 @@ def test_transformer_model(trained_model, X_train, y_train, X_test, y_test, outc
     lower_ci_neg_pred_value = np.percentile(neg_pred_value_scores, alpha / 2)
     upper_ci_neg_pred_value = np.percentile(neg_pred_value_scores, 100 - alpha / 2)
 
-    result_df = pd.DataFrame([{
+    result_dict = {
         'auc_test': median_roc_auc,
         'auc_test_lower_ci': lower_ci_roc_auc,
         'auc_test_upper_ci': upper_ci_roc_auc,
@@ -132,8 +131,8 @@ def test_transformer_model(trained_model, X_train, y_train, X_test, y_test, outc
         'neg_pred_value_test_upper_ci': upper_ci_neg_pred_value,
         'outcome': outcome,
         'model_weights_path': model_weights_path
-    }], index=[0])
+    }
 
-    result_df = result_df.append(pd.DataFrame(model_config, index=[0]))
+    result_df = pd.DataFrame({**model_config, **result_dict}, index=[0])
 
     return result_df, (bootstrapped_ground_truth, bootstrapped_predictions), (y_test, y_pred_test)
