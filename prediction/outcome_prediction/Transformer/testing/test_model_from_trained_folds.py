@@ -1,5 +1,7 @@
 import json
 import os
+import pickle
+
 import pandas as pd
 from tqdm import tqdm
 
@@ -68,8 +70,7 @@ def test_model_from_trained_folds(features_path, labels_path, model_weights_dir,
         # load model corresponding to fold
         fold_model_dir = os.path.join(model_dir, f'{trained_model_base_name}_{split_idx}')
         if not os.path.exists(fold_model_dir):
-            # raise ValueError(f'No model found for fold {split_idx}.')
-            continue
+            raise ValueError(f'No model found for fold {split_idx}.')
         fold_trained_model_paths = os.listdir(fold_model_dir)
         if len(fold_trained_model_paths) > 1:
             raise ValueError(f'More than one model found in {fold_model_dir}.')
@@ -88,6 +89,10 @@ def test_model_from_trained_folds(features_path, labels_path, model_weights_dir,
                                                                                              use_gpu=use_gpu)
         fold_result_df['fold'] = split_idx
         overall_results_df = pd.concat([overall_results_df, fold_result_df])
+
+        # save bootstrapped ground truth and predictions
+        pickle.dump(bootstrapped_gt_and_pred, open(os.path.join(output_dir, f'fold_{split_idx}_bootstrapped_gt_and_pred.pkl'), 'wb'))
+        pickle.dump(overall_gt_and_pred, open(os.path.join(output_dir, f'fold_{split_idx}_test_gt_and_pred.pkl'), 'wb'))
 
     overall_results_df.to_csv(os.path.join(output_dir, 'overall_results.csv'), sep=',', index=False)
 
@@ -111,15 +116,20 @@ if __name__ == '__main__':
     #
     # test_model_from_trained_folds(**vars(args))
 
-    features_path = '/Users/jk1/temp/opsum_prepro_output/gsu_prepro_01012023_233050/preprocessed_features_01012023_233050.csv'
-    labels_path = '/Users/jk1/temp/opsum_prepro_output/gsu_prepro_01012023_233050/preprocessed_outcomes_01012023_233050.csv'
-    model_dir = '/Users/jk1/Downloads/trained_models'
-    model_config_path = '/Users/jk1/Downloads/hyperopt_selected_transformer_20230328_004215.json'
+    # features_path = '/Users/jk1/temp/opsum_prepro_output/gsu_prepro_01012023_233050/preprocessed_features_01012023_233050.csv'
+    # labels_path = '/Users/jk1/temp/opsum_prepro_output/gsu_prepro_01012023_233050/preprocessed_outcomes_01012023_233050.csv'
+    # model_dir = '/Users/jk1/Downloads/trained_models'
+    # model_config_path = '/Users/jk1/Downloads/hyperopt_selected_transformer_20230328_004215.json'
+
+    features_path = '/home/klug/data/opsum/72h_input_data/gsu_prepro_01012023_233050/preprocessed_features_01012023_233050.csv'
+    labels_path = '/home/klug/data/opsum/72h_input_data/gsu_prepro_01012023_233050/preprocessed_outcomes_01012023_233050.csv'
+    model_dir = '/mnt/hdd1/klug/output/opsum/transformer_gridsearch/transformer_20230402_184459'
+    model_config_path = '/mnt/hdd1/klug/output/opsum/transformer_gridsearch/transformer_20230402_184459/hyperopt_selected_transformer_20230402_184459.json'
     outcome = '3M mRS 0-2'
     output_dir = os.path.join(model_dir, 'test_set_evaluation')
     ensure_dir(output_dir)
 
-    test_model_from_trained_folds(features_path, labels_path, model_dir, model_config_path, outcome, output_dir)
+    test_model_from_trained_folds(features_path, labels_path, model_dir, model_config_path, outcome, output_dir, use_gpu=True)
 
 
 
