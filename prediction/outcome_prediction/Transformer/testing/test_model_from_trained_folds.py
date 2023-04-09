@@ -8,7 +8,7 @@ from tqdm import tqdm
 from prediction.outcome_prediction.Transformer.architecture import OPSUMTransformer
 from prediction.outcome_prediction.Transformer.lightning_wrapper import LitModel
 from prediction.outcome_prediction.Transformer.testing.test_transformer_model import test_transformer_model
-from prediction.outcome_prediction.Transformer.utils.data_loader import load_data
+from prediction.outcome_prediction.data_loading.data_loader import load_data
 from prediction.utils.utils import save_json, ensure_dir
 
 
