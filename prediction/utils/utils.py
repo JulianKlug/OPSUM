@@ -60,6 +60,8 @@ def aggregate_features_over_time(features, labels, moving_average=False, n=3):
 
     return all_features, labels
 
+def flatten(l):
+    return [item for sublist in l for item in sublist]
 
 def check_data(data):
     """
