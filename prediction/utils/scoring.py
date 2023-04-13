@@ -4,8 +4,8 @@ from sklearn.metrics import roc_curve, auc
 
 
 def precision(y_true, y_pred):
-    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-    predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
+    true_positives = K.sum(K.round(K.clip(K.constant(y_true) * K.constant(y_pred), 0, 1)))
+    predicted_positives = K.sum(K.round(K.clip(K.constant(y_pred), 0, 1)))
     precision = true_positives / (predicted_positives + K.epsilon())
     return precision
 
@@ -19,15 +19,15 @@ def specificity(y_true, y_pred):
     """
     neg_y_true = 1 - y_true
     neg_y_pred = 1 - y_pred
-    fp = K.sum(neg_y_true * y_pred)
-    tn = K.sum(neg_y_true * neg_y_pred)
+    fp = K.sum(K.constant(neg_y_true) * K.constant(y_pred))
+    tn = K.sum(K.constant(neg_y_true) * K.constant(neg_y_pred))
     specificity = tn / (tn + fp + K.epsilon())
     return specificity
 
 
 def recall(y_true, y_pred):
-    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-    possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+    true_positives = K.sum(K.round(K.clip(K.constant(y_true) * K.constant(y_pred), 0, 1)))
+    possible_positives = K.sum(K.round(K.clip(K.constant(y_true), 0, 1)))
     recall = true_positives / (possible_positives + K.epsilon())
     return recall
 
