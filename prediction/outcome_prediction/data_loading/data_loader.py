@@ -3,7 +3,7 @@ from sklearn.model_selection import train_test_split, StratifiedKFold
 import pandas as pd
 import numpy as np
 from prediction.outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
-    link_patient_id_to_outcome, features_to_numpy, numpy_to_lookup_table
+    link_patient_id_to_outcome, features_to_numpy, numpy_to_lookup_table, feature_order_verification
 from prediction.utils.utils import check_data
 
 
@@ -73,3 +73,29 @@ def load_data(features_path, labels_path, outcome, test_size, n_splits, seed):
         splits.append((fold_X_train, fold_X_val, fold_y_train, fold_y_val))
 
     return (pid_train, pid_test), (train_X_np, train_y_np), (test_X_np, test_y_np), splits, test_features_lookup_table
+
+
+def load_external_data(features_path:str, labels_path:str, outcome:str):
+    # load the dataset
+    X, y = format_to_2d_table_with_time(feature_df_path=features_path, outcome_df_path=labels_path,
+                                        outcome=outcome)
+
+    # test if data is corrupted
+    check_data(X)
+
+    test_X_np = features_to_numpy(X,
+                                  ['case_admission_id', 'relative_sample_date_hourly_cat', 'sample_label', 'value'])
+
+    # ensure that the order of features (3rd dimension) is the one predefined for the model
+    feature_order_verification(test_X_np)
+
+    test_y_np = np.array([y[y.case_admission_id == cid].outcome.values[0] for cid in
+                          test_X_np[:, 0, 0, 0]]).astype('float32')
+
+    # create look-up table for case_admission_ids, sample_labels and relative_sample_date_hourly_cat
+    test_features_lookup_table = numpy_to_lookup_table(test_X_np)
+
+    # Remove the case_admission_id, sample_label, and time_step_label columns from the data
+    test_X_np = test_X_np[:, :, :, -1].astype('float32')
+
+    return test_X_np, test_y_np, test_features_lookup_table

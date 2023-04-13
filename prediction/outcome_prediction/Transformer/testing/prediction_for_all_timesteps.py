@@ -3,14 +3,14 @@ import json
 import os
 import pickle
 import numpy as np
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 import torch as ch
 import pytorch_lightning as pl
 
 from prediction.outcome_prediction.Transformer.architecture import OPSUMTransformer
 from prediction.outcome_prediction.Transformer.lightning_wrapper import LitModel
-from prediction.outcome_prediction.Transformer.utils.data_loader import load_data
+from prediction.outcome_prediction.data_loading.data_loader import load_data
 from prediction.outcome_prediction.Transformer.utils.utils import prepare_dataset, DictLogger
 
 
