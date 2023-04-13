@@ -8,11 +8,11 @@ from tqdm import tqdm
 from prediction.outcome_prediction.Transformer.architecture import OPSUMTransformer
 from prediction.outcome_prediction.Transformer.lightning_wrapper import LitModel
 from prediction.outcome_prediction.Transformer.testing.test_transformer_model import test_transformer_model
-from prediction.outcome_prediction.data_loading.data_loader import load_data
+from prediction.outcome_prediction.data_loading.data_loader import load_data, load_external_data
 from prediction.utils.utils import save_json, ensure_dir
 
 
-def test_model_from_trained_folds(features_path, labels_path, model_weights_dir, model_config_path, outcome, output_dir,
+def external_validation_from_trained_folds(training_features_path, training_labels_path, external_features_path, external_labels_path,  model_weights_dir, model_config_path, outcome, output_dir,
                                   seed=42, test_size=0.2, n_splits=5, use_gpu=False):
     """
     Test models from trained folds on test data.
@@ -22,19 +22,20 @@ def test_model_from_trained_folds(features_path, labels_path, model_weights_dir,
     testing_args_df['testing_mode'] = 'test_model_from_all_trained_folds'
     testing_args_df.to_csv(os.path.join(output_dir, 'testing_args.csv'), sep=',', index=False)
 
-    pids, train_data, test_data, train_splits, test_features_lookup_table = load_data(features_path, labels_path, outcome, test_size, n_splits, seed)
+    # load training data
+    pids, train_data, _, train_splits, _ = load_data(training_features_path, training_labels_path, outcome, test_size, n_splits, seed)
+
+    # load external test data
+    test_X_np, test_y_np, test_features_lookup_table = load_external_data(external_features_path, external_labels_path, outcome)
 
     pid_train, pid_test = pids
     train_X_np, train_y_np = train_data
-    test_X_np, test_y_np = test_data
 
-    # save patient ids used for testing / training
+    # save patient ids used for training
     pd.DataFrame(pid_train, columns=['patient_id']).to_csv(
         os.path.join(output_dir, 'pid_train.tsv'),
         sep='\t', index=False)
-    pd.DataFrame(pid_test, columns=['patient_id']).to_csv(
-        os.path.join(output_dir, 'pid_test.tsv'),
-        sep='\t', index=False)
+
 
     save_json(test_features_lookup_table,
               os.path.join(output_dir, 'test_lookup_dict.json'))
@@ -101,22 +102,24 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--features_path', type=str, required=True)
-    parser.add_argument('--labels_path', type=str, required=True)
-    parser.add_argument('--model_weights_dir', type=str, required=True)
-    parser.add_argument('--model_config_path', type=str, required=True)
-    parser.add_argument('--outcome', type=str, required=True)
-    parser.add_argument('--output_dir', type=str, required=True)
+    parser.add_argument('-tf', '--training_features_path', type=str, required=True)
+    parser.add_argument('-ef', '--external_features_path', type=str, required=True)
+    parser.add_argument('-tl', '--training_labels_path', type=str, required=True)
+    parser.add_argument('-el','--external_labels_path', type=str, required=True)
+    parser.add_argument('-w', '--model_weights_dir', type=str, required=True)
+    parser.add_argument('-c', '--model_config_path', type=str, required=True)
+    parser.add_argument('-o', '--outcome', type=str, required=True)
+    parser.add_argument('-O', '--output_dir', type=str, required=True)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--test_size', type=float, default=0.2)
     parser.add_argument('--n_splits', type=int, default=5)
-    parser.add_argument('--use_gpu', type=bool, default=False)
+    parser.add_argument('-g','--use_gpu', type=bool, default=False)
 
     args = parser.parse_args()
 
     ensure_dir(args.output_dir)
 
-    test_model_from_trained_folds(**vars(args))
+    external_validation_from_trained_folds(**vars(args))
 
 
 

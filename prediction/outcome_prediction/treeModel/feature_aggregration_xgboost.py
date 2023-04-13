@@ -209,7 +209,7 @@ if __name__=='__main__':
     param_dict['learning_rate'] = [0.1, 0.001]
     param_dict['reg_lambda'] = [1, 10, 50]
     param_dict['alpha']= [0, 50, 70, 100]
-    param_dict['moving_average'] = [True]
+    param_dict['moving_average'] = [False]
     param_dict['outcome'] = [cli_args.outcome]
     param_dict['feature_df_path'] = [cli_args.feature_df_path]
     param_dict['outcome_df_path'] = [cli_args.outcome_df_path]
