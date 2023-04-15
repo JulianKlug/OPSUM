@@ -7,7 +7,7 @@ from tqdm import tqdm
 from sklearn.utils import resample
 from sklearn.metrics import roc_auc_score, matthews_corrcoef, accuracy_score, precision_score, recall_score, \
     multilabel_confusion_matrix
-from prediction.outcome_prediction.treeModel.feature_aggregration_xgboost import evaluate_model
+from prediction.outcome_prediction.treeModel.training.feature_aggregration_xgboost import evaluate_model
 
 
 def test_model(max_depth:int, learning_rate:float, n_estimators:int, reg_lambda:int, alpha:int, moving_average:bool,
