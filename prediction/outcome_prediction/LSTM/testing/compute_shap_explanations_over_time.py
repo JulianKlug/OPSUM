@@ -2,7 +2,7 @@ import argparse
 import shap
 import os
 
-from prediction.outcome_prediction.LSTM.testing.shap_helper_functions import check_shap_version_compatibility
+from prediction.utils.shap_helper_functions import check_shap_version_compatibility
 from prediction.utils.scoring import precision, recall, matthews
 from prediction.outcome_prediction.LSTM.LSTM import lstm_generator
 import numpy as np
