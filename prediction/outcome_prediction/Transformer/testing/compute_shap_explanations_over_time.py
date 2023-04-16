@@ -1,6 +1,9 @@
 import argparse
 import json
 import os
+import time
+
+import shap
 import pickle
 import numpy as np
 from torch.utils.data import DataLoader
@@ -12,30 +15,29 @@ from prediction.outcome_prediction.Transformer.architecture import OPSUMTransfor
 from prediction.outcome_prediction.Transformer.lightning_wrapper import LitModel
 from prediction.outcome_prediction.data_loading.data_loader import load_data
 from prediction.outcome_prediction.Transformer.utils.utils import prepare_dataset, DictLogger
+from prediction.utils.shap_helper_functions import check_shap_version_compatibility
+
+# Shap values require very specific versions
+check_shap_version_compatibility()
 
 
-def prediction_for_all_timesteps(train_data, test_data, model_weights_path:str, n_time_steps:int, config:dict, use_gpu=False):
+def compute_shap_explanations_over_time(train_data, test_data, model_weights_path:str, n_time_steps:int, model_config:dict,
+                                        n_samples_background=100,
+                                        use_gpu=False):
     """
-    Predicts the outcome for all timesteps for all patients in data.
+    Compute SHAP values for all timesteps for all patients in test data.
     Args:
-        data: torch dataset of shape (n_patients, n_time_steps, n_features)
+        train_data: tuple of (X_train, y_train)
+        test_data: tuple of (X_test, y_test)
         model_weights_path: path to the model weights
         n_time_steps: total number of time steps
-        n_channels: number of channels
-        config: model configuration
+        model_config: model configuration
+        n_samples_background: number of samples to use as background for SHAP
+        use_gpu: whether to use GPU
 
     Returns:
         predictions: numpy array of shape (n_time_steps, n_patients)
     """
-    if use_gpu:
-        accelerator = 'gpu'
-    else:
-        accelerator = 'cpu'
-    logger = DictLogger(0)
-    trainer = pl.Trainer(accelerator=accelerator, devices=1, max_epochs=1000,
-                         gradient_clip_val=model_config['grad_clip_value'], logger=logger)
-
-
 
     # define model
     ff_factor = 2
@@ -62,7 +64,22 @@ def prediction_for_all_timesteps(train_data, test_data, model_weights_path:str, 
     X_train, y_train = train_data
     X_test, y_test = test_data
 
-    subj_pred_over_ts = []
+    # Prepare train dataset
+    train_dataset, _ = prepare_dataset((X_train, X_test, y_train, y_test),
+                                                  balanced=model_config['balanced'],
+                                                  rescale=True,
+                                                  use_gpu=use_gpu)
+    # Prepare background dataset (use all training data in batch size)
+    train_loader = DataLoader(train_dataset, batch_size=X_train.shape[0], shuffle=True, drop_last=True)
+
+    batch = next(iter(train_loader))
+    train_sample, _ = batch
+    background = train_sample[:n_samples_background]
+
+    # Initialize DeepExplainer
+    explainer = shap.DeepExplainer(trained_model.model, background)
+
+    shap_values_over_ts = []
     for ts in tqdm(range(n_time_steps)):
         modified_time_steps = ts + 1
 
@@ -73,14 +90,13 @@ def prediction_for_all_timesteps(train_data, test_data, model_weights_path:str, 
                                                       use_gpu=use_gpu)
 
         test_loader = DataLoader(test_dataset, batch_size=1024)
-        if ts == 0:
-            y_pred = ch.sigmoid(trainer.predict(trained_model, test_loader)[0])
-        else:
-            y_pred = ch.sigmoid(trainer.predict(trained_model, test_loader)[0])[:, -1]
+        batch = next(iter(test_loader))
+        test_samples, _ = batch
 
-        subj_pred_over_ts.append(np.squeeze(y_pred))
+        shap_values = explainer.shap_values(test_samples)
+        shap_values_over_ts.append(shap_values)
 
-    return np.array(subj_pred_over_ts)
+    return np.array(shap_values_over_ts)
 
 
 if __name__ == '__main__':
@@ -96,6 +112,7 @@ if __name__ == '__main__':
     parser.add_argument('--test_size', type=float, default=0.2)
     parser.add_argument('--n_splits', type=int, default=5)
     parser.add_argument('--n_time_steps', type=int, default=72)
+    parser.add_argument('--n_samples_background', type=int, default=100)
     parser.add_argument('--use_gpu', type=bool, default=False)
     args = parser.parse_args()
 
@@ -109,10 +126,15 @@ if __name__ == '__main__':
 
     fold_X_train, _, fold_y_train, _ = train_splits[int(model_config['best_cv_fold'])]
 
-    predictions = prediction_for_all_timesteps((fold_X_train, fold_y_train), test_data, args.model_weights_path, args.n_time_steps, model_config)
+    # Time execution
+    start_time = time.time()
+    shap_values_over_ts = compute_shap_explanations_over_time((fold_X_train, fold_y_train), test_data, args.model_weights_path, args.n_time_steps, model_config,
+                                                              n_samples_background=args.n_samples_background,
+                                                              use_gpu=args.use_gpu)
+    print('Time elapsed: {:.2f} min'.format((time.time() - start_time) / 60))
 
-    # Save predictions as pickle
-    with open(os.path.join(output_dir, 'predictions_over_timesteps.pkl'), 'wb') as f:
-        pickle.dump(predictions, f)
+    with open(os.path.join(output_dir, 'transformer_explainer_shap_values_over_ts.pkl'), 'wb') as handle:
+        pickle.dump(shap_values_over_ts, handle)
+
 
 
