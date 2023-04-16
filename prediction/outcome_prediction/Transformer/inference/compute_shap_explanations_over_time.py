@@ -64,34 +64,31 @@ def compute_shap_explanations_over_time(train_data, test_data, model_weights_pat
     X_train, y_train = train_data
     X_test, y_test = test_data
 
-    # Prepare train dataset
-    train_dataset, _ = prepare_dataset((X_train, X_test, y_train, y_test),
-                                                  balanced=model_config['balanced'],
-                                                  rescale=True,
-                                                  use_gpu=use_gpu)
-    # Prepare background dataset (use all training data in batch size)
-    train_loader = DataLoader(train_dataset, batch_size=X_train.shape[0], shuffle=True, drop_last=True)
-
-    batch = next(iter(train_loader))
-    train_sample, _ = batch
-    background = train_sample[:n_samples_background]
-
-    # Initialize DeepExplainer
-    explainer = shap.DeepExplainer(trained_model.model, background)
-
     shap_values_over_ts = []
     for ts in tqdm(range(n_time_steps)):
-        modified_time_steps = ts + 1
 
+        # Prepare datasets (use only first ts time steps)
+        modified_time_steps = ts + 1
+        X_train_with_first_n_ts = X_train[:, 0:modified_time_steps, :]
         X_test_with_first_n_ts = X_test[:, 0:modified_time_steps, :]
-        train_dataset, test_dataset = prepare_dataset((X_train, X_test_with_first_n_ts, y_train, y_test),
+        train_dataset, test_dataset = prepare_dataset((X_train_with_first_n_ts, X_test_with_first_n_ts, y_train, y_test),
                                                       balanced=model_config['balanced'],
                                                       rescale=True,
                                                       use_gpu=use_gpu)
 
+        # Prepare background dataset (use all training data in batch size)
+        train_loader = DataLoader(train_dataset, batch_size=X_train.shape[0], shuffle=True, drop_last=True)
+
+        batch = next(iter(train_loader))
+        train_sample, _ = batch
+        background = train_sample[:n_samples_background]
+
         test_loader = DataLoader(test_dataset, batch_size=1024)
         batch = next(iter(test_loader))
         test_samples, _ = batch
+
+        # Initialize DeepExplainer
+        explainer = shap.DeepExplainer(trained_model.model.to(background.device), background)
 
         shap_values = explainer.shap_values(test_samples)
         shap_values_over_ts.append(shap_values)
@@ -100,7 +97,7 @@ def compute_shap_explanations_over_time(train_data, test_data, model_weights_pat
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Transformer model for predicting outcome')
+    parser = argparse.ArgumentParser(description='Transformer model - compute shap explanations over time.')
     parser = argparse.ArgumentParser()
     parser.add_argument('--features_path', type=str, required=True)
     parser.add_argument('--labels_path', type=str, required=True)
