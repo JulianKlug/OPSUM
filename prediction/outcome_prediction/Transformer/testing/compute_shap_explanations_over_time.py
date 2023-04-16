@@ -14,7 +14,7 @@ from prediction.outcome_prediction.data_loading.data_loader import load_data
 from prediction.outcome_prediction.Transformer.utils.utils import prepare_dataset, DictLogger
 
 
-def prediction_for_all_timesteps(train_data, test_data, model_weights_path:str, n_time_steps:int, model_config:dict, use_gpu=False):
+def prediction_for_all_timesteps(train_data, test_data, model_weights_path:str, n_time_steps:int, config:dict, use_gpu=False):
     """
     Predicts the outcome for all timesteps for all patients in data.
     Args:
@@ -62,7 +62,7 @@ def prediction_for_all_timesteps(train_data, test_data, model_weights_path:str, 
     X_train, y_train = train_data
     X_test, y_test = test_data
 
-    pred_over_ts = []
+    subj_pred_over_ts = []
     for ts in tqdm(range(n_time_steps)):
         modified_time_steps = ts + 1
 
@@ -78,10 +78,9 @@ def prediction_for_all_timesteps(train_data, test_data, model_weights_path:str, 
         else:
             y_pred = ch.sigmoid(trainer.predict(trained_model, test_loader)[0])[:, -1]
 
+        subj_pred_over_ts.append(np.squeeze(y_pred))
 
-        pred_over_ts.append(np.squeeze(y_pred))
-
-    return np.array(pred_over_ts)
+    return np.array(subj_pred_over_ts)
 
 
 if __name__ == '__main__':
@@ -110,7 +109,7 @@ if __name__ == '__main__':
 
     fold_X_train, _, fold_y_train, _ = train_splits[int(model_config['best_cv_fold'])]
 
-    predictions = prediction_for_all_timesteps((fold_X_train, fold_y_train), test_data, args.model_weights_path, args.n_time_steps, model_config, args.use_gpu)
+    predictions = prediction_for_all_timesteps((fold_X_train, fold_y_train), test_data, args.model_weights_path, args.n_time_steps, model_config)
 
     # Save predictions as pickle
     with open(os.path.join(output_dir, 'predictions_over_timesteps.pkl'), 'wb') as f:
