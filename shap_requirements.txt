@@ -12,7 +12,11 @@ shap==0.40.0
 sklearn==0.0
 tensorflow==1.14.0
 tensorflow-estimator==1.14.0
+torch==1.13.1
+torchmetrics==0.11.4
 tqdm==4.64.0
-
+colormath==3.0.0
+fastjsonschema==2.15.3
+lightning-utilities==0.8.0
 
 git+https://github.com/slundberg/shap.git@690245c6ab043edf40cfce3d8438a62e29ab599f#egg=shap
