@@ -6,6 +6,7 @@ import time
 import shap
 import pickle
 import numpy as np
+from captum.attr import GradientShap
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import torch as ch
@@ -22,8 +23,7 @@ check_shap_version_compatibility()
 
 
 def compute_shap_explanations_over_time(train_data, test_data, model_weights_path:str, n_time_steps:int, model_config:dict,
-                                        n_samples_background=100,
-                                        use_gpu=False):
+                                        n_samples_background=100, library:str = 'shap', use_gpu=False):
     """
     Compute SHAP values for all timesteps for all patients in test data.
     Args:
@@ -33,6 +33,7 @@ def compute_shap_explanations_over_time(train_data, test_data, model_weights_pat
         n_time_steps: total number of time steps
         model_config: model configuration
         n_samples_background: number of samples to use as background for SHAP
+        library: which library to use for SHAP computation (shap or captum)
         use_gpu: whether to use GPU
 
     Returns:
@@ -87,11 +88,20 @@ def compute_shap_explanations_over_time(train_data, test_data, model_weights_pat
         batch = next(iter(test_loader))
         test_samples, _ = batch
 
-        # Initialize DeepExplainer
-        explainer = shap.DeepExplainer(trained_model.model.to(background.device), background)
+        if library == 'shap':
+            # Initialize DeepExplainer
+            explainer = shap.DeepExplainer(trained_model.model.to(background.device), background)
 
-        shap_values = explainer.shap_values(test_samples)
-        shap_values_over_ts.append(shap_values)
+            shap_values = explainer.shap_values(test_samples)
+            shap_values_over_ts.append(shap_values)
+        elif library == 'captum':
+            gradient_shap = GradientShap(trained_model.model)
+            attributions_gs = gradient_shap.attribute(test_samples,
+                                                      baselines=background,
+                                                      target=(-1, 0))
+            shap_values_over_ts.append(attributions_gs.cpu().numpy())
+        else:
+            raise ValueError(f'Library {library} not supported.')
 
     return np.array(shap_values_over_ts)
 
@@ -110,6 +120,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_splits', type=int, default=5)
     parser.add_argument('--n_time_steps', type=int, default=72)
     parser.add_argument('--n_samples_background', type=int, default=100)
+    parser.add_argument('--library', type=str, default='shap')
     parser.add_argument('--use_gpu', type=bool, default=False)
     args = parser.parse_args()
 
