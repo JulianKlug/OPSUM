@@ -95,7 +95,7 @@ def compute_shap_explanations_over_time(train_data, test_data, model_weights_pat
             shap_values = explainer.shap_values(test_samples)
             shap_values_over_ts.append(shap_values)
         elif library == 'captum':
-            gradient_shap = GradientShap(trained_model.model)
+            gradient_shap = GradientShap(trained_model.model.to(background.device))
             attributions_gs = gradient_shap.attribute(test_samples,
                                                       baselines=background,
                                                       target=(-1, 0))
@@ -125,8 +125,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
 
-    output_dir = os.path.dirname(args.model_weights_path)
-
     pids, train_data, test_data, train_splits, test_features_lookup_table = load_data(args.features_path, args.labels_path, args.outcome, args.test_size, args.n_splits, args.seed)
 
     # load model config
@@ -137,11 +135,11 @@ if __name__ == '__main__':
     # Time execution
     start_time = time.time()
     shap_values_over_ts = compute_shap_explanations_over_time((fold_X_train, fold_y_train), test_data, args.model_weights_path, args.n_time_steps, model_config,
-                                                              n_samples_background=args.n_samples_background,
+                                                              n_samples_background=args.n_samples_background, library=args.library,
                                                               use_gpu=args.use_gpu)
     print('Time elapsed: {:.2f} min'.format((time.time() - start_time) / 60))
 
-    with open(os.path.join(output_dir, 'transformer_explainer_shap_values_over_ts.pkl'), 'wb') as handle:
+    with open(os.path.join(args.output_dir, 'transformer_explainer_shap_values_over_ts.pkl'), 'wb') as handle:
         pickle.dump(shap_values_over_ts, handle)
 
 
