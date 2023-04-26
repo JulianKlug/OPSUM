@@ -92,7 +92,6 @@ if __name__ == '__main__':
     parser.add_argument('--model_weights_dir', type=str, required=True)
     parser.add_argument('--model_config_path', type=str, required=True)
     parser.add_argument('--outcome', type=str, required=True)
-    parser.add_argument('--output_dir', type=str, required=True)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--test_size', type=float, default=0.2)
     parser.add_argument('--n_splits', type=int, default=5)
@@ -107,7 +106,7 @@ if __name__ == '__main__':
     for fold_idx in range(args.n_splits):
         fold_X_train, _, fold_y_train, _ = train_splits[int(fold_idx)]
 
-        fold_model_weights_dir = os.path.join(args.model_weights_dir, f'checkpoints_opsum_{os.basename(args.model_weights_dir)}_cv_{fold_idx}')
+        fold_model_weights_dir = os.path.join(args.model_weights_dir, f'checkpoints_opsum_{os.path.basename(args.model_weights_dir)}_cv_{fold_idx}')
         model_weights_paths = [os.path.join(fold_model_weights_dir, f) for f in os.listdir(fold_model_weights_dir) if f.endswith('.ckpt')]
         if len(model_weights_paths) == 1:
             model_weights_path = model_weights_paths[0]
