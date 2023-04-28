@@ -49,3 +49,28 @@ def create_palette(start_rgb, end_rgb, n, colorspace, extrapolation_length):
 
 def hex_to_rgb_color(hex):
     return sRGBColor(*[int(hex[i + 1:i + 3], 16) for i in (0, 2 ,4)], is_upscaled=True)
+
+
+def density_jitter(values, width=1.0, cluster_factor=1.0):
+    """
+    Add jitter to a 1D array of values, using a kernel density estimate
+    """
+    inds = np.arange(len(values))
+    np.random.shuffle(inds)
+    values = values[inds]
+    N = len(values)
+    nbins = 100
+    quant = np.round(nbins * (values - np.min(values)) / (np.max(values) - np.min(values) + 1e-8))
+    inds = np.argsort(quant + np.random.randn(N) * 1e-6)
+    layer = 0
+    last_bin = -1
+    ys = np.zeros(N)
+    for ind in inds:
+        if quant[ind] != last_bin:
+            layer = 0
+        ys[ind] = cluster_factor * (np.ceil(layer / 2) * ((layer % 2) * 2 - 1))
+        layer += 1
+        last_bin = quant[ind]
+    ys *= 0.9 * (width / np.max(ys + 1))
+
+    return ys
