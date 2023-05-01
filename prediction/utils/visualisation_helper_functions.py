@@ -1,6 +1,7 @@
 import numpy as np
 from colormath.color_objects import sRGBColor
 from colormath.color_conversions import convert_color
+import matplotlib.text as mtext
 
 
 def reverse_normalisation_for_subj(norm_subj_df, normalisation_parameters_df):
@@ -74,3 +75,15 @@ def density_jitter(values, width=1.0, cluster_factor=1.0):
     ys *= 0.9 * (width / np.max(ys + 1))
 
     return ys
+
+
+class LegendTitle(object):
+    def __init__(self, text_props=None):
+        self.text_props = text_props or {}
+        super(LegendTitle, self).__init__()
+
+    def legend_artist(self, legend, orig_handle, fontsize, handlebox):
+        x0, y0 = handlebox.xdescent, handlebox.ydescent
+        title = mtext.Text(x0, y0, orig_handle,  **self.text_props)
+        handlebox.add_artist(title)
+        return title
