@@ -12,36 +12,20 @@ from prediction.outcome_prediction.data_loading.data_loader import load_data
 from prediction.utils.utils import save_json, ensure_dir
 
 
-def test_model_from_trained_folds(features_path, labels_path, model_weights_dir, model_config_path, outcome, output_dir,
-                                  seed=42, test_size=0.2, n_splits=5, use_gpu=False):
+def evaluate_model_from_trained_folds(test_X_np, test_y_np, train_splits,
+                                      model_config, model_weights_dir, outcome, output_dir, use_gpu=False):
     """
-    Test models from trained folds on test data.
+    Iterate through models on all trained folds (to obtain overall variance -> only results with best score on validation set should be reported).
+    Params:
+        - test_X_np: np.array of shape (n_samples, n_timesteps, n_features)
+        - test_y_np: np.array of shape (n_samples, 1)
+        - train_splits: list of tuples (X_train, X_val, y_train, y_val) - used to scale test data
+        - model_config: dict with model config
+        - model_weights_dir: path to directory with trained models
+        - outcome: str
+        - output_dir: path to output directory
+        - use_gpu: bool
     """
-    # got dict of input args
-    testing_args_df = pd.DataFrame(locals(), index=[0])
-    testing_args_df['testing_mode'] = 'test_model_from_all_trained_folds'
-    testing_args_df.to_csv(os.path.join(output_dir, 'testing_args.csv'), sep=',', index=False)
-
-    pids, train_data, test_data, train_splits, test_features_lookup_table = load_data(features_path, labels_path, outcome, test_size, n_splits, seed)
-
-    pid_train, pid_test = pids
-    train_X_np, train_y_np = train_data
-    test_X_np, test_y_np = test_data
-
-    # save patient ids used for testing / training
-    pd.DataFrame(pid_train, columns=['patient_id']).to_csv(
-        os.path.join(output_dir, 'pid_train.tsv'),
-        sep='\t', index=False)
-    pd.DataFrame(pid_test, columns=['patient_id']).to_csv(
-        os.path.join(output_dir, 'pid_test.tsv'),
-        sep='\t', index=False)
-
-    save_json(test_features_lookup_table,
-              os.path.join(output_dir, 'test_lookup_dict.json'))
-
-    # load model config
-    model_config = json.load(open(model_config_path, 'r'))
-
     # define model
     ff_factor = 2
     ff_dim = ff_factor * model_config['model_dim']
@@ -94,7 +78,44 @@ def test_model_from_trained_folds(features_path, labels_path, model_weights_dir,
         pickle.dump(bootstrapped_gt_and_pred, open(os.path.join(output_dir, f'fold_{split_idx}_bootstrapped_gt_and_pred.pkl'), 'wb'))
         pickle.dump(overall_gt_and_pred, open(os.path.join(output_dir, f'fold_{split_idx}_test_gt_and_pred.pkl'), 'wb'))
 
+    overall_results_df['selected_fold_on_cv'] = model_config['best_cv_fold']
     overall_results_df.to_csv(os.path.join(output_dir, 'overall_results.csv'), sep=',', index=False)
+    return overall_results_df
+
+
+def test_model_from_trained_folds(features_path, labels_path, model_weights_dir, model_config_path, outcome, output_dir,
+                                  seed=42, test_size=0.2, n_splits=5, use_gpu=False):
+    """
+    Test models from trained folds on test data.
+    """
+    # got dict of input args
+    testing_args_df = pd.DataFrame(locals(), index=[0])
+    testing_args_df['testing_mode'] = 'test_model_from_all_trained_folds'
+    testing_args_df.to_csv(os.path.join(output_dir, 'testing_args.csv'), sep=',', index=False)
+
+    pids, train_data, test_data, train_splits, test_features_lookup_table = load_data(features_path, labels_path, outcome, test_size, n_splits, seed)
+
+    pid_train, pid_test = pids
+    train_X_np, train_y_np = train_data
+    test_X_np, test_y_np = test_data
+
+    # save patient ids used for testing / training
+    pd.DataFrame(pid_train, columns=['patient_id']).to_csv(
+        os.path.join(output_dir, 'pid_train.tsv'),
+        sep='\t', index=False)
+    pd.DataFrame(pid_test, columns=['patient_id']).to_csv(
+        os.path.join(output_dir, 'pid_test.tsv'),
+        sep='\t', index=False)
+
+    save_json(test_features_lookup_table,
+              os.path.join(output_dir, 'test_lookup_dict.json'))
+
+    # load model config
+    model_config = json.load(open(model_config_path, 'r'))
+
+    evaluate_model_from_trained_folds(test_X_np, test_y_np, train_splits,
+                                      model_config, model_weights_dir, outcome, output_dir, use_gpu=use_gpu)
+
 
 
 if __name__ == '__main__':
