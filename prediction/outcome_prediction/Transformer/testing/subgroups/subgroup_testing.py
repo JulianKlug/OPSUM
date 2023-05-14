@@ -139,7 +139,7 @@ def test_model_on_subgroups(features_path, labels_path, normalisation_parameters
     pidx_with_only_IVT = pidx_with_IVT - pidx_with_IAT
     pidx_with_no_ttt = all_pidx - pidx_with_IAT - pidx_with_IVT
 
-    defined_subgroups['treatment'].append(('IAT (+/- IVT)', list(pidx_with_IAT)))
+    defined_subgroups['treatment'].append(('IAT (with_or_without IVT)', list(pidx_with_IAT)))
     defined_subgroups['treatment'].append(('IVT only', list(pidx_with_IVT)))
     defined_subgroups['treatment'].append(('no treatment', list(pidx_with_no_ttt)))
 
@@ -159,7 +159,7 @@ def test_model_on_subgroups(features_path, labels_path, normalisation_parameters
                 print('Evaluating subgroup split: {}'.format(subgroup_split_name))
 
             # create directory for subgroup split output
-            subgroup_split_output_dir = os.path.join(subgroup_output_dir, subgroup_split_name)
+            subgroup_split_output_dir = os.path.join(subgroup_output_dir, subgroup_split_name.replace(' ', '_').replace('<=', 'under_equal').replace('>', 'over'))
             ensure_dir(subgroup_split_output_dir)
 
             subgroup_split_X_np = test_X_np[subgroup_pidx, :, :]
@@ -187,8 +187,8 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--test_size', type=float, default=0.2)
     parser.add_argument('--n_splits', type=int, default=5)
-    parser.add_argument('--use_gpu', action='store_true', type=bool, default=False)
-    parser.add_argument('-v', '--verbose', action='store_true', type=bool, default=False)
+    parser.add_argument('--use_gpu', action='store_true', default=False)
+    parser.add_argument('-v', '--verbose', action='store_true', default=False)
 
     args = parser.parse_args()
 

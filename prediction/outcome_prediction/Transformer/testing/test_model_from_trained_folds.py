@@ -55,7 +55,7 @@ def evaluate_model_from_trained_folds(test_X_np, test_y_np, train_splits,
         fold_model_dir = os.path.join(model_weights_dir, f'{trained_model_base_name}_{split_idx}')
         if not os.path.exists(fold_model_dir):
             raise ValueError(f'No model found for fold {split_idx}.')
-        fold_trained_model_paths = os.listdir(fold_model_dir)
+        fold_trained_model_paths = [model_path for model_path in os.listdir(fold_model_dir) if model_path.endswith('.ckpt')]
         if len(fold_trained_model_paths) > 1:
             raise ValueError(f'More than one model found in {fold_model_dir}.')
         fold_trained_model_path = os.path.join(fold_model_dir, fold_trained_model_paths[0])
