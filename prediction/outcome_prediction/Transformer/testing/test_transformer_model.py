@@ -1,5 +1,3 @@
-from sklearn.preprocessing import StandardScaler
-
 from prediction.outcome_prediction.Transformer.utils.utils import prepare_dataset, DictLogger
 from torch.utils.data import DataLoader, TensorDataset
 import torch as ch

@@ -13,6 +13,7 @@ from sklearn.utils import resample
 from prediction.outcome_prediction.LSTM.LSTM import lstm_generator
 from prediction.outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
     link_patient_id_to_outcome, features_to_numpy, numpy_to_lookup_table
+from prediction.outcome_prediction.data_loading.data_loader import load_data, load_external_data
 from prediction.utils.scoring import precision, recall, matthews, plot_roc_curve
 from prediction.utils.utils import check_data, save_json, ensure_dir
 
@@ -152,7 +153,9 @@ if __name__ == '__main__':
     parser.add_argument('--features_path', required=True, type=str, help='path to features')
     parser.add_argument('--labels_path', required=True, type=str, help='path to labels')
     parser.add_argument('--cv_fold', type=int, help='fold of cross-validation')
+    parser.add_argument('-a', '--all_folds', type=bool, default=False, help='test all folds')
     parser.add_argument('--model_weights_dir', required=True, type=str, help='path to model weights')
+    parser.add_argument('-ext', '--is_external_dataset', type=bool, default=False, help='is external dataset')
     args = parser.parse_args()
 
     if args.hyperparameters_path != '':
@@ -179,76 +182,64 @@ if __name__ == '__main__':
         assert args.units is not None, 'number of units in each LSTM layer or hyperparameters_path not provided'
         assert args.cv_fold is not None, 'fold of cross-validation not provided'
 
-
-    model_name = '_'.join([args.activation, str(args.batch),
-                           args.data, str(args.dropout), str(args.layers),
-                           str(args.masking), args.optimizer, args.outcome,
-                           str(args.units), str(args.cv_fold)])
-    model_weights_path = os.path.join(args.model_weights_dir, f'{model_name}.hdf5')
-    output_dir = os.path.join(args.output_dir, f'test_LSTM_{model_name}')
-    ensure_dir(output_dir)
-    shutil.copy2(model_weights_path, output_dir)
-
     # define constants
     seed = 42
     test_size = 0.20
+    n_splits = 5
+
+    # test only best fold
+    if not args.all_folds:
+        cv_folds = [args.cv_fold]
+    else:
+        cv_folds = range(1, n_splits + 1)
+
 
     # load the dataset
     outcome = args.outcome
-    X, y = format_to_2d_table_with_time(feature_df_path=args.features_path, outcome_df_path=args.labels_path,
-                                        outcome=outcome)
 
-    n_time_steps = X.relative_sample_date_hourly_cat.max() + 1
-    n_channels = X.sample_label.unique().shape[0]
+    if not args.is_external_dataset:
+        # features_path, labels_path, outcome, test_size, n_splits, seed
+        (pid_train, pid_test), (train_X_np, train_y_np), (test_X_np, test_y_np), splits, test_features_lookup_table = load_data(
+            args.features_path, args.labels_path, outcome, test_size, n_splits, seed)
 
-    # test if data is corrupted
-    check_data(X)
+        # save patient ids used for testing / training
+        pd.DataFrame(pid_train, columns=['patient_id']).to_csv(
+            os.path.join(args.output_dir, 'pid_train.tsv'),
+            sep='\t', index=False)
+        pd.DataFrame(pid_test, columns=['patient_id']).to_csv(
+            os.path.join(args.output_dir, 'pid_test.tsv'),
+            sep='\t', index=False)
 
-    """
-        SPLITTING DATA
-        Splitting is done by patient id (and not admission id) as in case of the rare multiple admissions per patient there
-        would be a risk of data leakage otherwise split 'pid' in TRAIN and TEST pid = unique patient_id
-        """
-    # Reduce every patient to a single outcome (to avoid duplicates)
-    all_pids_with_outcome = link_patient_id_to_outcome(y, outcome)
-    pid_train, pid_test, y_pid_train, y_pid_test = train_test_split(all_pids_with_outcome.patient_id.tolist(),
-                                                                    all_pids_with_outcome.outcome.tolist(),
-                                                                    stratify=all_pids_with_outcome.outcome.tolist(),
-                                                                    test_size=test_size,
-                                                                    random_state=seed)
-
-    test_X_df = X[X.patient_id.isin(pid_test)]
-    test_y_df = y[y.patient_id.isin(pid_test)]
-
-    test_X_np = features_to_numpy(test_X_df,
-                                  ['case_admission_id', 'relative_sample_date_hourly_cat', 'sample_label', 'value'])
-    test_y_np = np.array([test_y_df[test_y_df.case_admission_id == cid].outcome.values[0] for cid in
-                          test_X_np[:, 0, 0, 0]]).astype('float32')
+    else:
+        test_X_np, test_y_np, test_features_lookup_table = load_external_data(
+            args.features_path, args.labels_path, outcome)
 
     # create look-up table for case_admission_ids, sample_labels and relative_sample_date_hourly_cat
-    save_json(numpy_to_lookup_table(test_X_np),
-              os.path.join(output_dir, 'test_lookup_dict.json'))
+    save_json(test_features_lookup_table,
+              os.path.join(args.output_dir, 'test_lookup_dict.json'))
 
-    # save patient ids used for testing / training
-    pd.DataFrame(pid_train, columns=['patient_id']).to_csv(
-        os.path.join(output_dir, 'pid_train.tsv'),
-        sep='\t', index=False)
-    pd.DataFrame(pid_test, columns=['patient_id']).to_csv(
-        os.path.join(output_dir, 'pid_test.tsv'),
-        sep='\t', index=False)
+    n_time_steps = test_X_np.shape[1]
+    n_channels = test_X_np.shape[-1]
 
-    # Remove the case_admission_id, sample_label, and time_step_label columns from the data
-    test_X_np = test_X_np[:, :, :, -1].astype('float32')
+    for cv_fold in cv_folds:
+        model_name = '_'.join([args.activation, str(args.batch),
+                               args.data, str(args.dropout), str(args.layers),
+                               str(args.masking), args.optimizer, args.outcome,
+                               str(args.units), str(cv_fold)])
+        model_weights_path = os.path.join(args.model_weights_dir, f'{model_name}.hdf5')
+        output_dir = os.path.join(args.output_dir, f'test_LSTM_{model_name}')
+        ensure_dir(output_dir)
+        shutil.copy2(model_weights_path, output_dir)
 
-    result_df, roc_auc_figure, bootstrapping_data, testing_data = test_LSTM(X=test_X_np, y=test_y_np, model_weights_path=model_weights_path,
-                          activation=args.activation, batch=args.batch, data=args.data, dropout=args.dropout,
-                          layers=args.layers, masking=args.masking, optimizer=args.optimizer,
-                          outcome=args.outcome, units=args.units, n_time_steps=n_time_steps, n_channels=n_channels)
+        result_df, roc_auc_figure, bootstrapping_data, testing_data = test_LSTM(X=test_X_np, y=test_y_np, model_weights_path=model_weights_path,
+                              activation=args.activation, batch=args.batch, data=args.data, dropout=args.dropout,
+                              layers=args.layers, masking=args.masking, optimizer=args.optimizer,
+                              outcome=args.outcome, units=args.units, n_time_steps=n_time_steps, n_channels=n_channels)
 
-    roc_auc_figure.savefig(os.path.join(output_dir, 'roc_auc_curve.png'))
+        roc_auc_figure.savefig(os.path.join(output_dir, f'roc_auc_curve_fold_{cv_fold}.png'))
 
-    result_df.to_csv(os.path.join(output_dir, 'test_LSTM_results.tsv'), sep='\t', index=False)
+        result_df.to_csv(os.path.join(output_dir, f'test_LSTM_results_fold_{cv_fold}.tsv'), sep='\t', index=False)
 
-    # save bootstrapped ground truth and predictions
-    pickle.dump(bootstrapping_data, open(os.path.join(output_dir, 'bootstrapped_gt_and_pred.pkl'), 'wb'))
-    pickle.dump(testing_data, open(os.path.join(output_dir, 'test_gt_and_pred.pkl'), 'wb'))
+        # save bootstrapped ground truth and predictions
+        pickle.dump(bootstrapping_data, open(os.path.join(output_dir, f'bootstrapped_gt_and_pred_fold_{cv_fold}.pkl'), 'wb'))
+        pickle.dump(testing_data, open(os.path.join(output_dir, f'test_gt_and_pred_fold_{cv_fold}.pkl'), 'wb'))
