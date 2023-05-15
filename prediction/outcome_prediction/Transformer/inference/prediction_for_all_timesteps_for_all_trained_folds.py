@@ -14,7 +14,7 @@ from prediction.outcome_prediction.data_loading.data_loader import load_data
 from prediction.outcome_prediction.Transformer.utils.utils import prepare_dataset, DictLogger
 
 
-def prediction_for_all_timesteps(train_data, test_data, model_weights_path:str, n_time_steps:int, config:dict, use_gpu=False):
+def prediction_for_all_timesteps(train_data, test_data, model_weights_path:str, n_time_steps:int, model_config:dict, use_gpu=False):
     """
     Predicts the outcome for all timesteps for all patients in data.
     Args:
@@ -62,7 +62,7 @@ def prediction_for_all_timesteps(train_data, test_data, model_weights_path:str, 
     X_train, y_train = train_data
     X_test, y_test = test_data
 
-    subj_pred_over_ts = []
+    pred_over_ts = []
     for ts in tqdm(range(n_time_steps)):
         modified_time_steps = ts + 1
 
@@ -78,9 +78,10 @@ def prediction_for_all_timesteps(train_data, test_data, model_weights_path:str, 
         else:
             y_pred = ch.sigmoid(trainer.predict(trained_model, test_loader)[0])[:, -1]
 
-        subj_pred_over_ts.append(np.squeeze(y_pred))
 
-    return np.array(subj_pred_over_ts)
+        pred_over_ts.append(np.squeeze(y_pred))
+
+    return np.array(pred_over_ts)
 
 
 if __name__ == '__main__':
@@ -88,10 +89,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--features_path', type=str, required=True)
     parser.add_argument('--labels_path', type=str, required=True)
-    parser.add_argument('--model_weights_path', type=str, required=True)
+    parser.add_argument('--model_weights_dir', type=str, required=True)
     parser.add_argument('--model_config_path', type=str, required=True)
     parser.add_argument('--outcome', type=str, required=True)
-    parser.add_argument('--output_dir', type=str, required=True)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--test_size', type=float, default=0.2)
     parser.add_argument('--n_splits', type=int, default=5)
@@ -99,20 +99,26 @@ if __name__ == '__main__':
     parser.add_argument('--use_gpu', type=bool, default=False)
     args = parser.parse_args()
 
-
-    output_dir = os.path.dirname(args.model_weights_path)
-
     pids, train_data, test_data, train_splits, test_features_lookup_table = load_data(args.features_path, args.labels_path, args.outcome, args.test_size, args.n_splits, args.seed)
-
     # load model config
     model_config = json.load(open(args.model_config_path, 'r'))
 
-    fold_X_train, _, fold_y_train, _ = train_splits[int(model_config['best_cv_fold'])]
+    for fold_idx in range(args.n_splits):
+        fold_X_train, _, fold_y_train, _ = train_splits[int(fold_idx)]
 
-    predictions = prediction_for_all_timesteps((fold_X_train, fold_y_train), test_data, args.model_weights_path, args.n_time_steps, model_config)
+        fold_model_weights_dir = os.path.join(args.model_weights_dir, f'checkpoints_opsum_{os.path.basename(args.model_weights_dir)}_cv_{fold_idx}')
+        model_weights_paths = [os.path.join(fold_model_weights_dir, f) for f in os.listdir(fold_model_weights_dir) if f.endswith('.ckpt')]
+        if len(model_weights_paths) == 1:
+            model_weights_path = model_weights_paths[0]
+        else:
+            raise ValueError(f'Found {len(model_weights_paths)} model weights files in {fold_model_weights_dir}')
 
-    # Save predictions as pickle
-    with open(os.path.join(output_dir, 'predictions_over_timesteps.pkl'), 'wb') as f:
-        pickle.dump(predictions, f)
+        output_dir = fold_model_weights_dir
+
+        predictions = prediction_for_all_timesteps((fold_X_train, fold_y_train), test_data, model_weights_path, args.n_time_steps, model_config, args.use_gpu)
+
+        # Save predictions as pickle
+        with open(os.path.join(output_dir, f'predictions_over_timesteps_from_fold_{fold_idx}.pkl'), 'wb') as f:
+            pickle.dump(predictions, f)
 
 

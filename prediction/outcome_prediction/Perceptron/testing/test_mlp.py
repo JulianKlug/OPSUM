@@ -7,13 +7,13 @@ from tqdm import tqdm
 from sklearn.utils import resample
 from sklearn.metrics import roc_auc_score, matthews_corrcoef, accuracy_score, precision_score, recall_score, \
     multilabel_confusion_matrix
-from prediction.outcome_prediction.treeModel.training.feature_aggregration_xgboost import evaluate_model
+from prediction.outcome_prediction.Perceptron.training.feature_aggregration_MLP import evaluate_model
 
 
-def test_model(max_depth:int, learning_rate:float, n_estimators:int, reg_lambda:int, alpha:int, moving_average:bool,
+def test_model(hidden_layer_sizes:tuple, alpha:float, activation:str,
                  outcome:str, features_df_path:str, outcomes_df_path:str, output_dir:str, all_folds:bool=False):
-    optimal_model_df, trained_models, test_dataset = evaluate_model(max_depth, learning_rate, n_estimators, reg_lambda, alpha, moving_average,
-                                                        outcome, features_df_path, outcomes_df_path, output_dir, save_models=True)
+    optimal_model_df, trained_models, test_dataset = evaluate_model(hidden_layer_sizes, alpha, activation,
+                                                                    outcome, features_df_path, outcomes_df_path, output_dir, save_models=True)
 
     X_test, y_test = test_dataset
 
@@ -147,13 +147,9 @@ if __name__ == '__main__':
 
     best_parameters_df = pd.read_csv(cli_args.best_parameters_path)
 
-    if 'moving_average' in best_parameters_df.columns:
-        moving_average = bool(best_parameters_df['moving_average'][0])
-    else:
-        moving_average = False
 
-    fold_results, best_cv_fold_idx = test_model(int(best_parameters_df['max_depth'][0]), best_parameters_df['learning_rate'][0], int(best_parameters_df['n_estimators'][0]), best_parameters_df['reg_lambda'][0], best_parameters_df['alpha'][0],
-                                                             moving_average,
+    hidden_layer_sizes = [int(size) for size in best_parameters_df['hidden_layer_sizes'][0][1:-1].replace(' ', '').split(',')]
+    fold_results, best_cv_fold_idx = test_model(hidden_layer_sizes, best_parameters_df['alpha'][0], best_parameters_df['activation'][0],
                                                                 cli_args.outcome, cli_args.feature_df_path, cli_args.outcome_df_path, cli_args.output_dir,
                                                                 cli_args.all_folds)
 
@@ -163,7 +159,7 @@ if __name__ == '__main__':
         bootstrapping_data = fold_results[fidx][1]
         testing_data = fold_results[fidx][2]
 
-        result_df.to_csv(os.path.join(cli_args.output_dir, f'test_XGB_cv_{fidx}_results.csv'), sep=',', index=False)
+        result_df.to_csv(os.path.join(cli_args.output_dir, f'test_mlp_cv_{fidx}_results.csv'), sep=',', index=False)
 
         # save bootstrapped ground truth and predictions
         pickle.dump(bootstrapping_data, open(os.path.join(cli_args.output_dir, f'bootstrapped_gt_and_pred_cv_{fidx}.pkl'), 'wb'))

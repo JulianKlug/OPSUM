@@ -2,6 +2,7 @@ import argparse
 import itertools
 import json
 import os
+import pickle
 import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, roc_auc_score, matthews_corrcoef
@@ -11,7 +12,7 @@ from sklearn.neural_network import MLPClassifier
 from prediction.outcome_prediction.data_loading.data_formatting import format_to_2d_table_with_time, \
     link_patient_id_to_outcome, features_to_numpy
 from prediction.utils.scoring import precision, recall, specificity
-from prediction.utils.utils import aggregrate_features_over_time
+from prediction.utils.utils import aggregate_features_over_time
 
 # define constants
 n_splits = 5
@@ -24,7 +25,7 @@ kfold = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
 
 
 def evaluate_model(hidden_layer_sizes:tuple, alpha:float, activation:str,
-                 outcome:str, features_df_path:str, outcomes_df_path:str, output_dir:str):
+                 outcome:str, features_df_path:str, outcomes_df_path:str, output_dir:str, save_models:bool=False):
     np.random.seed(seed)
     optimal_model_df = pd.DataFrame()
 
@@ -57,13 +58,14 @@ def evaluate_model(hidden_layer_sizes:tuple, alpha:float, activation:str,
 
     # Remove the case_admission_id, sample_label, and time_step_label columns from the data
     test_X_np = test_X_np[:, :, :, -1].astype('float32')
-    X_test, y_test = aggregrate_features_over_time(test_X_np, test_y_np)
+    X_test, y_test = aggregate_features_over_time(test_X_np, test_y_np)
     # only keep prediction at last timepoint
     X_test = X_test.reshape(-1, 72, X_test.shape[-1])[:, -1, :].astype('float32')
     y_test = y_test.reshape(-1, 72)[:, -1].astype('float32')
 
     ### TRAIN MODEL USING K-FOLD CROSS-VALIDATION
     i = 0
+    trained_models = []
     for fold_pid_train_idx, fold_pid_val_idx in kfold.split(pid_train, y_pid_train):
         i += 1
 
@@ -98,14 +100,15 @@ def evaluate_model(hidden_layer_sizes:tuple, alpha:float, activation:str,
         fold_X_val = fold_X_val[:, :, :, -1].astype('float32')
 
         # aggregate features over time so that one timepoint is one sample
-        fold_X_train, fold_y_train = aggregrate_features_over_time(fold_X_train, fold_y_train)
-        fold_X_val, fold_y_val = aggregrate_features_over_time(fold_X_val, fold_y_val)
+        fold_X_train, fold_y_train = aggregate_features_over_time(fold_X_train, fold_y_train)
+        fold_X_val, fold_y_val = aggregate_features_over_time(fold_X_val, fold_y_val)
 
         # Define the model
         mlp_model = MLPClassifier(hidden_layer_sizes, learning_rate='adaptive', alpha=alpha, activation=activation,
                                   max_iter=n_epochs)
 
         mlp_model.fit(fold_X_train, fold_y_train)
+        trained_models.append(mlp_model)
 
         # only keep prediction at last timepoint
         X_train = fold_X_train.reshape(-1, 72, fold_X_train.shape[-1])[:, -1, :].astype('float32')
@@ -169,6 +172,14 @@ def evaluate_model(hidden_layer_sizes:tuple, alpha:float, activation:str,
         optimal_model_df = optimal_model_df.append(run_performance_df)
 
     optimal_model_df.to_csv(os.path.join(output_dir, f'{model_name}.csv'), sep=',', index=False)
+
+    if save_models:
+        for idx, model in enumerate(trained_models):
+            filename = os.path.join(output_dir, f'{model_name}_cv{idx}.pkl')
+            pickle.dump(model, open(filename, 'wb'))
+
+    return optimal_model_df, trained_models, (X_test, y_test)
+
 
 def evaluate_args(args):
     evaluate_model(hidden_layer_sizes=args['hidden_layer_sizes'], alpha = args['alpha'], activation = args['activation'],

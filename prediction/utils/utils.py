@@ -27,6 +27,24 @@ def generate_balanced_arrays(X_train, y_train):
         yield input_, target
 
 
+def filter_consecutive_numbers(lst):
+    a = np.array(list(lst)).astype(int)
+    if len(lst) < 2:
+        return a
+    consecutive_mask = np.concatenate(([False], (np.abs(a[1:] - a[:-1]) == 1)))
+    result = a[np.logical_not(consecutive_mask)]
+    if len(lst) == 2:
+        return result
+    next_to_consecutive_mask = np.concatenate(([False], (np.abs(result[1:] - result[:-1]) == 2)))
+    result = result[np.logical_not(next_to_consecutive_mask)]
+    return np.array(result)
+
+def smooth(y, box_pts):
+    box = np.ones(box_pts)/box_pts
+    y_smooth = np.convolve(y, box, mode='same')
+    return y_smooth
+
+
 def moving_time_average(a, n=3):
     """
     This function calculates the moving average over the last n elements of the array a.
