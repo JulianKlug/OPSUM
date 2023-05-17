@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-
+from sklearn.metrics import brier_score_loss
+from netcal.metrics import ECE
 
 def logit(p):
     return np.log(p / (1 - p))
@@ -26,9 +27,9 @@ def cox_calibration_coefficients(y, prob):
     Returns
     :return: dictionary of slope and intercept
     """
-    dat = pd.DataFrame({'e': prob, 'o': y})
-    dat.loc[dat['e'] == 0, 'e'] = 0.0000000001
-    dat.loc[dat['e'] == 1, 'e'] = 0.9999999999
+    dat = pd.DataFrame({'e': prob.astype(np.float64), 'o': y.astype(np.float64)})
+    dat.loc[np.isclose(dat['e'], 0), 'e'] = 0.0000000001
+    dat.loc[np.isclose(dat['e'], 1), 'e'] = 0.9999999999
     # take logit of predicted probability
     dat['logite'] = logit(dat['e'])
 
@@ -42,3 +43,15 @@ def cox_calibration_coefficients(y, prob):
     intercept = result.params[0]
 
     return {'slope': slope, 'intercept': intercept}
+
+
+def evaluate_calibration(y:np.ndarray, probs:np.ndarray) -> pd.DataFrame:
+    results = {}
+    cox_coeffs = cox_calibration_coefficients(y, probs)
+    results['slope'] = cox_coeffs['slope']
+    results['intercept'] = cox_coeffs['intercept']
+    expected_calibration_error = ECE(bins=10)
+    results['ECE'] = expected_calibration_error.measure(probs, y)
+    results['Brier'] = brier_score_loss(y, probs)
+
+    return pd.DataFrame(results, index=[0])
