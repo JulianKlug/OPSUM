@@ -9,6 +9,9 @@ from sklearn.metrics import roc_auc_score, matthews_corrcoef, accuracy_score, pr
     multilabel_confusion_matrix
 from sklearn.utils import resample
 
+from prediction.utils.utils import flatten
+
+
 def test_transformer_model(trained_model, X_train, y_train, X_test, y_test, outcome, model_config, model_weights_path,
                            rescale=True, use_gpu=True):
     if use_gpu:
@@ -58,7 +61,10 @@ def test_transformer_model(trained_model, X_train, y_train, X_test, y_test, outc
         bootstrapped_predictions.append(y_pred_bs)
 
         # evaluate model
-        roc_auc_bs = roc_auc_score(y_bs, y_pred_bs)
+        if not np.all(y_bs == 0) and not np.all(y_bs == 1):
+            roc_auc_bs = roc_auc_score(y_bs, y_pred_bs)
+        else:
+            roc_auc_bs = np.nan
         roc_auc_scores.append(roc_auc_bs)
         matthews_bs = matthews_corrcoef(y_bs, y_pred_bs_binary)
         matthews_scores.append(matthews_bs)
@@ -80,30 +86,30 @@ def test_transformer_model(trained_model, X_train, y_train, X_test, y_test, outc
         neg_pred_value_scores.append(neg_pred_value_bs)
 
     # get medians
-    median_roc_auc = np.percentile(roc_auc_scores, 50)
-    median_matthews = np.percentile(matthews_scores, 50)
-    median_accuracy = np.percentile(accuracy_scores, 50)
-    median_precision = np.percentile(precision_scores, 50)
-    median_recall = np.percentile(recall_scores, 50)
-    median_specificity = np.percentile(specificity_scores, 50)
-    median_neg_pred_value = np.percentile(neg_pred_value_scores, 50)
+    median_roc_auc = np.nanpercentile(roc_auc_scores, 50)
+    median_matthews = np.nanpercentile(matthews_scores, 50)
+    median_accuracy = np.nanpercentile(accuracy_scores, 50)
+    median_precision = np.nanpercentile(precision_scores, 50)
+    median_recall = np.nanpercentile(recall_scores, 50)
+    median_specificity = np.nanpercentile(flatten(specificity_scores), 50)
+    median_neg_pred_value = np.nanpercentile(flatten(neg_pred_value_scores), 50)
 
     # get 95% interval
     alpha = 100 - 95
-    lower_ci_roc_auc = np.percentile(roc_auc_scores, alpha / 2)
-    upper_ci_roc_auc = np.percentile(roc_auc_scores, 100 - alpha / 2)
-    lower_ci_matthews = np.percentile(matthews_scores, alpha / 2)
-    upper_ci_matthews = np.percentile(matthews_scores, 100 - alpha / 2)
-    lower_ci_accuracy = np.percentile(accuracy_scores, alpha / 2)
-    upper_ci_accuracy = np.percentile(accuracy_scores, 100 - alpha / 2)
-    lower_ci_precision = np.percentile(precision_scores, alpha / 2)
-    upper_ci_precision = np.percentile(precision_scores, 100 - alpha / 2)
-    lower_ci_recall = np.percentile(recall_scores, alpha / 2)
-    upper_ci_recall = np.percentile(recall_scores, 100 - alpha / 2)
-    lower_ci_specificity = np.percentile(specificity_scores, alpha / 2)
-    upper_ci_specificity = np.percentile(specificity_scores, 100 - alpha / 2)
-    lower_ci_neg_pred_value = np.percentile(neg_pred_value_scores, alpha / 2)
-    upper_ci_neg_pred_value = np.percentile(neg_pred_value_scores, 100 - alpha / 2)
+    lower_ci_roc_auc = np.nanpercentile(roc_auc_scores, alpha / 2)
+    upper_ci_roc_auc = np.nanpercentile(roc_auc_scores, 100 - alpha / 2)
+    lower_ci_matthews = np.nanpercentile(matthews_scores, alpha / 2)
+    upper_ci_matthews = np.nanpercentile(matthews_scores, 100 - alpha / 2)
+    lower_ci_accuracy = np.nanpercentile(accuracy_scores, alpha / 2)
+    upper_ci_accuracy = np.nanpercentile(accuracy_scores, 100 - alpha / 2)
+    lower_ci_precision = np.nanpercentile(precision_scores, alpha / 2)
+    upper_ci_precision = np.nanpercentile(precision_scores, 100 - alpha / 2)
+    lower_ci_recall = np.nanpercentile(recall_scores, alpha / 2)
+    upper_ci_recall = np.nanpercentile(recall_scores, 100 - alpha / 2)
+    lower_ci_specificity = np.nanpercentile(flatten(specificity_scores), alpha / 2)
+    upper_ci_specificity = np.nanpercentile(flatten(specificity_scores), 100 - alpha / 2)
+    lower_ci_neg_pred_value = np.nanpercentile(flatten(neg_pred_value_scores), alpha / 2)
+    upper_ci_neg_pred_value = np.nanpercentile(flatten(neg_pred_value_scores), 100 - alpha / 2)
 
     result_dict = {
         'auc_test': median_roc_auc,
@@ -127,6 +133,9 @@ def test_transformer_model(trained_model, X_train, y_train, X_test, y_test, outc
         'neg_pred_value_test': median_neg_pred_value,
         'neg_pred_value_test_lower_ci': lower_ci_neg_pred_value,
         'neg_pred_value_test_upper_ci': upper_ci_neg_pred_value,
+        'n_pos_samples': np.sum(y_test),
+        'n_total_samples': len(y_test),
+        'percent_pos_samples': np.sum(y_test) / len(y_test),
         'outcome': outcome,
         'model_weights_path': model_weights_path
     }
