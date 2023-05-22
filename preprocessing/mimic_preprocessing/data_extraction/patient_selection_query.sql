@@ -30,7 +30,7 @@ SELECT
     ELSE 0 END
     AS exclusion_los
   , CASE
-        WHEN co.age < 17 then 1
+        WHEN co.age < 18 then 1
     ELSE 0 END
     AS exclusion_age
   , CASE
