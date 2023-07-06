@@ -1,4 +1,5 @@
 import argparse
+import glob
 import shutil
 
 import pandas as pd
@@ -147,7 +148,7 @@ if __name__ == '__main__':
     parser.add_argument('-ep', '--external_outcome_df_path', type=str, help='path to outcome dataframe')
     parser.add_argument('-o', '--outcome', type=str, help='selected outcome')
     parser.add_argument('-O', '--output_dir', type=str, help='Output directory')
-    parser.add_argument('--model_weights_path', required=True, type=str, help='path to model weights')
+    parser.add_argument('--model_weights_path', required=True, type=str, help='path to model weights (if is a directory, will process all files in directory)')
     parser.add_argument('--parameters_path', required=True, type=str, help='path to model parameters')
 
     cli_args = parser.parse_args()
@@ -157,20 +158,37 @@ if __name__ == '__main__':
     # copy parameter_df to output directory
     shutil.copyfile(cli_args.parameters_path, os.path.join(cli_args.output_dir, 'parameters.csv'))
 
-    if 'moving_average' in parameters_df:
-        moving_average = parameters_df['moving_average'][0]
+    # process single model weights file
+    if not os.path.isdir(cli_args.model_weights_path):
+        result_df, bootstrapping_data, testing_data = external_validation(cli_args.outcome,
+                                                                            cli_args.model_weights_path,
+                                                                          cli_args.external_feature_df_path,
+                                                                            cli_args.external_outcome_df_path,
+                                                                            cli_args.output_dir,
+                                                                          config)
+
+        result_df.to_csv(os.path.join(cli_args.output_dir, 'external_validation_XGB_results.csv'), sep=',', index=False)
+
+        # save bootstrapped ground truth and predictions
+        pickle.dump(bootstrapping_data, open(os.path.join(cli_args.output_dir, 'bootstrapped_gt_and_pred.pkl'), 'wb'))
+        pickle.dump(testing_data, open(os.path.join(cli_args.output_dir, 'external_validation_gt_and_pred.pkl'), 'wb'))
+
+    # process all model weights files in directory
     else:
-        moving_average = False
+        # find all model weights files
+        model_weights_files = glob.glob(os.path.join(cli_args.model_weights_path, '*.json'))
+        for file in model_weights_files:
+            cv_fold = int(os.path.basename(file).split('.')[-2].split('_cv')[-1])
+            result_df, bootstrapping_data, testing_data = external_validation(cli_args.outcome,
+                                                                              file,
+                                                                              cli_args.external_feature_df_path,
+                                                                              cli_args.external_outcome_df_path,
+                                                                              cli_args.output_dir,
+                                                                              config)
 
-    result_df, bootstrapping_data, testing_data = external_validation(cli_args.outcome,
-                                                                        cli_args.model_weights_path,
-                                                                      cli_args.external_feature_df_path,
-                                                                        cli_args.external_outcome_df_path,
-                                                                        cli_args.output_dir,
-                                                                      config)
+            result_df.to_csv(os.path.join(cli_args.output_dir, f'external_validation_cv_{cv_fold}_results.csv'), sep=',', index=False)
 
-    result_df.to_csv(os.path.join(cli_args.output_dir, 'external_validation_XGB_results.csv'), sep=',', index=False)
-
-    # save bootstrapped ground truth and predictions
-    pickle.dump(bootstrapping_data, open(os.path.join(cli_args.output_dir, 'bootstrapped_gt_and_pred.pkl'), 'wb'))
-    pickle.dump(testing_data, open(os.path.join(cli_args.output_dir, 'external_validation_gt_and_pred.pkl'), 'wb'))
+            # save bootstrapped ground truth and predictions
+            pickle.dump(bootstrapping_data,
+                        open(os.path.join(cli_args.output_dir, f'external_validation_bootstrapped_gt_and_pred_cv_{cv_fold}.pkl'), 'wb'))
+            pickle.dump(testing_data, open(os.path.join(cli_args.output_dir, f'external_validation_gt_and_pred_cv_{cv_fold}.pkl'), 'wb'))
