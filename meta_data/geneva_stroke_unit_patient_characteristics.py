@@ -1,6 +1,8 @@
 import os.path
-
+import numpy as np
 import pandas as pd
+
+from preprocessing.geneva_stroke_unit_preprocessing.utils import create_registry_case_identification_column
 
 CONTINUOUS_CHARACTERISTICS = [
     'Age (calc.)',
@@ -40,7 +42,7 @@ def outcome_preprocessing(df: pd.DataFrame):
     return df
 
 
-def extract_patient_characteristics(patient_id_path: str, stroke_registry_data_path: str,
+def extract_patient_characteristics(case_admission_ids: pd.DataFrame, stroke_registry_data_path: str,
                                     continuous_characteristics: list = CONTINUOUS_CHARACTERISTICS,
                                     categorical_characteristics: list = CATEGORICAL_CHARACTERISTICS) -> pd.DataFrame:
     """
@@ -54,22 +56,18 @@ def extract_patient_characteristics(patient_id_path: str, stroke_registry_data_p
     # load stroke registry data
     stroke_registry_df = pd.read_excel(stroke_registry_data_path)
     stroke_registry_df['patient_id'] = stroke_registry_df['Case ID'].apply(lambda x: x[8:-4]).astype(str)
-
-    # only keep first admission for duplicate patients
-    stroke_registry_df = stroke_registry_df.drop_duplicates(subset=['patient_id'], keep='first')
+    stroke_registry_df['case_admission_id'] = create_registry_case_identification_column(stroke_registry_df)
 
     # preprocess outcome variables
     stroke_registry_df = outcome_preprocessing(stroke_registry_df)
 
-    patient_id_df = pd.read_csv(patient_id_path, sep='\t')
-    patient_id_df['patient_id'] = patient_id_df['patient_id'].astype(str)
-
     # select patients to extract characteristics from
-    selected_stroke_registry_df = stroke_registry_df[stroke_registry_df['patient_id'].isin(patient_id_df['patient_id'])]
+    selected_stroke_registry_df = stroke_registry_df[stroke_registry_df['case_admission_id'].isin(case_admission_ids)]
+    selected_stroke_registry_df.drop_duplicates(subset=['case_admission_id'], inplace=True)
 
     patient_characteristics_df = pd.DataFrame()
 
-    patient_characteristics_df['n patients'] = [len(selected_stroke_registry_df)]
+    patient_characteristics_df['n admissions'] = [len(case_admission_ids)]
 
     # extract continuous characteristics
     for characteristic in continuous_characteristics:
@@ -97,16 +95,50 @@ def extract_patient_characteristics(patient_id_path: str, stroke_registry_data_p
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('-p', '--patient_id_path', type=str, default='../pid_test.tsv')
+    parser.add_argument('-p1', '--test_patient_id_path', type=str, default='../pid_test.tsv')
+    parser.add_argument('-p2', '--train_patient_id_path', type=str, default='../pid_train.tsv')
     parser.add_argument('-s', '--stroke_registry_data_path', type=str, default='../stroke_registry_post_hoc_modified.xlsx')
+    parser.add_argument('-d', '--features_path', type=str, default='../preprocessed_features_01012023_233050.csv')
+    parser.add_argument('-O', '--outcomes_path', type=str, default='../preprocessed_outcomes_01012023_233050.csv')
     parser.add_argument('-o', '--output_path', type=str, default='.')
+    parser.add_argument('--outcome', type=str, default='3M Death')
     args = parser.parse_args()
 
-    patient_characteristics_df = extract_patient_characteristics(args.patient_id_path, args.stroke_registry_data_path)
-    patient_characteristics_df.to_csv(os.path.join(args.output_path,
-                                                   f'patient_characteristics_{os.path.basename(args.patient_id_path).split("_")[1]}'), sep='\t', index=False)
+    data_df = pd.read_csv(args.features_path)
+    outcomes_df = pd.read_csv(args.outcomes_path)
+    data_df['pid'] = data_df['case_admission_id'].apply(lambda x: x.split('_')[0])
+    outcomes_df['pid'] = outcomes_df['case_admission_id'].apply(lambda x: x.split('_')[0])
 
-    print()
+    test_patient_id_df = pd.read_csv(args.test_patient_id_path, sep='\t')
+    test_patient_id_df['patient_id'] = test_patient_id_df['patient_id'].astype(str)
+
+    admissions_test_set = outcomes_df[
+        (outcomes_df.case_admission_id.isin(data_df.case_admission_id.unique()))
+        & (~outcomes_df[args.outcome].isnull())
+        & (outcomes_df.pid.isin(test_patient_id_df['patient_id']))].case_admission_id.unique()
+
+    train_patient_id_df = pd.read_csv(args.train_patient_id_path, sep='\t')
+    train_patient_id_df['patient_id'] = train_patient_id_df['patient_id'].astype(str)
+
+    admissions_train_set = outcomes_df[
+        (outcomes_df.case_admission_id.isin(data_df.case_admission_id.unique()))
+        & (~outcomes_df[args.outcome].isnull())
+        & (outcomes_df.pid.isin(train_patient_id_df['patient_id']))].case_admission_id.unique()
+
+    all_admissions = np.concatenate([admissions_test_set, admissions_train_set])
+
+    overall_patient_characteristics_df = extract_patient_characteristics(all_admissions, args.stroke_registry_data_path)
+    overall_patient_characteristics_df.to_csv(os.path.join(args.output_path,
+                                                   f'patient_characteristics_overall.tsv'), sep='\t', index=False)
+
+    test_patient_characteristics_df = extract_patient_characteristics(admissions_test_set, args.stroke_registry_data_path)
+    test_patient_characteristics_df.to_csv(os.path.join(args.output_path,
+                                                    f'patient_characteristics_test.tsv'), sep='\t', index=False)
+
+    train_patient_characteristics_df = extract_patient_characteristics(admissions_train_set, args.stroke_registry_data_path)
+    train_patient_characteristics_df.to_csv(os.path.join(args.output_path,
+                                                    f'patient_characteristics_train.tsv'), sep='\t', index=False)
+
 
 
 
