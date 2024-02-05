@@ -1,11 +1,10 @@
 #!/bin/bash
 #SBATCH --job-name=opsum_compute_shap    # Job name
-#SBATCH --partition=public-gpu
-#SBATCH --gres=gpu:turing:1                    # Number of GPUs
+#SBATCH --partition=shared-bigmem
 #SBATCH --ntasks=1
 #SBATCH --mem=100G                     # Job memory request
 #SBATCH --cpus-per-task=16
-#SBATCH --time=1-00:00:00               # Time limit hrs:min:sec
+#SBATCH --time=12:00:00               # Time limit hrs:min:sec
 #SBATCH --output=/home/users/k/klug/logs/opsum/opsum_shap_%j.log   # Standard output and error log
 
 ulimit -S -n 131072 # setting "soft" limit number of file descriptor per processes
@@ -23,5 +22,8 @@ conda activate shap
 export PYTHONPATH="${PYTHONPATH}:/home/users/k/klug/opsum"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/
 
-srun python /home/users/k/klug/opsum/prediction/outcome_prediction/Transformer/inference/compute_shap_explanations_over_time.py --output_dir=/home/users/k/klug/output/opsum/transformer_72h/shap_values/captum --features_path=$OPSUM_FEATURES_PATH --labels_path=$OPSUM_LABELS_PATH --outcome="3M mRS 0-2" --model_weights_path /home/users/k/klug/output/opsum/transformer_72h/shap_values/opsum_transformer_epoch=14_val_auroc=0.9222.ckpt --model_config_path /home/users/k/klug/output/opsum/transformer_72h/shap_values/hyperopt_selected_transformer_20230402_184459.json --use_gpu True --n_samples_background 100 --library "captum"
+srun python /home/users/k/klug/opsum/prediction/outcome_prediction/Transformer/inference/compute_shap_explanations_over_time.py --output_dir=/home/users/k/klug/output/opsum/transformer_72h/shap_values/captum --features_path=$OPSUM_FEATURES_PATH --labels_path=$OPSUM_LABELS_PATH --outcome="3M mRS 0-2" --model_weights_path /home/users/k/klug/output/opsum/transformer_72h/shap_values/opsum_transformer_epoch=14_val_auroc=0.9222.ckpt --model_config_path /home/users/k/klug/output/opsum/transformer_72h/shap_values/hyperopt_selected_transformer_20230402_184459.json --n_samples_background 1795 --library "captum"
+
+##srun python /home/users/k/klug/opsum/prediction/outcome_prediction/Transformer/inference/compute_shap_explanations_over_time.py --output_dir=/home/users/k/klug/output/opsum/transformer_72h/death_shap_values/captum --features_path=$OPSUM_FEATURES_PATH --labels_path=$OPSUM_LABELS_PATH --outcome="3M Death" --model_weights_path /home/users/k/klug/output/opsum/transformer_72h/death_shap_values/opsum_transformer_epoch=14_val_auroc=0.9105.ckpt --model_config_path /home/users/k/klug/output/opsum/transformer_72h/death_shap_values/hyperopt_selected_transformer_death_20230409_060354.json --n_samples_background 1795 --library "captum"
+
 cp $OPSUM_LOGS_PATH /home/users/k/klug/output/opsum/transformer_72h/shap_values/logs

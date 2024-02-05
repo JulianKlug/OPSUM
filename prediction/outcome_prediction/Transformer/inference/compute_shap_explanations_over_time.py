@@ -16,10 +16,10 @@ from prediction.outcome_prediction.Transformer.architecture import OPSUMTransfor
 from prediction.outcome_prediction.Transformer.lightning_wrapper import LitModel
 from prediction.outcome_prediction.data_loading.data_loader import load_data
 from prediction.outcome_prediction.Transformer.utils.utils import prepare_dataset, DictLogger
-from prediction.utils.shap_helper_functions import check_shap_version_compatibility
+#from prediction.utils.shap_helper_functions import check_shap_version_compatibility
 
 # Shap values require very specific versions
-check_shap_version_compatibility()
+#check_shap_version_compatibility()
 
 
 def compute_shap_explanations_over_time(train_data, test_data, model_weights_path:str, n_time_steps:int, model_config:dict,
@@ -72,6 +72,7 @@ def compute_shap_explanations_over_time(train_data, test_data, model_weights_pat
         modified_time_steps = ts + 1
         X_train_with_first_n_ts = X_train[:, 0:modified_time_steps, :]
         X_test_with_first_n_ts = X_test[:, 0:modified_time_steps, :]
+        print('Using GPU: ', use_gpu)
         train_dataset, test_dataset = prepare_dataset((X_train_with_first_n_ts, X_test_with_first_n_ts, y_train, y_test),
                                                       balanced=model_config['balanced'],
                                                       rescale=True,
@@ -95,7 +96,11 @@ def compute_shap_explanations_over_time(train_data, test_data, model_weights_pat
             shap_values = explainer.shap_values(test_samples)
             shap_values_over_ts.append(shap_values)
         elif library == 'captum':
-            gradient_shap = GradientShap(trained_model.model)
+            print(f'Using captum library for SHAP computation for time step {ts}, {test_samples.shape}, {background.shape}')
+
+            gradient_shap = GradientShap(trained_model.model.to(background.device))
+            print(f'Devices: {background.device}, {test_samples.device}')
+           
             attributions_gs = gradient_shap.attribute(test_samples,
                                                       baselines=background,
                                                       target=(-1, 0))
@@ -103,7 +108,7 @@ def compute_shap_explanations_over_time(train_data, test_data, model_weights_pat
         else:
             raise ValueError(f'Library {library} not supported.')
 
-    return np.array(shap_values_over_ts)
+    return shap_values_over_ts
 
 
 if __name__ == '__main__':
@@ -125,8 +130,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
 
-    output_dir = os.path.dirname(args.model_weights_path)
-
     pids, train_data, test_data, train_splits, test_features_lookup_table = load_data(args.features_path, args.labels_path, args.outcome, args.test_size, args.n_splits, args.seed)
 
     # load model config
@@ -137,11 +140,11 @@ if __name__ == '__main__':
     # Time execution
     start_time = time.time()
     shap_values_over_ts = compute_shap_explanations_over_time((fold_X_train, fold_y_train), test_data, args.model_weights_path, args.n_time_steps, model_config,
-                                                              n_samples_background=args.n_samples_background,
+                                                              n_samples_background=args.n_samples_background, library=args.library,
                                                               use_gpu=args.use_gpu)
     print('Time elapsed: {:.2f} min'.format((time.time() - start_time) / 60))
 
-    with open(os.path.join(output_dir, 'transformer_explainer_shap_values_over_ts.pkl'), 'wb') as handle:
+    with open(os.path.join(args.output_dir, 'transformer_explainer_shap_values_over_ts.pkl'), 'wb') as handle:
         pickle.dump(shap_values_over_ts, handle)
 
 
