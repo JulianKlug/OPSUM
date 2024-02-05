@@ -83,8 +83,8 @@ def save_train_splits(features_path: str, labels_path:str, outcome:str, output_d
 
 
 if __name__ == '__main__':
-    features_path = '/Users/jk1/temp/opsum_prepro_output/not_winsorized/gsu_Extraction_20220815_prepro_08052023_102951/non_winsorized_preprocessed_features_08052023_102951.csv'
-    labels_path = '/Users/jk1/temp/opsum_prepro_output/not_winsorized/gsu_Extraction_20220815_prepro_08052023_102951/non_winsorized_preprocessed_outcomes_08052023_102951.csv'
-    output_dir = '/Users/jk1/temp/opsum_prepro_output/not_winsorized/gsu_Extraction_20220815_prepro_08052023_102951/non_winsorized_data_splits'
-    outcome = '3M mRS 0-2'
+    features_path = '/Users/jk1/temp/opsum_prepro_output/gsu_prepro_01012023_233050/preprocessed_features_01012023_233050.csv'
+    labels_path = '/Users/jk1/temp/opsum_prepro_output/gsu_prepro_01012023_233050/preprocessed_outcomes_01012023_233050.csv'
+    output_dir = '/Users/jk1/temp/opsum_prepro_output/gsu_prepro_01012023_233050/data_splits'
+    outcome = 'Death in hospital'
     save_train_splits(features_path, labels_path, outcome, output_dir)
