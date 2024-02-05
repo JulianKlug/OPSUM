@@ -67,7 +67,7 @@ def train_model(
 
     Returns: void
     """
-    saved_args = locals()
+    saved_args = locals().copy()
     saved_args.pop('CVheader')
     saved_args.pop('errorHeader')
 

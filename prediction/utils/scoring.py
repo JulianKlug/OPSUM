@@ -1,11 +1,16 @@
 import tensorflow.keras.backend as K
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc
+from prediction.utils.utils import ensure_tensor
 
 
 def precision(y_true, y_pred):
-    true_positives = K.sum(K.round(K.clip(K.constant(y_true) * K.constant(y_pred), 0, 1)))
-    predicted_positives = K.sum(K.round(K.clip(K.constant(y_pred), 0, 1)))
+    # Ensure that y_true and y_pred are tensors (replaces K.constant, which fails if tensor is passed)
+    y_true = ensure_tensor(y_true)
+    y_pred = ensure_tensor(y_pred)
+
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
     precision = true_positives / (predicted_positives + K.epsilon())
     return precision
 
@@ -17,22 +22,33 @@ def specificity(y_true, y_pred):
     Returns:
     Specificity score
     """
-    neg_y_true = 1 - y_true
-    neg_y_pred = 1 - y_pred
-    fp = K.sum(K.constant(neg_y_true) * K.constant(y_pred))
-    tn = K.sum(K.constant(neg_y_true) * K.constant(neg_y_pred))
+    # Ensure that y_true and y_pred are tensors (replaces K.constant, which fails if tensor is passed)
+    neg_y_true = ensure_tensor(1 - y_true)
+    neg_y_pred = ensure_tensor(1 - y_pred)
+    y_pred = ensure_tensor(y_pred)
+
+    fp = K.sum(neg_y_true * y_pred)
+    tn = K.sum(neg_y_true * neg_y_pred)
     specificity = tn / (tn + fp + K.epsilon())
     return specificity
 
 
 def recall(y_true, y_pred):
-    true_positives = K.sum(K.round(K.clip(K.constant(y_true) * K.constant(y_pred), 0, 1)))
-    possible_positives = K.sum(K.round(K.clip(K.constant(y_true), 0, 1)))
+    # Ensure that y_true and y_pred are tensors (replaces K.constant, which fails if tensor is passed)
+    y_true = ensure_tensor(y_true)
+    y_pred = ensure_tensor(y_pred)
+
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
     recall = true_positives / (possible_positives + K.epsilon())
     return recall
 
 
 def matthews(y_true, y_pred):
+    # Ensure that y_true and y_pred are tensors (replaces K.constant, which fails if tensor is passed)
+    y_true = ensure_tensor(y_true)
+    y_pred = ensure_tensor(y_pred)
+
     y_pred_pos = K.round(K.clip(y_pred, 0, 1))
     y_pred_neg = 1 - y_pred_pos
     y_pos = K.round(K.clip(y_true, 0, 1))
