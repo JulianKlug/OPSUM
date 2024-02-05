@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:turing:1                    # Number of GPUs
 #SBATCH --ntasks=1
 #SBATCH --mem=100G                     # Job memory request
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=14
 #SBATCH --time=01:00:00               # Time limit hrs:min:sec
 #SBATCH --output=/home/users/k/klug/logs/opsum/opsum_gridsearch_%j.log   # Standard output and error log
 
@@ -19,6 +19,7 @@ export OPSUM_FEATURES_PATH="/home/users/k/klug/data/opsum/gsu_prepro_01012023_23
 export OPSUM_LABELS_PATH="/home/users/k/klug/data/opsum/gsu_prepro_01012023_233050/preprocessed_outcomes_01012023_233050.csv"
 export OPSUM_LOGS_PATH="/home/users/k/klug/logs/opsum/opsum_gridsearch_${SLURM_JOB_ID}.log"
 
+conda deactivate
 conda activate opsum
 export PYTHONPATH="${PYTHONPATH}:/home/users/k/klug/opsum"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/
