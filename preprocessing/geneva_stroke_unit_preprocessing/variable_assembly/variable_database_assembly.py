@@ -1,6 +1,8 @@
 import pandas as pd
 import os
 
+from preprocessing.geneva_stroke_unit_preprocessing.imaging_preprocessing.imaging_data_preprocessing import \
+    preprocess_imaging_data
 from preprocessing.geneva_stroke_unit_preprocessing.patient_selection.filter_ehr_patients import filter_ehr_patients
 from preprocessing.geneva_stroke_unit_preprocessing.patient_selection.restrict_to_patient_selection import restrict_to_patient_selection
 from preprocessing.geneva_stroke_unit_preprocessing.stroke_registry_params_preprocessing.admission_params_preprocessing import preprocess_admission_data
@@ -37,14 +39,27 @@ def get_first_sample_date(df):
 
 
 def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: str,
-                               patient_selection_path: str, verbose: bool = False,
+                               patient_selection_path: str, imaging_data_path: str = '',
+                               verbose: bool = False,
                                use_stroke_registry_data: bool = True,
+                               restrict_to_patients_with_imaging_data_available: bool = False,
                                log_dir:str = '') -> pd.DataFrame:
     """
     1. Restrict to patient selection (done after geneva_stroke_unit_preprocessing for EHR data and before processing for stroke registry data)
     2. Preprocess EHR and stroke registry data
     3. Restrict to variable selection
-    4. Assemble database from lab/scales/ventilation/vitals + stroke registry subparts
+    4. Assemble database from lab/scales/ventilation/vitals + stroke registry subparts + imaging data (if available)
+
+    Args:
+    raw_data_path: Path to the raw data
+    stroke_registry_data_path: Path to the stroke registry data
+    patient_selection_path: Path to the patient selection file
+    imaging_data_path: Path to the imaging data (optional)
+    verbose: If True, print progress
+    use_stroke_registry_data: If True, use stroke registry data
+    restrict_to_patients_with_imaging_data_available: If True, restrict only to patients with imaging data available
+    log_dir: Path to the log directory
+
     :return: Dataframe with all features under sample_label, value, sample_date, source
     """
     # load eds data
@@ -98,8 +113,16 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
     spo2_df.rename(columns={'spo2': 'value', 'datetime': 'sample_date'}, inplace=True)
     spo2_df['source'] = 'EHR'
 
+    # Imaging data
+    if imaging_data_path == '':
+        imaging_data_df = pd.DataFrame()
+    else:
+        # Load imaging data (Tmax > 10, Tmax > 8, Tmax > 6, Tmax > 4, CBF < 30%)
+        imaging_data_df = preprocess_imaging_data(imaging_data_path, patient_selection_path)
+        imaging_data_df['source'] = 'EHR'
+
     # Assemble feature database
-    feature_database = pd.concat([preprocessed_lab_df, scales_df, fio2_df, spo2_df, vitals_df], ignore_index=True)
+    feature_database = pd.concat([preprocessed_lab_df, scales_df, fio2_df, spo2_df, vitals_df, imaging_data_df], ignore_index=True)
     feature_database = restrict_to_patient_selection(feature_database, patient_selection_path, verbose=verbose,
                                                      restrict_to_event_period=True)
 
@@ -151,7 +174,18 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
 
     # Restrict to variable selection
     variable_selection_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'selected_variables.xlsx')
+    if imaging_data_path != '':
+        # add imaging variables to the variable selection
+        variable_selection_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                               'selected_variables_with_imaging.xlsx')
     feature_database = restrict_to_selected_variables(feature_database, variable_selection_path, enforce=True)
+
+    # Restrict to patients with imaging data available
+    if restrict_to_patients_with_imaging_data_available:
+        # restrict to patients with imaging data
+        cids_with_imaging_data = imaging_data_df[(imaging_data_df.sample_label == 'CBF')
+                                            & (imaging_data_df.value.notnull())]['case_admission_id'].unique()
+        feature_database = feature_database[feature_database['case_admission_id'].isin(cids_with_imaging_data)]
 
     if log_dir != '':
         # save cids of patients in selection and that are not included in the feature_database

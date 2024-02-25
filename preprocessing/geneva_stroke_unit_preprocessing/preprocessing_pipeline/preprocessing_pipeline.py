@@ -16,14 +16,17 @@ from preprocessing.geneva_stroke_unit_preprocessing.variable_assembly.variable_d
 from preprocessing.geneva_stroke_unit_preprocessing.variable_assembly.relative_timestamps import transform_to_relative_timestamps
 
 
-def preprocess(ehr_data_path:str, stroke_registry_data_path:str, patient_selection_path:str,
-               log_dir: str, verbose:bool=True, desired_time_range:int=72) -> pd.DataFrame:
+def preprocess(ehr_data_path:str, stroke_registry_data_path:str, patient_selection_path:str, log_dir: str,
+               imaging_data_path:str='', restrict_to_patients_with_imaging_data_available:bool=False,
+                verbose:bool=True, desired_time_range:int=72) -> pd.DataFrame:
     """
     Apply geneva_stroke_unit_preprocessing pipeline detailed in ./geneva_stroke_unit_preprocessing/readme.md
     :param ehr_data_path: path to EHR data
     :param stroke_registry_data_path: path to stroke registry (admission) data
     :param patient_selection_path: path to patient selection file
     :param log_dir: path to logging directory (this will receive logs of excluded patients and those that were not found)
+    :param imaging_data_path: path to imaging data
+    :param restrict_to_patients_with_imaging_data_available: if True, restricts the database to patients with imaging data available
     :param verbose:
     :param desired_time_range: number of hours to use for imputation
     :return: preprocessed feature Dataframe, preprocessed outcome dataframe
@@ -32,9 +35,11 @@ def preprocess(ehr_data_path:str, stroke_registry_data_path:str, patient_selecti
     # 1. Restrict to patient selection (& filter out patients with no EHR data or EHR data with wrong dates)
     # 2. Preprocess EHR and stroke registry variables
     # 3. Restrict to variable selection
-    # 4. Assemble database from lab/scales/ventilation/vitals + stroke registry subparts
+    # 4. Assemble database from lab/scales/ventilation/vitals + stroke registry subparts +/- imaging
     print('STARTING VARIABLE PREPROCESSING')
     feature_df = assemble_variable_database(ehr_data_path, stroke_registry_data_path, patient_selection_path,
+                                            imaging_data_path=imaging_data_path,
+                                            restrict_to_patients_with_imaging_data_available=restrict_to_patients_with_imaging_data_available,
                                             log_dir=log_dir, verbose=verbose)
     print(f'A. Number of patients: {feature_df.case_admission_id.nunique()}')
 
@@ -78,7 +83,13 @@ def preprocess(ehr_data_path:str, stroke_registry_data_path:str, patient_selecti
 
 
 def preprocess_and_save(ehr_data_path:str, stroke_registry_data_path:str, patient_selection_path:str, output_dir:str,
+                        imaging_data_path:str='', restrict_to_patients_with_imaging_data_available:bool=False,
                         feature_file_prefix:str = 'preprocessed_features', outcome_file_prefix:str = 'preprocessed_outcomes', verbose:bool=True):
+
+    # verify that all provided paths exist
+    for path in [ehr_data_path, stroke_registry_data_path, patient_selection_path, imaging_data_path]:
+        if path != '':
+            assert os.path.exists(path), f'Path {path} does not exist'
 
     timestamp = time.strftime("%d%m%Y_%H%M%S")
     desired_time_range = 72
@@ -92,7 +103,10 @@ def preprocess_and_save(ehr_data_path:str, stroke_registry_data_path:str, patien
         json.dump(saved_args, fp)
 
     preprocessed_feature_df, preprocessed_outcome_df = preprocess(ehr_data_path, stroke_registry_data_path,
-                                                                  patient_selection_path, verbose=verbose, log_dir=log_dir,
+                                                                  patient_selection_path, log_dir=log_dir,
+                                                                  imaging_data_path=imaging_data_path,
+                                                                  restrict_to_patients_with_imaging_data_available = restrict_to_patients_with_imaging_data_available,
+                                                                    verbose=verbose,
                                                                   desired_time_range=desired_time_range)
     features_save_path = os.path.join(output_dir, f'{feature_file_prefix}_{timestamp}.csv')
     outcomes_save_path = os.path.join(output_dir, f'{outcome_file_prefix}_{timestamp}.csv')
@@ -110,13 +124,17 @@ if __name__ == '__main__':
     """
     Example usage:
     python preprocessing_pipeline.py.py -e /Users/jk1/-/-/-/Extraction20220629 -r /Users/jk1/-/-/-/post_hoc_modified/stroke_registry_post_hoc_modified.xlsx 
-    -p /Users/jk1/-/-/high_frequency_data_patient_selection_with_details.csv -o /Users/jk1/-/opsum_prepro_output
+    -p /Users/jk1/-/-/high_frequency_data_patient_selection_with_details.csv -o /Users/jk1/-/opsum_prepro_output -i /Users/jk1/.../perfusion_imaging_data/random_subset_for_imaging_extraction.xlsx
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('-e','--ehr', type=str, help='EHR data path')
     parser.add_argument('-r', '--registry', type=str, help='Registry data path')
     parser.add_argument('-p', '--patients', type=str, help='Patient selection file')
     parser.add_argument('-o', '--output_dir', type=str, help='Output directory')
+    parser.add_argument('-i', '--imaging', type=str, help='Imaging data path', default='')
+    parser.add_argument('-ri', '--restrict_to_patients_with_imaging_data_available', action='store_true', help='Restrict to patients with imaging data available', default=False)
     args = parser.parse_args()
 
-    preprocess_and_save(args.ehr, args.registry, args.patients, args.output_dir)
+    preprocess_and_save(args.ehr, args.registry, args.patients, args.output_dir,
+                        imaging_data_path=args.imaging,
+                        restrict_to_patients_with_imaging_data_available=args.restrict_to_patients_with_imaging_data_available)

@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+import tensorflow.keras.backend as K
 
 # define function for balanced training
 def generate_balanced_arrays(X_train, y_train):
@@ -118,5 +119,5 @@ def save_json(obj, path):
 
 def ensure_tensor(x):
     if not isinstance(x, tf.Tensor):
-        x = tf.convert_to_tensor(x)
+        x = K.constant(x)
     return x

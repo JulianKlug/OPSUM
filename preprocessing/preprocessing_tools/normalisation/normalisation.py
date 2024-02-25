@@ -55,6 +55,11 @@ variables_to_normalize = [
 'LDL cholesterol calcule',
 'chlore',
 'lactate',
+'CBF',
+'T10',
+'T4',
+'T6',
+'T8',
 ]
 
 def normalise_data(df: pd.DataFrame, reference_population_normalisation_parameters_path:str = '',
@@ -89,6 +94,11 @@ def normalise_data(df: pd.DataFrame, reference_population_normalisation_paramete
     if verbose:
         print('Winsorizing...')
     for variable in tqdm(variables_to_normalize):
+        if variable not in winsorized_restricted_feature_df.sample_label.unique():
+            if verbose:
+                print(f'Variable {variable} not found in the dataframe')
+            continue
+
         temp = winsorized_restricted_feature_df[winsorized_restricted_feature_df.sample_label == variable].value.copy()
         # skip variables with insufficient range (FiO2, GCS)
         winsorizing_parameters_df = winsorizing_parameters_df.append(

@@ -11,10 +11,14 @@ from prediction.utils.utils import check_data, ensure_dir
 
 
 def save_train_splits(features_path: str, labels_path:str, outcome:str, output_dir:str,
+                      test_pids_path:str=None, train_pids_path:str=None,
                       test_size:float=0.2, seed=42, n_splits=5):
     ensure_dir(output_dir)
     # save all arguments given to function as json
     args = locals()
+    # remove 'args' from args to avoid circular reference
+    args = {k: v for k, v in args.items() if k != 'args'}
+
     with open(os.path.join(output_dir, 'args.json'), 'w') as f:
         json.dump(args, f)
 
@@ -28,18 +32,32 @@ def save_train_splits(features_path: str, labels_path:str, outcome:str, output_d
     # test if data is corrupted
     check_data(X)
 
-    """
-    SPLITTING DATA
-    Splitting is done by patient id (and not admission id) as in case of the rare multiple admissions per patient there
-    would be a risk of data leakage otherwise split 'pid' in TRAIN and TEST pid = unique patient_id
-    """
     # Reduce every patient to a single outcome (to avoid duplicates)
     all_pids_with_outcome = link_patient_id_to_outcome(y, outcome)
-    pid_train, pid_test, y_pid_train, y_pid_test = train_test_split(all_pids_with_outcome.patient_id.tolist(),
-                                                                    all_pids_with_outcome.outcome.tolist(),
-                                                                    stratify=all_pids_with_outcome.outcome.tolist(),
-                                                                    test_size=test_size,
-                                                                    random_state=seed)
+
+    # Using predefined test and train patient ids
+    if test_pids_path is not None:
+        pid_test = pd.read_csv(test_pids_path, sep='\t', dtype=str).patient_id.tolist()
+        pid_train = pd.read_csv(train_pids_path, sep='\t', dtype=str).patient_id.tolist()
+
+        # Reduce to pids actually present in the data
+        pid_test = [pid for pid in pid_test if pid in all_pids_with_outcome.patient_id.tolist()]
+        pid_train = [pid for pid in pid_train if pid in all_pids_with_outcome.patient_id.tolist()]
+
+        y_pid_test = all_pids_with_outcome[all_pids_with_outcome.patient_id.isin(pid_test)].outcome.tolist()
+        y_pid_train = all_pids_with_outcome[all_pids_with_outcome.patient_id.isin(pid_train)].outcome.tolist()
+
+    else:
+        """
+        SPLITTING DATA
+        Splitting is done by patient id (and not admission id) as in case of the rare multiple admissions per patient there
+        would be a risk of data leakage otherwise split 'pid' in TRAIN and TEST pid = unique patient_id
+        """
+        pid_train, pid_test, y_pid_train, y_pid_test = train_test_split(all_pids_with_outcome.patient_id.tolist(),
+                                                                        all_pids_with_outcome.outcome.tolist(),
+                                                                        stratify=all_pids_with_outcome.outcome.tolist(),
+                                                                        test_size=test_size,
+                                                                        random_state=seed)
 
     # save patient ids used for testing / training
     pd.DataFrame(pid_train, columns=['patient_id']).to_csv(
@@ -83,8 +101,32 @@ def save_train_splits(features_path: str, labels_path:str, outcome:str, output_d
 
 
 if __name__ == '__main__':
-    features_path = '/Users/jk1/temp/opsum_prepro_output/gsu_prepro_01012023_233050/preprocessed_features_01012023_233050.csv'
-    labels_path = '/Users/jk1/temp/opsum_prepro_output/gsu_prepro_01012023_233050/preprocessed_outcomes_01012023_233050.csv'
-    output_dir = '/Users/jk1/temp/opsum_prepro_output/gsu_prepro_01012023_233050/data_splits'
-    outcome = 'Death in hospital'
-    save_train_splits(features_path, labels_path, outcome, output_dir)
+    '''
+    Example usage:
+    python data_splits_to_file.py -f '/Users/jk1/.../preprocessed_features_24022024_133425.csv' -l '/Users/jk1/.../preprocessed_outcomes_24022024_133425.csv' -o '3M mRS 0-2' -ptest '/Users/jk1/.../pid_test.tsv' -ptrain '/Users/jk1/.../pid_train.tsv' -od '/Users/jk1/.../train_data_splits' -ts 0.2 -s 42 -ns 5
+    
+    If pid_test and pid_train are given, the data is split according to these patient ids
+    If pid_test and pid_train are not given, the data is split randomly  
+    '''
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-f', '--features_path', type=str, required=True)
+    parser.add_argument('-l', '--labels_path', type=str, required=True)
+    parser.add_argument('-o', '--outcome', type=str, required=True)
+    parser.add_argument('-ptest', '--pid_test_path', type=str, required=False, default=None)
+    parser.add_argument('-ptrain', '--pid_train_path', type=str, required=False, default=None)
+    parser.add_argument('-od', '--output_dir', type=str, required=False, default=None)
+
+    # optional arguments
+    parser.add_argument('-ts', '--test_size', type=float, required=False, default=0.2)
+    parser.add_argument('-s', '--seed', type=int, required=False, default=42)
+    parser.add_argument('-ns', '--n_splits', type=int, required=False, default=5)
+
+    args = parser.parse_args()
+
+    if args.output_dir is None:
+        output_dir = os.path.join(os.path.dirname(args.features_path), f'{"_".join(args.outcome.split(" "))}_train_data_splits')
+
+    save_train_splits(features_path=args.features_path, labels_path=args.labels_path, outcome=args.outcome,
+                        output_dir=output_dir, test_pids_path=args.pid_test_path, train_pids_path=args.pid_train_path,
+                        test_size=args.test_size, seed=args.seed, n_splits=args.n_splits)

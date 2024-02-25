@@ -10,9 +10,13 @@ from prediction.outcome_prediction.data_loading.data_formatting import format_to
     features_to_numpy, numpy_to_lookup_table, feature_order_verification
 from prediction.utils.utils import check_data, save_json
 
-
+# DEPRECATED
+# Use test_LSTM with -e flag instead
 def external_validation(model_weights_dir: str, features_path: str, labels_path: str, output_dir: str,
                         model_config: dict, outcome: str):
+    raise DeprecationWarning('Use test_LSTM with -e flag instead')
+    # TODO: rewrite this function to use test_LSTM with -e flag instead
+
     model_name = '_'.join([model_config['activation'], str(model_config['batch']),
                            model_config['data'], str(model_config['dropout']), str(model_config['layers']),
                            str(model_config['masking']), model_config['optimizer'], outcome,
