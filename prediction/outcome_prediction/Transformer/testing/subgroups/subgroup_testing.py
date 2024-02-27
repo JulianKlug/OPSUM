@@ -13,7 +13,8 @@ from preprocessing.preprocessing_tools.normalisation.reverse_normalisation impor
 
 
 def test_model_on_subgroups(features_path, labels_path, normalisation_parameters_path, model_weights_dir, model_config_path, outcome, output_dir,
-                                  seed=42, test_size=0.2, n_splits=5, use_gpu=False, verbose: bool = False):
+                            covid_subgroup_path = None, imaging_subgroup_path = None,
+                            seed=42, test_size=0.2, n_splits=5, use_gpu=False, verbose: bool = False):
     """
     Test models from trained folds on test data split by subgroups.
     Subgroups:
@@ -36,6 +37,10 @@ def test_model_on_subgroups(features_path, labels_path, normalisation_parameters
             Outcome to predict.
         output_dir: str
             Path to output directory.
+        covid_subgroup_path: str
+            Path to csv file containing covid subgroup case / patient ids.
+        imaging_subgroup_path: str
+            Path to csv file containing patient ids of patients with imaging (from restricted to imaging extraction)
         seed: int
             Random seed.
         test_size: float
@@ -85,6 +90,7 @@ def test_model_on_subgroups(features_path, labels_path, normalisation_parameters
     model_config = json.load(open(model_config_path, 'r'))
 
     # Define subgroups
+    # every subgroup will be associated to the indices of the respective patients in the test set
     defined_subgroups = {
         'NIHSS': [],
         'mrs': [],
@@ -93,7 +99,24 @@ def test_model_on_subgroups(features_path, labels_path, normalisation_parameters
         'treatment': []
     }
 
+    # patient indices (!= patient_id)
     all_pidx = set(non_norm_baseline_t0_test_X_df.pidx.unique())
+
+    # Define COVID subgroup
+    if covid_subgroup_path is not None:
+        covid_subgroup_df = pd.read_csv(covid_subgroup_path, dtype=str)
+        # indices of covid patients in test set
+        covid_pidx = [test_features_lookup_table['case_admission_id'][cid] for cid in covid_subgroup_df.case_admission_id.unique()
+                        if cid in test_features_lookup_table['case_admission_id'].keys()]
+        defined_subgroups['covid'] = covid_pidx
+
+    # Define with imaging subgroup
+    if imaging_subgroup_path is not None:
+        imaging_subgroup_df = pd.read_csv(imaging_subgroup_path, dtype=str)
+        # indices of patients with imaging data available in test set
+        imaging_pidx = [test_features_lookup_table['case_admission_id'][cid] for cid in imaging_subgroup_df.case_admission_id.unique()
+                        if cid in test_features_lookup_table['case_admission_id'].keys()]
+        defined_subgroups['with_imaging'] = imaging_pidx
 
     # Define NIHSS subgroups
     minor_stroke_pidx = set(non_norm_baseline_t0_test_X_df[(non_norm_baseline_t0_test_X_df.sample_label == 'max_NIHSS') & (non_norm_baseline_t0_test_X_df.value <= 5)].pidx.unique())
@@ -174,8 +197,13 @@ def test_model_on_subgroups(features_path, labels_path, normalisation_parameters
 
 
 if __name__ == '__main__':
-    import argparse
+    # Example usage
+    # -f /Users/jk1/.../preprocessed_features_01012023_233050.csv -l /Users/jk1/../preprocessed_outcomes_01012023_233050.csv -n /Users/jk1/../normalisation_parameters.csv
+    # -w /Users/jk1/../trained_models -c /Users/jk1/../hyperopt_selected_transformer_20230402_184459.json
+    # -o "3M mRS 0-2" -O /Users/jk1/../subgroup_testing_output
+    # -i /Users/jk1/../imaging_subset_cids.csv -cov /Users/jk1/../opsum_covid_subset.csv
 
+    import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--features_path', type=str, required=True)
     parser.add_argument('-l', '--labels_path', type=str, required=True)
@@ -184,6 +212,8 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--model_config_path', type=str, required=True)
     parser.add_argument('-o', '--outcome', type=str, required=True)
     parser.add_argument('-O', '--output_dir', type=str, required=True)
+    parser.add_argument('-i', '--imaging_subgroup_path', type=str, required=False, default=None)
+    parser.add_argument('-cov', '--covid_subgroup_path', type=str, required=False, default=None)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--test_size', type=float, default=0.2)
     parser.add_argument('--n_splits', type=int, default=5)
