@@ -92,11 +92,11 @@ def test_model_on_subgroups(features_path, labels_path, normalisation_parameters
     # Define subgroups
     # every subgroup will be associated to the indices of the respective patients in the test set
     defined_subgroups = {
-        'NIHSS': [],
-        'mrs': [],
-        'age': [],
-        'sex': [],
-        'treatment': []
+     #   'NIHSS': [],
+     #   'mrs': [],
+     #   'age': [],
+     #   'sex': [],
+     #   'treatment': []
     }
 
     # patient indices (!= patient_id)
@@ -111,6 +111,7 @@ def test_model_on_subgroups(features_path, labels_path, normalisation_parameters
         covid_neg_pidx = all_pidx - set(covid_pos_pidx)
         defined_subgroups['covid'] = [('covid_positive', list(covid_pos_pidx)), ('covid_negative', list(covid_neg_pidx))]
 
+
     # Define with imaging subgroup
     if imaging_subgroup_path is not None:
         imaging_subgroup_df = pd.read_csv(imaging_subgroup_path, dtype=str)
@@ -119,55 +120,56 @@ def test_model_on_subgroups(features_path, labels_path, normalisation_parameters
                         if cid in test_features_lookup_table['case_admission_id'].keys()]
         without_imaging_pidx = all_pidx - set(with_imaging_pidx)
         defined_subgroups['with_imaging'] = [('with_imaging_available', list(with_imaging_pidx)),
-                                             ('without_imaging_available', list(without_imaging_pidx))]
+                                           ('without_imaging_available', list(without_imaging_pidx))]
 
-    # Define NIHSS subgroups
-    minor_stroke_pidx = set(non_norm_baseline_t0_test_X_df[(non_norm_baseline_t0_test_X_df.sample_label == 'max_NIHSS') & (non_norm_baseline_t0_test_X_df.value <= 5)].pidx.unique())
-    severe_stroke_pidx = all_pidx - minor_stroke_pidx
-    defined_subgroups['NIHSS'].append(('NIHSS <= 5', list(minor_stroke_pidx)))
-    defined_subgroups['NIHSS'].append(('NIHSS > 5', list(severe_stroke_pidx)))
+    ## Define NIHSS subgroups
+    #minor_stroke_pidx = set(non_norm_baseline_t0_test_X_df[(non_norm_baseline_t0_test_X_df.sample_label == 'max_NIHSS') & (non_norm_baseline_t0_test_X_df.value <= 5)].pidx.unique())
+    #severe_stroke_pidx = all_pidx - minor_stroke_pidx
+    #defined_subgroups['NIHSS'].append(('NIHSS <= 5', list(minor_stroke_pidx)))
+    #defined_subgroups['NIHSS'].append(('NIHSS > 5', list(severe_stroke_pidx)))
 
-    # Define mrs subgroups
-    pidx_mrs3_to_5 = set(list(non_norm_baseline_t0_test_X_df[(
-                                                                     non_norm_baseline_t0_test_X_df.sample_label == 'prestroke_disability_(rankin)_3.0') & (
-                                                                     non_norm_baseline_t0_test_X_df.value == 1)].pidx.unique())
-                         + list(non_norm_baseline_t0_test_X_df[
-                                                                    (non_norm_baseline_t0_test_X_df.sample_label == 'prestroke_disability_(rankin)_4.0') & (
-                                                                     non_norm_baseline_t0_test_X_df.value == 1)].pidx.unique())
-                         + list(non_norm_baseline_t0_test_X_df[
-                                                                    (non_norm_baseline_t0_test_X_df.sample_label == 'prestroke_disability_(rankin)_5.0') & (
-                                                                            non_norm_baseline_t0_test_X_df.value == 1)].pidx.unique()))
-    pidx_mrs0_to_2 = all_pidx - pidx_mrs3_to_5
-    defined_subgroups['mrs'].append(('mRS 0-2', list(pidx_mrs0_to_2)))
-    defined_subgroups['mrs'].append(('mRS 3-5', list(pidx_mrs3_to_5)))
+    ## Define mrs subgroups
+    #pidx_mrs3_to_5 = set(list(non_norm_baseline_t0_test_X_df[(
+    #                                                                 non_norm_baseline_t0_test_X_df.sample_label == 'prestroke_disability_(rankin)_3.0') & (
+    #                                                                 non_norm_baseline_t0_test_X_df.value == 1)].pidx.unique())
+    #                     + list(non_norm_baseline_t0_test_X_df[
+    #                                                                (non_norm_baseline_t0_test_X_df.sample_label == 'prestroke_disability_(rankin)_4.0') & (
+    #                                                                 non_norm_baseline_t0_test_X_df.value == 1)].pidx.unique())
+    #                     + list(non_norm_baseline_t0_test_X_df[
+    #                                                                (non_norm_baseline_t0_test_X_df.sample_label == 'prestroke_disability_(rankin)_5.0') & (
+    #                                                                        non_norm_baseline_t0_test_X_df.value == 1)].pidx.unique()))
+    #pidx_mrs0_to_2 = all_pidx - pidx_mrs3_to_5
+    #defined_subgroups['mrs'].append(('mRS 0-2', list(pidx_mrs0_to_2)))
+    #defined_subgroups['mrs'].append(('mRS 3-5', list(pidx_mrs3_to_5)))
 
-    # Define age subgroups
-    pidx_age_under_70 = set(non_norm_baseline_t0_test_X_df[(non_norm_baseline_t0_test_X_df.sample_label == 'age') & (
-                non_norm_baseline_t0_test_X_df.value <= 70)].pidx.unique())
-    pidx_age_over_70 = all_pidx - pidx_age_under_70
-    defined_subgroups['age'].append(('age <= 70', list(pidx_age_under_70)))
-    defined_subgroups['age'].append(('age > 70', list(pidx_age_over_70)))
+    ## Define age subgroups
+    #pidx_age_under_70 = set(non_norm_baseline_t0_test_X_df[(non_norm_baseline_t0_test_X_df.sample_label == 'age') & (
+    #            non_norm_baseline_t0_test_X_df.value <= 70)].pidx.unique())
+    #pidx_age_over_70 = all_pidx - pidx_age_under_70
+    #defined_subgroups['age'].append(('age <= 70', list(pidx_age_under_70)))
+    #defined_subgroups['age'].append(('age > 70', list(pidx_age_over_70)))
 
-    # Define sex subgroups
-    pidx_sex_male = set(non_norm_baseline_t0_test_X_df[(non_norm_baseline_t0_test_X_df.sample_label == 'sex_male') & (
-                non_norm_baseline_t0_test_X_df.value == 1)].pidx.unique())
-    pidx_sex_female = all_pidx - pidx_sex_male
-    defined_subgroups['sex'].append(('male', list(pidx_sex_male)))
-    defined_subgroups['sex'].append(('female', list(pidx_sex_female)))
+    ## Define sex subgroups
+    #pidx_sex_male = set(non_norm_baseline_t0_test_X_df[(non_norm_baseline_t0_test_X_df.sample_label == 'sex_male') & (
+    #            non_norm_baseline_t0_test_X_df.value == 1)].pidx.unique())
+    #pidx_sex_female = all_pidx - pidx_sex_male
+    #defined_subgroups['sex'].append(('male', list(pidx_sex_male)))
+    #defined_subgroups['sex'].append(('female', list(pidx_sex_female)))
 
-    # Define treatment subgroups
-    pidx_with_IAT = set(non_norm_baseline_t0_test_X_df[
-                            (non_norm_baseline_t0_test_X_df.sample_label == 'categorical_iat_no_iat') & (
-                                        non_norm_baseline_t0_test_X_df.value == 0)].pidx.unique())
-    pidx_with_IVT = set(non_norm_baseline_t0_test_X_df[
-                            (non_norm_baseline_t0_test_X_df.sample_label == 'categorical_ivt_no_ivt') & (
-                                        non_norm_baseline_t0_test_X_df.value == 0)].pidx.unique())
-    pidx_with_only_IVT = pidx_with_IVT - pidx_with_IAT
-    pidx_with_no_ttt = all_pidx - pidx_with_IAT - pidx_with_IVT
+    ## Define treatment subgroups
+    #pidx_with_IAT = set(non_norm_baseline_t0_test_X_df[
+    #                        (non_norm_baseline_t0_test_X_df.sample_label == 'categorical_iat_no_iat') & (
+    #                                    non_norm_baseline_t0_test_X_df.value == 0)].pidx.unique())
+    #pidx_with_IVT = set(non_norm_baseline_t0_test_X_df[
+    #                        (non_norm_baseline_t0_test_X_df.sample_label == 'categorical_ivt_no_ivt') & (
+    #                                    non_norm_baseline_t0_test_X_df.value == 0)].pidx.unique())
+    #pidx_with_only_IVT = pidx_with_IVT - pidx_with_IAT
+    #pidx_with_no_ttt = all_pidx - pidx_with_IAT - pidx_with_IVT
 
-    defined_subgroups['treatment'].append(('IAT (with_or_without IVT)', list(pidx_with_IAT)))
-    defined_subgroups['treatment'].append(('IVT only', list(pidx_with_IVT)))
-    defined_subgroups['treatment'].append(('no treatment', list(pidx_with_no_ttt)))
+    #defined_subgroups['treatment'].append(('IAT (with_or_without IVT)', list(pidx_with_IAT)))
+    #defined_subgroups['treatment'].append(('IVT only', list(pidx_with_IVT)))
+    #defined_subgroups['treatment'].append(('no treatment', list(pidx_with_no_ttt)))
+
 
     ## Iterate through subgroups and evaluate performance
     for subgroup in tqdm(defined_subgroups.keys()):
