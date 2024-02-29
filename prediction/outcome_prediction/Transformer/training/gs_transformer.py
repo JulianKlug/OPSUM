@@ -116,6 +116,8 @@ if __name__ == '__main__':
     outcome = '_'.join(SPLIT_FILE.split('_')[3:6])
     if outcome.startswith('3M_Death'):
         outcome = '3M_Death'
+    elif outcome.startswith('Death_in'):
+        outcome = 'Death_in_hospital'
 
     OUTPUT_FOLDER = '/mnt/data1/klug/output/opsum/transformer_evaluation/'
     OUTPUT_FOLDER = path.join(OUTPUT_FOLDER, outcome)

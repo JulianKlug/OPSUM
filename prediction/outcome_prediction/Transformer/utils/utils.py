@@ -46,8 +46,8 @@ def prepare_dataset(scenario, balanced=False, aggregate=False, rescale=True, use
     scaler = StandardScaler()
 
     if rescale:
-        X_train = scaler.fit_transform(X_train.reshape(-1, 84)).reshape(X_train.shape)
-        X_val = scaler.transform(X_val.reshape(-1, 84)).reshape(X_val.shape)
+        X_train = scaler.fit_transform(X_train.reshape(-1, X_train.shape[-1])).reshape(X_train.shape)
+        X_val = scaler.transform(X_val.reshape(-1, X_train.shape[-1])).reshape(X_val.shape)
 
     if balanced:
         X_train_neg = X_train[y_train == 0]
