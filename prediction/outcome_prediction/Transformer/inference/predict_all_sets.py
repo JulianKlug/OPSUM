@@ -87,7 +87,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--features_path', type=str, required=True)
     parser.add_argument('-l', '--labels_path', type=str, required=True)
-    parser.add_argument('-w', '--model_weights_path', type=str, required=True)
+    parser.add_argument('-w', '--model_weights_dir', type=str, required=True)
     parser.add_argument('-c', '--model_config_path', type=str, required=True)
     parser.add_argument('-o', '--outcome', type=str, required=True)
     parser.add_argument('-O', '--output_dir', type=str, required=True)
@@ -99,24 +99,31 @@ if __name__ == '__main__':
 
 
     pids, train_data, test_data, train_splits, test_features_lookup_table = load_data(args.features_path, args.labels_path, args.outcome, args.test_size, args.n_splits, args.seed)
+    _, y_test = test_data
 
     # load model config
     model_config = json.load(open(args.model_config_path, 'r'))
 
-    fold_X_train, fold_X_val, fold_y_train, fold_y_val = train_splits[int(model_config['best_cv_fold'])]
+    for split_idx, train_split in enumerate(train_splits):
+        fold_X_train, fold_X_val, fold_y_train, fold_y_val = train_split
 
-    test_predictions, val_predictions, train_predictions = predict_all_sets((fold_X_train, fold_y_train), (fold_X_val, fold_y_val), test_data,
-                                   args.model_weights_path, model_config, args.use_gpu)
+        # find subfolder of model weights dir that ends with the split_idx
+        model_weights_subdir = [d for d in os.listdir(args.model_weights_dir) if d.endswith(str(split_idx))][0]
+        model_weights_path = [f for f in os.listdir(os.path.join(args.model_weights_dir, model_weights_subdir)) if f.endswith('.ckpt')][0]
+        model_weights_path = os.path.join(args.model_weights_dir, model_weights_subdir, model_weights_path)
 
-    output_dir = args.output_dir
-    # Save predictions as pickle
-    with open(os.path.join(output_dir, 'test_predictions.pkl'), 'wb') as f:
-        pickle.dump(test_predictions, f)
+        test_predictions, val_predictions, train_predictions = predict_all_sets((fold_X_train, fold_y_train), (fold_X_val, fold_y_val), test_data,
+                                       model_weights_path, model_config, args.use_gpu)
 
-    with open(os.path.join(output_dir, 'val_predictions.pkl'), 'wb') as f:
-        pickle.dump(val_predictions, f)
+        output_dir = args.output_dir
+        # Save predictions as pickle
+        with open(os.path.join(output_dir, f'test_predictions_fold{split_idx}.pkl'), 'wb') as f:
+            pickle.dump((y_test, test_predictions), f)
 
-    with open(os.path.join(output_dir, 'train_predictions.pkl'), 'wb') as f:
-        pickle.dump(train_predictions, f)
+        with open(os.path.join(output_dir, f'val_predictions_fold{split_idx}.pkl'), 'wb') as f:
+            pickle.dump((fold_y_val, val_predictions), f)
+
+        with open(os.path.join(output_dir, f'train_predictions_fold{split_idx}.pkl'), 'wb') as f:
+            pickle.dump((fold_y_train, train_predictions), f)
 
 
