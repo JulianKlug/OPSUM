@@ -106,17 +106,20 @@ def test_model_on_subgroups(features_path, labels_path, normalisation_parameters
     if covid_subgroup_path is not None:
         covid_subgroup_df = pd.read_csv(covid_subgroup_path, dtype=str)
         # indices of covid patients in test set
-        covid_pidx = [test_features_lookup_table['case_admission_id'][cid] for cid in covid_subgroup_df.case_admission_id.unique()
+        covid_pos_pidx = [test_features_lookup_table['case_admission_id'][cid] for cid in covid_subgroup_df.case_admission_id.unique()
                         if cid in test_features_lookup_table['case_admission_id'].keys()]
-        defined_subgroups['covid'] = covid_pidx
+        covid_neg_pidx = all_pidx - set(covid_pos_pidx)
+        defined_subgroups['covid'] = [('covid_positive', list(covid_pos_pidx)), ('covid_negative', list(covid_neg_pidx))]
 
     # Define with imaging subgroup
     if imaging_subgroup_path is not None:
         imaging_subgroup_df = pd.read_csv(imaging_subgroup_path, dtype=str)
         # indices of patients with imaging data available in test set
-        imaging_pidx = [test_features_lookup_table['case_admission_id'][cid] for cid in imaging_subgroup_df.case_admission_id.unique()
+        with_imaging_pidx = [test_features_lookup_table['case_admission_id'][cid] for cid in imaging_subgroup_df.case_admission_id.unique()
                         if cid in test_features_lookup_table['case_admission_id'].keys()]
-        defined_subgroups['with_imaging'] = imaging_pidx
+        without_imaging_pidx = all_pidx - set(with_imaging_pidx)
+        defined_subgroups['with_imaging'] = [('with_imaging_available', list(with_imaging_pidx)),
+                                             ('without_imaging_available', list(without_imaging_pidx))]
 
     # Define NIHSS subgroups
     minor_stroke_pidx = set(non_norm_baseline_t0_test_X_df[(non_norm_baseline_t0_test_X_df.sample_label == 'max_NIHSS') & (non_norm_baseline_t0_test_X_df.value <= 5)].pidx.unique())
