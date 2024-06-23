@@ -5,10 +5,27 @@ from tqdm import tqdm
 import pandas as pd
 import pickle
 
+from prediction.outcome_prediction.LSTM.LSTM import lstm_generator
 from prediction.outcome_prediction.LSTM.testing.test_LSTM import test_LSTM
 from prediction.outcome_prediction.data_loading.data_loader import load_data
 from prediction.utils.utils import save_json, ensure_dir
+from prediction.utils.scoring import precision, recall, matthews
 
+
+def LSTM_inference(X, y, model_weights_path, activation, batch, data, dropout, layers, masking, optimizer, outcome, units,
+              n_time_steps, n_channels):
+    model = lstm_generator(x_time_shape=n_time_steps, x_channels_shape=n_channels, masking=masking, n_units=units,
+                           activation=activation, dropout=dropout, n_layers=layers)
+
+    model.compile(loss='binary_crossentropy', optimizer=optimizer,
+                  metrics=['accuracy', precision, recall, matthews])
+
+    model.load_weights(model_weights_path)
+
+    # calculate overall model prediction
+    y_pred_test = model.predict(X)
+
+    return (y, y_pred_test)
 
 
 
@@ -92,8 +109,6 @@ if __name__ == '__main__':
     n_time_steps = test_X_np.shape[1]
     n_channels = test_X_np.shape[-1]
 
-    train_results_df = pd.DataFrame()
-    val_results_df = pd.DataFrame()
     for cv_fold in tqdm(cv_folds):
         model_name = '_'.join([args.activation, str(args.batch),
                                args.data, str(args.dropout), str(args.layers),
@@ -106,27 +121,17 @@ if __name__ == '__main__':
 
         (fold_X_train, fold_X_val, fold_y_train, fold_y_val) = splits[cv_fold - 1]
 
-
-        train_result_df, _, _, train_pred_data = test_LSTM(X=fold_X_train, y=fold_y_train, model_weights_path=model_weights_path,
+        train_pred_data = LSTM_inference(X=fold_X_train, y=fold_y_train, model_weights_path=model_weights_path,
                               activation=args.activation, batch=args.batch, data=args.data, dropout=args.dropout,
                               layers=args.layers, masking=args.masking, optimizer=args.optimizer,
                               outcome=args.outcome, units=args.units, n_time_steps=n_time_steps, n_channels=n_channels)
 
-        val_result_df, _, _, val_pred_data = test_LSTM(X=fold_X_val, y=fold_y_val, model_weights_path=model_weights_path,
+        val_pred_data = LSTM_inference(X=fold_X_val, y=fold_y_val, model_weights_path=model_weights_path,
                               activation=args.activation, batch=args.batch, data=args.data, dropout=args.dropout,
                               layers=args.layers, masking=args.masking, optimizer=args.optimizer,
                               outcome=args.outcome, units=args.units, n_time_steps=n_time_steps, n_channels=n_channels)
-
-
-        train_result_df['cv_fold'] = cv_fold
-        val_result_df['cv_fold'] = cv_fold
-        train_results_df = pd.concat([train_results_df, train_result_df])
-        val_results_df = pd.concat([val_results_df, val_result_df])
 
         # save ground truth and predictions
         pickle.dump(train_pred_data, open(os.path.join(output_dir, f'train_gt_and_pred_fold_{cv_fold}.pkl'), 'wb'))
         pickle.dump(val_pred_data, open(os.path.join(output_dir, f'val_gt_and_pred_fold_{cv_fold}.pkl'), 'wb'))
 
-    # save results
-    train_results_df.to_csv(os.path.join(args.output_dir, 'train_results.csv'), index=False)
-    val_results_df.to_csv(os.path.join(args.output_dir, 'val_results.csv'), index=False)

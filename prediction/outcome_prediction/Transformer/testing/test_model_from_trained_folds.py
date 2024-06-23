@@ -117,7 +117,6 @@ def test_model_from_trained_folds(features_path, labels_path, model_weights_dir,
                                       model_config, model_weights_dir, outcome, output_dir, use_gpu=use_gpu)
 
 
-
 if __name__ == '__main__':
     import argparse
 
