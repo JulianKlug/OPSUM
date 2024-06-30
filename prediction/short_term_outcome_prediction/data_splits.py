@@ -181,6 +181,8 @@ if __name__ == '__main__':
 
     if args.output_dir is None:
         output_dir = os.path.join(os.path.dirname(args.features_path), f'{"_".join(args.outcome.split(" "))}_train_data_splits')
+    else:
+        output_dir = args.output_dir
 
     data_splits_to_file(features_path=args.features_path, labels_path=args.labels_path, outcome=args.outcome,
                         output_dir=output_dir, test_pids_path=args.pid_test_path, train_pids_path=args.pid_train_path,

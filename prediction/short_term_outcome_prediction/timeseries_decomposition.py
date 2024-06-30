@@ -108,7 +108,7 @@ class BucketBatchSampler(Sampler):
         return self.num_batches
 
     def __len__(self):
-        return len(self.idx_to_len_map)
+        return self.num_batches
 
     def __iter__(self):
         self.batch_list = self._generate_batch_map()

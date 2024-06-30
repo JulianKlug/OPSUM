@@ -33,12 +33,13 @@ def launch_gridsearch(data_splits_path:str, output_folder:str, n_trials:int=1000
     splits = ch.load(path.join(data_splits_path))
     all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu) for x in splits]
 
-    study.optimize(partial(get_score, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder), n_trials=n_trials)
+    study.optimize(partial(get_score, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
+                           use_gpu=use_gpu), n_trials=n_trials)
 
 
-def get_score(trial, ds, data_splits_path, output_folder):
+def get_score(trial, ds, data_splits_path, output_folder, use_gpu=True):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    batch_size = trial.suggest_categorical("batch_size", choices=[16])
+    batch_size = trial.suggest_categorical("batch_size", choices=[128])
     num_layers = trial.suggest_categorical("num_layers", choices=[6])
     model_dim = trial.suggest_categorical("model_dim", choices=[1024])
     train_noise = trial.suggest_loguniform("train_noise", 1e-5, 1e-3)
@@ -52,6 +53,8 @@ def get_score(trial, ds, data_splits_path, output_folder):
     n_lr_warm_up_steps = trial.suggest_categorical("n_lr_warm_up_steps", [0])
     grad_clip = trial.suggest_loguniform('grad_clip_value', 1e-3, 0.2)
     early_stopping_step_limit = trial.suggest_categorical('early_stopping_step_limit', [10])
+
+    accelerator = 'gpu' if use_gpu else 'cpu'
 
     val_scores = []
     best_epochs = []
@@ -93,7 +96,7 @@ def get_score(trial, ds, data_splits_path, output_folder):
         )
 
         module = LitModel(model, lr, wd, train_noise, lr_warmup_steps=n_lr_warm_up_steps)
-        trainer = pl.Trainer(accelerator='gpu', devices=1, max_epochs=1000, logger=logger,
+        trainer = pl.Trainer(accelerator=accelerator, devices=1, max_epochs=50, logger=logger,
                              log_every_n_steps=25, enable_checkpointing=True,
                              callbacks=[MyEarlyStopping(step_limit=early_stopping_step_limit), checkpoint_callback],
                              gradient_clip_val=grad_clip)
