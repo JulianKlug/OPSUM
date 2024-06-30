@@ -56,6 +56,9 @@ def get_score(trial, ds, data_splits_path, output_folder, use_gpu=True):
 
     accelerator = 'gpu' if use_gpu else 'cpu'
 
+    # used for BCEWithLogitsLoss(pos_weight=imbalance_factor)
+    imbalance_factor = 62
+
     val_scores = []
     best_epochs = []
     rolling_val_scores = []
@@ -95,8 +98,8 @@ def get_score(trial, ds, data_splits_path, output_folder, use_gpu=True):
             filename="short_opsum_transformer_{epoch:02d}_{val_auroc:.4f}",
         )
 
-        module = LitModel(model, lr, wd, train_noise, lr_warmup_steps=n_lr_warm_up_steps)
-        trainer = pl.Trainer(accelerator=accelerator, devices=1, max_epochs=50, logger=logger,
+        module = LitModel(model, lr, wd, train_noise, lr_warmup_steps=n_lr_warm_up_steps, imbalance_factor=ch.tensor(imbalance_factor))
+        trainer = pl.Trainer(accelerator=accelerator, devices=1, max_epochs=1, logger=logger,
                              log_every_n_steps=25, enable_checkpointing=True,
                              callbacks=[MyEarlyStopping(step_limit=early_stopping_step_limit), checkpoint_callback],
                              gradient_clip_val=grad_clip)

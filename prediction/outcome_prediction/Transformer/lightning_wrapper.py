@@ -6,14 +6,17 @@ from torchmetrics.classification import Accuracy
 
 
 class LitModel(pl.LightningModule):
-    def __init__(self, model, lr, wd, train_noise, lr_warmup_steps=0):
+    def __init__(self, model, lr, wd, train_noise, lr_warmup_steps=0, imbalance_factor=None):
         super().__init__()
         self.model = model
         self.lr = lr
         self.lr_warmup_steps = lr_warmup_steps
         self.wd = wd
         self.train_noise = train_noise
-        self.criterion = ch.nn.BCEWithLogitsLoss()
+        if imbalance_factor is not None:
+            self.criterion = ch.nn.BCEWithLogitsLoss(pos_weight=imbalance_factor)
+        else:
+            self.criterion = ch.nn.BCEWithLogitsLoss()
         self.train_accuracy = Accuracy(task='binary')
         self.train_accuracy_epoch = Accuracy(task='binary')
         self.val_accuracy_epoch = Accuracy(task='binary')
