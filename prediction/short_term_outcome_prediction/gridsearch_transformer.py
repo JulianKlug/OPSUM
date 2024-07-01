@@ -20,8 +20,28 @@ from prediction.utils.utils import ensure_dir
 
 ch.set_float32_matmul_precision('high')
 
+DEFAULT_GRIDEARCH_CONFIG = {
+    "n_trials": 1000,
+    "batch_size": [416],
+    "num_layers": [6],
+    "model_dim": [1024],
+    "train_noise": [1e-5, 1e-3],
+    "weight_decay": [1e-5, 0.0002],
+    "dropout": [0.1, 0.5],
+    "num_head": [16],
+    "lr": [0.0001, 0.001],
+    "n_lr_warm_up_steps": [0],
+    "grad_clip_value": [1e-3, 0.2],
+    "early_stopping_step_limit": [10],
+    "imbalance_factor": 62,
+    "max_epochs": 50
+}
 
-def launch_gridsearch(data_splits_path:str, output_folder:str, n_trials:int=1000, use_gpu:bool=True):
+def launch_gridsearch(data_splits_path:str, output_folder:str, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG, use_gpu:bool=True,
+                      storage_pwd:str=None, storage_port:int=None):
+    if gridsearch_config is None:
+        gridsearch_config = DEFAULT_GRIDEARCH_CONFIG
+
     outcome = '_'.join(os.path.basename(data_splits_path).split('_')[3:6])
 
     output_folder = path.join(output_folder, outcome)
@@ -29,35 +49,45 @@ def launch_gridsearch(data_splits_path:str, output_folder:str, n_trials:int=1000
     output_folder = path.join(output_folder, f'transformer_gs_{datetime.now().strftime("%Y%m%d_%H%M%S")}')
     ensure_dir(output_folder)
 
-    study = optuna.create_study(direction='maximize')
+    if storage_pwd is not None and storage_port is not None:
+        storage = optuna.storages.JournalStorage(optuna.storages.JournalRedisStorage(
+            url=f'redis://default:{storage_pwd}@localhost:{storage_port}/opsum'
+        ))
+    else:
+        storage = None
+    study = optuna.create_study(direction='maximize', storage=storage)
     splits = ch.load(path.join(data_splits_path))
     all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu) for x in splits]
 
     study.optimize(partial(get_score, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
-                           use_gpu=use_gpu), n_trials=n_trials)
+                            gridsearch_config=gridsearch_config,
+                           use_gpu=use_gpu), n_trials=gridsearch_config['n_trials'])
 
 
-def get_score(trial, ds, data_splits_path, output_folder, use_gpu=True):
+def get_score(trial, ds, data_splits_path, output_folder, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG, use_gpu=True):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    batch_size = trial.suggest_categorical("batch_size", choices=[128])
-    num_layers = trial.suggest_categorical("num_layers", choices=[6])
-    model_dim = trial.suggest_categorical("model_dim", choices=[1024])
-    train_noise = trial.suggest_loguniform("train_noise", 1e-5, 1e-3)
-    wd = trial.suggest_loguniform("weight_decay", 1e-5, 0.0002)
+
+    if gridsearch_config is None:
+        gridsearch_config = DEFAULT_GRIDEARCH_CONFIG
+    batch_size = trial.suggest_categorical("batch_size", choices=gridsearch_config['batch_size'])
+    num_layers = trial.suggest_categorical("num_layers", choices=gridsearch_config['num_layers'])
+    model_dim = trial.suggest_categorical("model_dim", choices=gridsearch_config['model_dim'])
+    train_noise = trial.suggest_loguniform("train_noise", gridsearch_config['train_noise'][0], gridsearch_config['train_noise'][1])
+    wd = trial.suggest_loguniform("weight_decay", gridsearch_config['weight_decay'][0], gridsearch_config['weight_decay'][1])
     ff_factor = 2
     ff_dim = ff_factor * model_dim
-    dropout = trial.suggest_uniform("dropout", 0.2, 0.5)
-    num_heads = trial.suggest_categorical("num_head", [16])
+    dropout = trial.suggest_uniform("dropout", gridsearch_config['dropout'][0], gridsearch_config['dropout'][1])
+    num_heads = trial.suggest_categorical("num_head", gridsearch_config['num_head'])
     pos_encode_factor = 1
-    lr = trial.suggest_loguniform("lr", 0.0001, 0.001)
-    n_lr_warm_up_steps = trial.suggest_categorical("n_lr_warm_up_steps", [0])
-    grad_clip = trial.suggest_loguniform('grad_clip_value', 1e-3, 0.2)
-    early_stopping_step_limit = trial.suggest_categorical('early_stopping_step_limit', [10])
+    lr = trial.suggest_loguniform("lr", gridsearch_config['lr'][0], gridsearch_config['lr'][1])
+    n_lr_warm_up_steps = trial.suggest_categorical("n_lr_warm_up_steps", gridsearch_config['n_lr_warm_up_steps'])
+    grad_clip = trial.suggest_loguniform('grad_clip_value', gridsearch_config['grad_clip_value'][0], gridsearch_config['grad_clip_value'][1])
+    early_stopping_step_limit = trial.suggest_categorical('early_stopping_step_limit', gridsearch_config['early_stopping_step_limit'])
 
     accelerator = 'gpu' if use_gpu else 'cpu'
 
     # used for BCEWithLogitsLoss(pos_weight=imbalance_factor)
-    imbalance_factor = 62
+    imbalance_factor = gridsearch_config['imbalance_factor']
 
     val_scores = []
     best_epochs = []
@@ -99,7 +129,8 @@ def get_score(trial, ds, data_splits_path, output_folder, use_gpu=True):
         )
 
         module = LitModel(model, lr, wd, train_noise, lr_warmup_steps=n_lr_warm_up_steps, imbalance_factor=ch.tensor(imbalance_factor))
-        trainer = pl.Trainer(accelerator=accelerator, devices=1, max_epochs=1, logger=logger,
+        trainer = pl.Trainer(accelerator=accelerator, devices=1, max_epochs=gridsearch_config['max_epochs'],
+                             logger=logger,
                              log_every_n_steps=25, enable_checkpointing=True,
                              callbacks=[MyEarlyStopping(step_limit=early_stopping_step_limit), checkpoint_callback],
                              gradient_clip_val=grad_clip)
@@ -137,12 +168,17 @@ if __name__ == '__main__':
 
     parser.add_argument('-d', '--data_splits_path', type=str, required=True)
     parser.add_argument('-o', '--output_folder', type=str, required=True)
-    parser.add_argument('-n', '--n_trials', type=int, required=False, default=1000)
+    parser.add_argument('-c', '--config', type=str, required=False, default=None)
     parser.add_argument('-g', '--use_gpu', type=int, required=False, default=1)
+    parser.add_argument('-spwd', '--storage_pwd', type=str, required=False, default=None)
+    parser.add_argument('-sport', '--storage_port', type=int, required=False, default=None)
 
     args = parser.parse_args()
 
     use_gpu = args.use_gpu == 1
 
-    launch_gridsearch(data_splits_path=args.data_splits_path, output_folder=args.output_folder, n_trials=args.n_trials,
-                      use_gpu=use_gpu)
+    if args.config is not None:
+        gridsearch_config = json.load(open(args.config))
+
+    launch_gridsearch(data_splits_path=args.data_splits_path, output_folder=args.output_folder, gridsearch_config=gridsearch_config,
+                      use_gpu=use_gpu, storage_pwd=args.storage_pwd, storage_port=args.storage_port)
