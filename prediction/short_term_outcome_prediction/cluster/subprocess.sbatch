@@ -17,6 +17,7 @@ source /home/users/k/klug/.bashrc
 
 export OPSUM_LOGS_PATH="/home/users/k/klug/logs/short_term_opsum/opsum_short_subprocess_${SLURM_JOB_ID}.log"
 
+conda deactivate
 conda activate opsum
 export PYTHONPATH="${PYTHONPATH}:/home/users/k/klug/opsum"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/
