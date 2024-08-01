@@ -11,7 +11,7 @@ def launch_cluster_gridsearch(data_splits_path: str, output_folder: str,
                               gridsearch_config_path: str,
                               n_subprocesses: int = 10,
                               use_gpu:bool = True,
-                              storage_pwd:str = None, storage_port:int = None):
+                              storage_pwd:str = None, storage_port:int = None, storage_host:str = 'localhost'):
     outcome = '_'.join(os.path.basename(data_splits_path).split('_')[3:6])
     study_name = f'transformer_gs_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
 
@@ -33,7 +33,7 @@ def launch_cluster_gridsearch(data_splits_path: str, output_folder: str,
 
     if storage_pwd is not None and storage_port is not None:
         storage = optuna.storages.JournalStorage(optuna.storages.JournalRedisStorage(
-            url=f'redis://default:{storage_pwd}@localhost:{storage_port}/opsum'
+            url=f'redis://default:{storage_pwd}@{storage_host}:{storage_port}/opsum'
         ))
     else:
         storage = None
@@ -62,11 +62,12 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--use_gpu', type=int, required=False, default=1)
     parser.add_argument('-spwd', '--storage_pwd', type=str, required=False, default=None)
     parser.add_argument('-sport', '--storage_port', type=int, required=False, default=None)
+    parser.add_argument('-shost', '--storage_host', type=str, required=False, default=None)
 
     args = parser.parse_args()
 
     use_gpu = args.use_gpu == 1
     launch_cluster_gridsearch(args.data_splits_path, args.output_folder, args.gridsearch_config_path,
                               n_subprocesses=args.n_subprocesses, use_gpu=use_gpu,
-                              storage_pwd=args.storage_pwd, storage_port=args.storage_port)
+                              storage_pwd=args.storage_pwd, storage_port=args.storage_port, storage_host=args.storage_host)
 
