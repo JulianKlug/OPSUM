@@ -40,14 +40,14 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output_folder', type=str, required=True)
     parser.add_argument('-t', '--trial_name', type=str, required=True)
     parser.add_argument('-c', '--gridsearch_config_path', type=str, required=True)
-    parser.add_argument('-g', '--use_gpu', type=int, required=False, default=1)
+    parser.add_argument('-g', '--use_gpu', type=str, required=False, default=1)
     parser.add_argument('-spwd', '--storage_pwd', type=str, required=False, default=None)
     parser.add_argument('-sport', '--storage_port', type=int, required=False, default=None)
     parser.add_argument('-shost', '--storage_host', type=str, required=False, default='localhost')
 
     args = parser.parse_args()
 
-    use_gpu = args.use_gpu == 1
+    use_gpu = (args.use_gpu == 1) | (args.use_gpu == '1') | (args.use_gpu == 'True')
     subprocess_cluster_gridsearch(args.data_splits_path, args.output_folder, args.trial_name, args.gridsearch_config_path,
                                     use_gpu=use_gpu,
                                     storage_pwd=args.storage_pwd, storage_port=args.storage_port, storage_host=args.storage_host)
