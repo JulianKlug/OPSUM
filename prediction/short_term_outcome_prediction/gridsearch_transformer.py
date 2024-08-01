@@ -38,7 +38,7 @@ DEFAULT_GRIDEARCH_CONFIG = {
 }
 
 def launch_gridsearch(data_splits_path:str, output_folder:str, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG, use_gpu:bool=True,
-                      storage_pwd:str=None, storage_port:int=None):
+                      storage_pwd:str=None, storage_port:int=None, storage_host:str='localhost'):
     if gridsearch_config is None:
         gridsearch_config = DEFAULT_GRIDEARCH_CONFIG
 
@@ -51,7 +51,7 @@ def launch_gridsearch(data_splits_path:str, output_folder:str, gridsearch_config
 
     if storage_pwd is not None and storage_port is not None:
         storage = optuna.storages.JournalStorage(optuna.storages.JournalRedisStorage(
-            url=f'redis://default:{storage_pwd}@localhost:{storage_port}/opsum'
+            url=f'redis://default:{storage_pwd}@{storage_host}:{storage_port}/opsum'
         ))
     else:
         storage = None
@@ -172,6 +172,7 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--use_gpu', type=int, required=False, default=1)
     parser.add_argument('-spwd', '--storage_pwd', type=str, required=False, default=None)
     parser.add_argument('-sport', '--storage_port', type=int, required=False, default=None)
+    parser.add_argument('-shost', '--storage_host', type=str, required=False, default=None)
 
     args = parser.parse_args()
 
@@ -181,4 +182,4 @@ if __name__ == '__main__':
         gridsearch_config = json.load(open(args.config))
 
     launch_gridsearch(data_splits_path=args.data_splits_path, output_folder=args.output_folder, gridsearch_config=gridsearch_config,
-                      use_gpu=use_gpu, storage_pwd=args.storage_pwd, storage_port=args.storage_port)
+                      use_gpu=use_gpu, storage_pwd=args.storage_pwd, storage_port=args.storage_port, storage_host=args.storage_host)

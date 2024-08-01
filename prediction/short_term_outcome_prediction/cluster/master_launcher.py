@@ -48,7 +48,8 @@ def launch_cluster_gridsearch(data_splits_path: str, output_folder: str,
     for i in range(n_subprocesses):
         os.system(f'sbatch --export=ALL,data_splits_path={data_splits_path},output_folder={output_folder},'
                   f'trial_name={study_name},gridsearch_config_path={gridsearch_config_path},use_gpu={use_gpu},'
-                    f'storage_pwd={storage_pwd},storage_port={storage_port},subprocess_py_file_path={subprocess_py_file_path} {subprocess_sbatch_file_path}')
+                    f'storage_pwd={storage_pwd},storage_port={storage_port},storage_host={storage_host},'
+                  f'subprocess_py_file_path={subprocess_py_file_path} {subprocess_sbatch_file_path}')
 
 
 if __name__ == '__main__':
