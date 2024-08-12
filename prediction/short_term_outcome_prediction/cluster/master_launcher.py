@@ -31,6 +31,8 @@ def launch_cluster_gridsearch(data_splits_path: str, output_folder: str,
     with open(path.join(output_folder, 'gridsearch_config.json'), 'w') as f:
         json.dump(gridsearch_config, f)
 
+
+    # REDIS Setup for SLURM/optuna ref: https://github.com/liukidar/stune
     if storage_pwd is not None and storage_port is not None:
         storage = optuna.storages.JournalStorage(optuna.storages.JournalRedisStorage(
             url=f'redis://default:{storage_pwd}@{storage_host}:{storage_port}/opsum'

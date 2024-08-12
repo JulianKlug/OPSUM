@@ -23,6 +23,7 @@ terminado==0.9.4
 tf-estimator-nightly==2.8.0.dev2021122109
 torch==1.11.0
 xgboost==1.6.1
+pytorch_lightning
 
 modun @ git+git://github.com/Jimmy2027/MODUN@b106ed60d97bcab0dc629030447c73011d06a3f9
 

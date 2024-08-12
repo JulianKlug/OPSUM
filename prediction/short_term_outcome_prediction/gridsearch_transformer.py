@@ -155,7 +155,7 @@ def get_score(trial, ds, data_splits_path, output_folder, gridsearch_config:dict
     d['split_file'] = data_splits_path
     text = json.dumps(d)
     text += '\n'
-    dest = path.join(output_folder, 'gridsearch.jsonl')
+    dest = path.join(output_folder, f'{os.path.basename(output_folder)}_gridsearch.jsonl')
     with open(dest, 'a') as handle:
         handle.write(text)
     print("WRITTEN in ", dest)
