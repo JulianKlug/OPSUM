@@ -11,9 +11,14 @@ def launch_cluster_gridsearch(data_splits_path: str, output_folder: str,
                               gridsearch_config_path: str,
                               n_subprocesses: int = 10,
                               use_gpu:bool = True,
+                              use_decoder:bool = False,
                               storage_pwd:str = None, storage_port:int = None, storage_host:str = 'localhost'):
     outcome = '_'.join(os.path.basename(data_splits_path).split('_')[3:6])
-    study_name = f'transformer_gs_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+
+    if not use_decoder:
+        study_name = f'transformer_gs_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+    else:
+        study_name = f'dec_transformer_gs_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
 
     with open(gridsearch_config_path, 'r') as f:
         gridsearch_config = json.load(f)
@@ -50,6 +55,7 @@ def launch_cluster_gridsearch(data_splits_path: str, output_folder: str,
     for i in range(n_subprocesses):
         os.system(f'sbatch --export=ALL,data_splits_path={data_splits_path},output_folder={output_folder},'
                   f'trial_name={study_name},gridsearch_config_path={gridsearch_config_path},use_gpu={use_gpu},'
+                    f'use_decoder={use_decoder},'
                     f'storage_pwd={storage_pwd},storage_port={storage_port},storage_host={storage_host},'
                   f'subprocess_py_file_path={subprocess_py_file_path} {subprocess_sbatch_file_path}')
 
@@ -63,6 +69,8 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--gridsearch_config_path', type=str, required=True)
     parser.add_argument('-n', '--n_subprocesses', type=int, required=False, default=10)
     parser.add_argument('-g', '--use_gpu', type=int, required=False, default=1)
+    parser.add_argument('-dec', '--use_decoder', default=False, action='store_true')
+
     parser.add_argument('-spwd', '--storage_pwd', type=str, required=False, default=None)
     parser.add_argument('-sport', '--storage_port', type=int, required=False, default=None)
     parser.add_argument('-shost', '--storage_host', type=str, required=False, default=None)
@@ -72,5 +80,6 @@ if __name__ == '__main__':
     use_gpu = args.use_gpu == 1
     launch_cluster_gridsearch(args.data_splits_path, args.output_folder, args.gridsearch_config_path,
                               n_subprocesses=args.n_subprocesses, use_gpu=use_gpu,
+                                use_decoder=args.use_decoder,
                               storage_pwd=args.storage_pwd, storage_port=args.storage_port, storage_host=args.storage_host)
 

@@ -37,7 +37,7 @@ DEFAULT_GRIDEARCH_CONFIG = {
     "max_epochs": 50
 }
 
-def launch_gridsearch(data_splits_path:str, output_folder:str, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG, use_gpu:bool=True,
+def launch_gridsearch_encoder(data_splits_path:str, output_folder:str, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG, use_gpu:bool=True,
                       storage_pwd:str=None, storage_port:int=None, storage_host:str='localhost'):
     if gridsearch_config is None:
         gridsearch_config = DEFAULT_GRIDEARCH_CONFIG
@@ -59,12 +59,12 @@ def launch_gridsearch(data_splits_path:str, output_folder:str, gridsearch_config
     splits = ch.load(path.join(data_splits_path))
     all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu) for x in splits]
 
-    study.optimize(partial(get_score, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
+    study.optimize(partial(get_score_encoder, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
                             gridsearch_config=gridsearch_config,
                            use_gpu=use_gpu), n_trials=gridsearch_config['n_trials'])
 
 
-def get_score(trial, ds, data_splits_path, output_folder, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG, use_gpu=True):
+def get_score_encoder(trial, ds, data_splits_path, output_folder, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG, use_gpu=True):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     if gridsearch_config is None:
@@ -181,5 +181,5 @@ if __name__ == '__main__':
     if args.config is not None:
         gridsearch_config = json.load(open(args.config))
 
-    launch_gridsearch(data_splits_path=args.data_splits_path, output_folder=args.output_folder, gridsearch_config=gridsearch_config,
+    launch_gridsearch_encoder(data_splits_path=args.data_splits_path, output_folder=args.output_folder, gridsearch_config=gridsearch_config,
                       use_gpu=use_gpu, storage_pwd=args.storage_pwd, storage_port=args.storage_port, storage_host=args.storage_host)

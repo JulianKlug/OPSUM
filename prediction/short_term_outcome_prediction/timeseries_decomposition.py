@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import torch
 import torch as ch
 
 from sklearn.preprocessing import StandardScaler
@@ -44,9 +45,32 @@ def decompose_and_label_timeseries(timeseries: np.ndarray, y_df: pd.DataFrame, t
     return map, flat_labels
 
 
+def decompose_timeseries(timeseries: np.ndarray, target_timeseries_length: int = 1):
+    """
+    Decompose the timeseries data into individual samples (every sample is a subtimeseries)
+    Args:
+        timeseries (np.array): array of shape (num_samples, num_features, num_timesteps)
+
+    Returns:
+        map (list): list of tuples (cid_idx, ts) where idx in list is the index of the sample in the flattened targets array, cid_idx is the idx of case admission id, and ts is the last timestep for this idx
+    """
+
+    # create index mapping (list of (cid, ts) in which the index in the list is the index of the sample in the flattened targets array)
+    map = []
+    # maximum number of timesteps (max of relative_sample_date_hourly_cat)
+    overall_max_ts = timeseries.shape[1] - target_timeseries_length
+    for idx, cid in enumerate(timeseries[:, 0, 0, 0]):
+        for ts in range(int(overall_max_ts)):
+            # store idx of cid and idx of ts
+            map.append((idx, ts))
+
+    return map
+
+
 class StrokeUnitBucketDataset(Dataset):
 
-    def __init__(self, inputs, targets, idx_map):
+    def __init__(self, inputs, targets, idx_map,
+                 return_target_timeseries=False, target_timeseries_indices=None, target_timeseries_length=1):
         """
         Every sample is a sequence of timesteps with an associated label/target.
         - The index of each sample is an index in the flattened targets array
@@ -57,10 +81,19 @@ class StrokeUnitBucketDataset(Dataset):
             targets (np.array): array of shape (with targets for all idx) (flattened)
             idx_map (list): list of tuples (cid_idx, ts) where idx in list is the index of the sample in targets, cid_idx is the idx of case admission id, and ts is the last timestep for this idx
                 - This is necessary to retrieve the inputs for this idx (as every patient has multiple timesteps)
+            return_target_timeseries (bool): whether to return the target timeseries or not (on top of the inputs and targets)
+            target_timeseries_indices (list): list of indices of the target timeseries to return (if None, return all features)
+            target_timeseries_length (int): length of the target timeseries to return (1 by default, only predict the next timestep)
         """
         self.inputs = inputs
         self.targets = targets
         self.idx_map = idx_map
+
+        # only for encoder/decoder model
+        self.return_target_timeseries = return_target_timeseries
+        self.target_timeseries_indices = target_timeseries_indices
+        self.target_timeseries_length = target_timeseries_length
+
         # create a mapping from overall idx to length of sequence
         # idx_to_len_map (list): list of tuples (idx, length) where idx is the index of the sample in the flattened targets array and length is the length of the sequence
         self.idx_to_len_map = [(idx, map_i[1] + 1) for idx, map_i in enumerate(self.idx_map)]
@@ -74,7 +107,18 @@ class StrokeUnitBucketDataset(Dataset):
         if self.targets is None:
             return self.inputs[cid_idx, 0: last_ts + 1]
         else:
-            return self.inputs[cid_idx, 0: last_ts + 1], self.targets[index]
+            if self.return_target_timeseries:
+                if self.target_timeseries_indices is not None:
+                    # return inputs, and the target features of the rest of the timeseries (becomes the target timeseries)
+                    return (self.inputs[cid_idx, 0: last_ts + 1],
+                            self.inputs[cid_idx, last_ts + 1: last_ts + 1 + self.target_timeseries_length,
+                                        self.target_timeseries_indices])
+                else:
+                    # return inputs, and the rest of the timeseries with all features (becomes the target timeseries)
+                    return (self.inputs[cid_idx, 0: last_ts + 1],
+                            self.inputs[cid_idx, last_ts + 1: last_ts + 1 + self.target_timeseries_length])
+            else:
+                return self.inputs[cid_idx, 0: last_ts + 1], self.targets[index]
 
 
 class BucketBatchSampler(Sampler):
@@ -118,11 +162,31 @@ class BucketBatchSampler(Sampler):
             yield i
 
 
-def prepare_subsequence_dataset(scenario, rescale=True, target_time_to_outcome=6, use_gpu=True):
+def prepare_subsequence_dataset(scenario, rescale=True, target_time_to_outcome=6, use_gpu=True,
+                                use_target_timeseries=False, target_timeseries_indices=None,
+                                target_timeseries_length=1):
+    """
+    Prepares the dataset for the transformer model.
+
+    Args:
+        scenario (tuple): tuple of (X_train, X_val, y_train, y_val)
+        rescale (bool): whether to rescale the data or not
+        target_time_to_outcome (int): number of timesteps to predict in the future
+        use_gpu (bool): whether to use GPU or not
+        use_target_timeseries (bool): whether to return the target timeseries or not (only relevant for the encoder/decoder model)
+    """
     X_train, X_val, y_train, y_val = scenario
 
-    train_map, train_flat_labels = decompose_and_label_timeseries(X_train, y_train, target_time_to_outcome=target_time_to_outcome)
-    val_map, val_flat_labels = decompose_and_label_timeseries(X_val, y_val, target_time_to_outcome=target_time_to_outcome)
+    if not use_target_timeseries:
+        train_map, train_flat_labels = decompose_and_label_timeseries(X_train, y_train, target_time_to_outcome=target_time_to_outcome)
+        val_map, val_flat_labels = decompose_and_label_timeseries(X_val, y_val, target_time_to_outcome=target_time_to_outcome)
+    else:
+        # if we want to return the target timeseries, we need to decompose the timeseries differently (whole timeseries for each sample)
+        train_map = decompose_timeseries(X_train, target_timeseries_length)
+        val_map = decompose_timeseries(X_val, target_timeseries_length)
+        # labels are not used (as timeseries is the target)
+        train_flat_labels = torch.empty(len(train_map))
+        val_flat_labels = torch.empty(len(val_map))
 
     X_train = X_train[:, :, :, -1].astype('float32')
     X_val = X_val[:, :, :, -1].astype('float32')
@@ -134,11 +198,23 @@ def prepare_subsequence_dataset(scenario, rescale=True, target_time_to_outcome=6
 
 
     if use_gpu:
-        train_dataset = StrokeUnitBucketDataset(ch.from_numpy(X_train).cuda(), tensor(train_flat_labels).cuda(), train_map)
-        val_dataset = StrokeUnitBucketDataset(ch.from_numpy(X_val).cuda(), tensor(val_flat_labels).cuda(), val_map)
+        train_dataset = StrokeUnitBucketDataset(ch.from_numpy(X_train).cuda(), tensor(train_flat_labels).cuda(),
+                                                train_map, return_target_timeseries=use_target_timeseries,
+                                                target_timeseries_indices=target_timeseries_indices,
+                                                target_timeseries_length=target_timeseries_length)
+        val_dataset = StrokeUnitBucketDataset(ch.from_numpy(X_val).cuda(), tensor(val_flat_labels).cuda(), val_map,
+                                                return_target_timeseries=use_target_timeseries,
+                                                target_timeseries_indices=target_timeseries_indices,
+                                                target_timeseries_length=target_timeseries_length)
     else:
-        train_dataset = StrokeUnitBucketDataset(ch.from_numpy(X_train), tensor(train_flat_labels), train_map)
-        val_dataset = StrokeUnitBucketDataset(ch.from_numpy(X_val), tensor(val_flat_labels), val_map)
+        train_dataset = StrokeUnitBucketDataset(ch.from_numpy(X_train), tensor(train_flat_labels), train_map,
+                                                return_target_timeseries=use_target_timeseries,
+                                                target_timeseries_indices=target_timeseries_indices,
+                                                target_timeseries_length=target_timeseries_length)
+        val_dataset = StrokeUnitBucketDataset(ch.from_numpy(X_val), tensor(val_flat_labels), val_map,
+                                                return_target_timeseries=use_target_timeseries,
+                                                target_timeseries_indices=target_timeseries_indices,
+                                                target_timeseries_length=target_timeseries_length)
 
     return train_dataset, val_dataset
 

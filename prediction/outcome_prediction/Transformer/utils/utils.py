@@ -18,6 +18,7 @@ class DictLogger(LightningLoggerBase):
         self._version = version
 
     def log_metrics(self, metrics, step=None):
+        print(metrics)
         self.metrics.append(metrics)
 
     @property

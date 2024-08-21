@@ -172,3 +172,45 @@ class OPSUMTransformer(nn.Module):
         x = self.encoder(x)
         x = self.classifier(x)
         return x
+
+
+class OPSUM_encoder_decoder(nn.Module):
+        def __init__(self, input_dim, num_layers, num_decoder_layers, model_dim, ff_dim,
+                    num_heads, dropout, pos_encode_factor=0.1, layer_norm_eps = 1e-05, n_tokens=1,
+                    max_dim=5000):
+            super().__init__()
+            self.embedder = nn.Linear(input_dim, model_dim)
+            self.pe = PositionalEncoding(model_dim, dropout, max_dim, factor=pos_encode_factor)
+            model_dim *= 2
+
+            self.transformer = ch.nn.Transformer(d_model=model_dim, batch_first=True,
+                                  nhead = num_heads, num_encoder_layers = num_layers, num_decoder_layers = num_decoder_layers,
+                                  dim_feedforward = ff_dim,
+                                  dropout = dropout, layer_norm_eps = layer_norm_eps
+                                  )
+            self.feature_linear = nn.Linear(model_dim, input_dim)
+            self.step_linear = nn.Linear(n_tokens+1, n_tokens)
+
+
+
+        def forward(self, x, tgt):
+            bs, t, f = x.shape
+            x = self.embedder(x.reshape(-1, f))
+            x = x.reshape(bs, t, -1)
+            x = self.pe(x)
+
+            tgt_bs, tgt_t, tgt_f = tgt.shape
+            tgt = self.embedder(tgt.reshape(-1, tgt_f))
+            tgt = tgt.reshape(tgt_bs, tgt_t, -1)
+            tgt = self.pe(tgt)
+
+            x = self.transformer(x, tgt)
+
+            # reduce number of features and timesteps
+            out = self.feature_linear(x)
+            # final_bs, final_t, final_f = x.shape
+            # x = x.reshape(final_bs, final_f, -1)
+            # x = self.step_linear(x)
+            # out = x.reshape(final_bs, -1, final_f)
+
+            return out
