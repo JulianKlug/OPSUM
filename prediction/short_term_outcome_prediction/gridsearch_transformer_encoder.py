@@ -180,6 +180,8 @@ if __name__ == '__main__':
 
     if args.config is not None:
         gridsearch_config = json.load(open(args.config))
+    else:
+        gridsearch_config = None
 
     launch_gridsearch_encoder(data_splits_path=args.data_splits_path, output_folder=args.output_folder, gridsearch_config=gridsearch_config,
                       use_gpu=use_gpu, storage_pwd=args.storage_pwd, storage_port=args.storage_port, storage_host=args.storage_host)

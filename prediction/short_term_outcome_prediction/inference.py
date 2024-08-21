@@ -99,6 +99,8 @@ def main():
     if args.output_dir is None:
         output_dir = os.path.join(os.path.dirname(args.model_path), 'predictions')
         ensure_dir(output_dir)
+    else:
+        output_dir = args.output_dir
 
     ch.save(pred_over_ts, os.path.join(output_dir, 'predictions.pt'))
 

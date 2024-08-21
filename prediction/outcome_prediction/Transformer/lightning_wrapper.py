@@ -114,8 +114,8 @@ class LitEncoderDecoderModel(pl.LightningModule):
 
         loss = self.criterion(predictions, y)
 
-        self.train_cos_sim(predictions, y)
-        self.train_cos_sim_epoch(predictions, y)
+        self.train_cos_sim(predictions.reshape(x.shape[0],-1), y.reshape(x.shape[0],-1))
+        self.train_cos_sim_epoch(predictions.reshape(x.shape[0],-1), y.reshape(x.shape[0],-1))
 
         self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("train_cos_sim", self.train_cos_sim_epoch, on_step=False, on_epoch=True, prog_bar=True)
@@ -123,14 +123,13 @@ class LitEncoderDecoderModel(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx, mode='train'):
-        print('Validation step', batch_idx)
         x, y = batch
         y_input = x[:, -1, :][:, None, :]
         predictions = self.model(x, y_input)
 
         loss = self.criterion(predictions, y)
 
-        self.val_cos_sim_epoch(predictions, y)
+        self.val_cos_sim(predictions.reshape(x.shape[0],-1), y.reshape(x.shape[0],-1))
 
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val_cos_sim", self.val_cos_sim_epoch, on_step=False, on_epoch=True, prog_bar=True)

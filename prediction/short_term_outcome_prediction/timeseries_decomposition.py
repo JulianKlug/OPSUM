@@ -9,6 +9,8 @@ from torch import tensor
 from collections import OrderedDict
 from random import shuffle
 
+from prediction.utils.utils import aggregate_features_over_time
+
 
 def decompose_and_label_timeseries(timeseries: np.ndarray, y_df: pd.DataFrame, target_time_to_outcome: int = 6):
     """
@@ -65,6 +67,32 @@ def decompose_timeseries(timeseries: np.ndarray, target_timeseries_length: int =
             map.append((idx, ts))
 
     return map
+
+
+def aggregate_and_label_timeseries(timeseries, y_df, target_time_to_outcome=6, mask_after_first_positive=True):
+    all_subj_labels = []
+    all_subj_data = []
+    n_timepoints = timeseries.shape[1]
+    for idx, cid in enumerate(timeseries[:, 0, 0, 0]):
+        x_data = timeseries[None, idx, :, :, -1].astype('float32')
+        if cid not in y_df.case_admission_id.values:
+            labels = np.zeros(n_timepoints)
+        else:
+            event_ts = int(y_df[y_df.case_admission_id == cid].relative_sample_date_hourly_cat.values[0])
+            # let labels be 0 until 6 ts before the event then 1 until the end then 0
+            n_pos_start = max(0, event_ts - target_time_to_outcome)
+            n_pos_end = event_ts
+            labels = np.concatenate(
+                (np.zeros(n_pos_start), np.ones(n_pos_end - n_pos_start), np.zeros(n_timepoints - n_pos_end)))
+
+            if mask_after_first_positive:
+                labels = labels[:n_pos_start + 1]
+                x_data = x_data[:, :n_pos_start + 1, :]
+        x_data, _ = aggregate_features_over_time(x_data, np.array([None]), moving_average=False)
+        all_subj_labels.append(labels)
+        all_subj_data.append(x_data)
+
+    return all_subj_data, all_subj_labels
 
 
 class StrokeUnitBucketDataset(Dataset):
@@ -217,6 +245,37 @@ def prepare_subsequence_dataset(scenario, rescale=True, target_time_to_outcome=6
                                                 target_timeseries_length=target_timeseries_length)
 
     return train_dataset, val_dataset
+
+
+def prepare_aggregate_dataset(scenario, rescale=True, target_time_to_outcome=6, mask_after_first_positive=True):
+    """
+    Prepares the dataset as an aggregate dataset (one sample per timepoint) and returns the train and validation sets.
+
+    Args:
+        scenario (tuple): tuple of (X_train, X_val, y_train, y_val)
+        rescale (bool): whether to rescale the data or not
+        target_time_to_outcome (int): number of timesteps to predict in the future
+    """
+    X_train, X_val, y_train, y_val = scenario
+
+    train_data, train_labels = aggregate_and_label_timeseries(X_train, y_train, target_time_to_outcome,
+                                                              mask_after_first_positive)
+    val_data, val_labels = aggregate_and_label_timeseries(X_val, y_val, target_time_to_outcome,
+                                                          mask_after_first_positive)
+
+    train_data = np.concatenate(train_data)
+    train_labels = np.concatenate(train_labels)
+
+    val_data = np.concatenate(val_data)
+    val_labels = np.concatenate(val_labels)
+
+    scaler = StandardScaler()
+    if rescale:
+        train_data = scaler.fit_transform(train_data)
+        val_data = scaler.transform(val_data)
+
+    return train_data, val_data, train_labels, val_labels
+
 
 
 

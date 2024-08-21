@@ -85,12 +85,11 @@ for i, (train_dataset, val_dataset) in enumerate(ds):
     module = LitEncoderDecoderModel(model, lr, wd, train_noise, lr_warmup_steps=n_lr_warm_up_steps)
     trainer = pl.Trainer(accelerator=accelerator, devices=1, max_epochs=max_epochs,
                          logger=[logger, pl.loggers.TensorBoardLogger(output_folder, name=f'{timestamp}_cv_{i}')],
-                         log_every_n_steps=1, enable_checkpointing=True,
+                         log_every_n_steps=50, enable_checkpointing=False,
                          callbacks=[MyEarlyStopping(step_limit=early_stopping_step_limit, metric='val_cos_sim'),
                                     # checkpoint_callback],
                                     ],
-                         gradient_clip_val=grad_clip,
-                         num_sanity_val_steps=0)
+                         gradient_clip_val=grad_clip)
     trainer.fit(model=module, train_dataloaders=train_loader, val_dataloaders=val_loader)
     # trainer.validate(model=module, dataloaders=val_loader)
 
