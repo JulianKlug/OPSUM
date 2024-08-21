@@ -36,7 +36,8 @@ DEFAULT_GRIDEARCH_CONFIG = {
     "grad_clip_value": [1e-3, 0.2],
     "early_stopping_step_limit": [10],
     "imbalance_factor": 62,
-    "max_epochs": 50
+    "max_epochs": 50,
+    "target_timeseries_length": 1
 }
 
 def launch_gridsearch_encoder_decoder(data_splits_path:str, output_folder:str, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG, use_gpu:bool=True,
@@ -168,6 +169,8 @@ if __name__ == '__main__':
 
     if args.config is not None:
         gridsearch_config = json.load(open(args.config))
+    else:
+        gridsearch_config = None
 
     launch_gridsearch_encoder_decoder(data_splits_path=args.data_splits_path, output_folder=args.output_folder, gridsearch_config=gridsearch_config,
                       use_gpu=use_gpu, storage_pwd=args.storage_pwd, storage_port=args.storage_port, storage_host=args.storage_host)

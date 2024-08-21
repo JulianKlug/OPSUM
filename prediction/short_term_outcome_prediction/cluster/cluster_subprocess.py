@@ -26,13 +26,16 @@ def subprocess_cluster_gridsearch(data_splits_path:str, output_folder:str, trial
     study = optuna.load_study(study_name=trial_name, storage=storage)
 
     splits = ch.load(path.join(data_splits_path))
-    all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu) for x in splits]
 
     if use_decoder:
+        all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu, use_target_timeseries=True,
+                                                    target_timeseries_length=gridsearch_config[
+                                                        'target_timeseries_length']) for x in splits]
         study.optimize(partial(get_score_encoder_decoder, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
                             gridsearch_config=gridsearch_config,
                            use_gpu=use_gpu), n_trials=gridsearch_config['n_trials'])
     else:
+        all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu) for x in splits]
         study.optimize(partial(get_score_encoder, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
                                 gridsearch_config=gridsearch_config,
                                use_gpu=use_gpu), n_trials=gridsearch_config['n_trials'])
