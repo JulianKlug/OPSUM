@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=opsum_short_subprocess    # Job name
 #SBATCH --partition=public-gpu
-#SBATCH --gres=gpu:turing:1                    # Number of GPUs
+#SBATCH --gres=gpu:1                    # Number of GPUs
 #SBATCH --ntasks=1
-#SBATCH --mem=100G                     # Job memory request
+#SBATCH --mem=20G                     # Job memory request
 #SBATCH --cpus-per-task=1
 #SBATCH --time=1-00:00:00               # Time limit hrs:min:sec
 #SBATCH --output=/home/users/k/klug/logs/short_term_opsum/opsum_short_subprocess_%j.log   # Standard output and error log
