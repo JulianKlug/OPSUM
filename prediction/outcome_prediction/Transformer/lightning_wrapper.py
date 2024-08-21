@@ -95,9 +95,9 @@ class LitEncoderDecoderModel(pl.LightningModule):
 
         self.criterion = ch.nn.MSELoss()
 
-        self.train_cos_sim = CosineSimilarity()
-        self.train_cos_sim_epoch = CosineSimilarity()
-        self.val_cos_sim_epoch = CosineSimilarity()
+        self.train_cos_sim = CosineSimilarity(reduction='mean')
+        self.train_cos_sim_epoch = CosineSimilarity(reduction='mean')
+        self.val_cos_sim_epoch = CosineSimilarity(reduction='mean')
 
 
 
@@ -114,8 +114,8 @@ class LitEncoderDecoderModel(pl.LightningModule):
 
         loss = self.criterion(predictions, y)
 
-        self.train_cos_sim(predictions.ravel(), y.ravel())
-        self.train_cos_sim_epoch(predictions.ravel(), y.ravel())
+        self.train_cos_sim(predictions, y)
+        self.train_cos_sim_epoch(predictions, y)
 
         self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("train_cos_sim", self.train_cos_sim_epoch, on_step=False, on_epoch=True, prog_bar=True)
@@ -130,7 +130,7 @@ class LitEncoderDecoderModel(pl.LightningModule):
 
         loss = self.criterion(predictions, y)
 
-        self.val_cos_sim_epoch(predictions.ravel(), y.ravel())
+        self.val_cos_sim_epoch(predictions, y)
 
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val_cos_sim", self.val_cos_sim_epoch, on_step=False, on_epoch=True, prog_bar=True)
