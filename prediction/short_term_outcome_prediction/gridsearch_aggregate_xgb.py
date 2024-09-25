@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import json
 
-from sklearn.metrics import accuracy_score, roc_auc_score, matthews_corrcoef
+from sklearn.metrics import accuracy_score, roc_auc_score, matthews_corrcoef, average_precision_score
 import xgboost as xgb
 
 from prediction.short_term_outcome_prediction.timeseries_decomposition import prepare_aggregate_dataset
@@ -78,7 +78,7 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
 
         xgb_model = xgb.XGBClassifier(learning_rate=learning_rate, max_depth=max_depth, n_estimators=n_estimators,
                                       reg_lambda=reg_lambda, alpha=alpha)
-        trained_xgb = xgb_model.fit(fold_X_train, fold_y_train, early_stopping_rounds=early_stopping_rounds, eval_metric=["auc"],
+        trained_xgb = xgb_model.fit(fold_X_train, fold_y_train, early_stopping_rounds=early_stopping_rounds, eval_metric=["aucpr"],
                                     eval_set=[(fold_X_train, fold_y_train), (fold_X_val, fold_y_val)])
 
         # save trained model
@@ -94,6 +94,7 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
         model_auc_val = roc_auc_score(fold_y_val, model_y_val)
         model_mcc_val = matthews_corrcoef(fold_y_val, model_y_pred_val)
         model_sp_val = specificity(fold_y_val, model_y_pred_val).numpy()
+        model_auprc_val = average_precision_score(fold_y_val, model_y_val)
 
         model_y_train = trained_xgb.predict_proba(fold_X_train)[:, 1].astype('float32')
         model_y_pred_train = np.where(model_y_train > 0.5, 1, 0).astype('float32')
@@ -103,6 +104,7 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
         model_auc_train = roc_auc_score(fold_y_train, model_y_train)
         model_mcc_train = matthews_corrcoef(fold_y_train, model_y_pred_train)
         model_sp_train = specificity(fold_y_train, model_y_pred_train).numpy()
+        model_auprc_train = average_precision_score(fold_y_train, model_y_train)
 
         # save model performance
         run_performance_df = pd.DataFrame(index=[0])
@@ -117,6 +119,8 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
         run_performance_df['outcome'] = outcome
         run_performance_df['auc_train'] = model_auc_train
         run_performance_df['auc_val'] = model_auc_val
+        run_performance_df['auprc_train'] = model_auprc_train
+        run_performance_df['auprc_val'] = model_auprc_val
         run_performance_df['mcc_train'] = model_mcc_train
         run_performance_df['mcc_val'] = model_mcc_val
         run_performance_df['acc_train'] = model_acc_train
@@ -129,7 +133,7 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
         run_performance_df['sp_val'] = model_sp_val
         model_df = pd.concat([model_df, run_performance_df])
 
-        best_val_score = model_auc_val
+        best_val_score = model_auprc_val
         best_epoch = trained_xgb.best_iteration
         val_scores.append(best_val_score)
         best_epochs.append(best_epoch)
