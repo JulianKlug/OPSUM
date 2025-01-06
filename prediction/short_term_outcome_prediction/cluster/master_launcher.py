@@ -2,6 +2,7 @@ import os
 from os import path
 from datetime import datetime
 import optuna
+from optuna_dashboard import run_server
 import json
 
 from prediction.utils.utils import ensure_dir
@@ -13,7 +14,8 @@ def launch_cluster_gridsearch(data_splits_path: str, output_folder: str,
                               use_gpu:bool = True,
                               use_time_to_event:bool = False,
                               use_decoder:bool = False,
-                              storage_pwd:str = None, storage_port:int = None, storage_host:str = 'localhost'):
+                              storage_pwd:str = None, storage_port:int = None, storage_host:str = 'localhost',
+                              use_optuna_frontend:bool = False):
     outcome = '_'.join(os.path.basename(data_splits_path).split('_')[3:6])
 
     if not use_decoder and not use_time_to_event:
@@ -66,6 +68,10 @@ def launch_cluster_gridsearch(data_splits_path: str, output_folder: str,
                     f'storage_pwd={storage_pwd},storage_port={storage_port},storage_host={storage_host},'
                   f'subprocess_py_file_path={subprocess_py_file_path} {subprocess_sbatch_file_path}')
 
+    # launch optuna dashboard
+    if use_optuna_frontend:
+        run_server(storage=storage, port=5555)
+
 
 if __name__ == '__main__':
     import argparse
@@ -82,6 +88,7 @@ if __name__ == '__main__':
     parser.add_argument('-spwd', '--storage_pwd', type=str, required=False, default=None)
     parser.add_argument('-sport', '--storage_port', type=int, required=False, default=None)
     parser.add_argument('-shost', '--storage_host', type=str, required=False, default=None)
+    parser.add_argument('-f', '--use_optuna_frontend', default=False, action='store_true')
 
     args = parser.parse_args()
 
@@ -90,5 +97,6 @@ if __name__ == '__main__':
                                 n_subprocesses=args.n_subprocesses, use_gpu=use_gpu,
                                 use_decoder=args.use_decoder,
                                 use_time_to_event=args.use_time_to_event,
-                                storage_pwd=args.storage_pwd, storage_port=args.storage_port, storage_host=args.storage_host)
+                                storage_pwd=args.storage_pwd, storage_port=args.storage_port, storage_host=args.storage_host,
+                                use_optuna_frontend=args.use_optuna_frontend)
 

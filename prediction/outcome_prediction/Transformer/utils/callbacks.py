@@ -3,7 +3,6 @@ from pytorch_lightning.callbacks.callback import Callback
 
 class MyEarlyStopping(Callback):
 
-    best_so_far = 0
     last_improvement = 0
 
     def __init__(self, step_limit=10, metric='val_auroc', direction='max'):
@@ -11,6 +10,13 @@ class MyEarlyStopping(Callback):
         self.step_limit = step_limit
         self.metric = metric
         self.direction = direction
+
+        if self.direction == 'max':
+                   self.best_so_far = 0
+        elif self.direction == 'min':
+                   self.best_so_far = 1e6
+        else:
+            raise ValueError('direction must be "max" or "min"')
 
     def on_validation_end(self, trainer, pl_module):
         logs = trainer.callback_metrics
