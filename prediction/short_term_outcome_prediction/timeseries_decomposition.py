@@ -47,6 +47,46 @@ def decompose_and_label_timeseries(timeseries: np.ndarray, y_df: pd.DataFrame, t
     return map, flat_labels
 
 
+def decompose_and_label_timeseries_time_to_event(timeseries: np.ndarray, y_df: pd.DataFrame):
+    """
+    Decompose the timeseries data into individual samples (every sample is a subtimeseries) and associate each sample with a label.
+    The label is given by a tuple and represents the time to event or censoring (time to event|censoring, event y|n)
+    Args:
+        timeseries (np.array): array of shape (num_samples, num_features, num_timesteps)
+        y_df (pd.DataFrame): dataframe with case_admission_id and relative_sample_date_hourly_cat (start of the target event)
+
+    Returns:
+        map (list): list of tuples (cid_idx, ts) where idx in list is the index of the sample in the flattened targets array, cid_idx is the idx of case admission id, and ts is the last timestep for this idx
+        flat_labels (list): list of labels for every subsequence [label: (time to event|censoring, event y|n)]
+
+    """
+
+    # create index mapping (list of (cid, ts) in which the index in the list is the index of the sample in the flattened targets array)
+    map = []
+    # labels for every sub sequence
+    flat_labels = []
+    # maximum number of timesteps (for most patients is max of relative_sample_date_hourly_cat, but for some patients it until the occurrence of the event)
+    overall_max_ts = timeseries.shape[1]
+    for idx, cid in enumerate(timeseries[:, 0, 0, 0]):
+        if cid in y_df.case_admission_id.values:
+            max_ts = y_df[y_df.case_admission_id == cid].relative_sample_date_hourly_cat.values[0]
+        else:
+            max_ts = overall_max_ts
+        for ts in range(int(max_ts)):
+            # store idx of cid and idx of ts
+            map.append((idx, ts))
+            time_to_event = max_ts - ts
+            if cid in y_df.case_admission_id.values:
+                # flat_labels.append((time_to_event, 1))
+                flat_labels.append(time_to_event)
+            else:
+                # data censored (no event)
+                # flat_labels.append((time_to_event, 0))
+                flat_labels.append(max_ts)
+
+    return map, flat_labels
+
+
 def decompose_timeseries(timeseries: np.ndarray, target_timeseries_length: int = 1):
     """
     Decompose the timeseries data into individual samples (every sample is a subtimeseries)
@@ -191,6 +231,7 @@ class BucketBatchSampler(Sampler):
 
 
 def prepare_subsequence_dataset(scenario, rescale=True, target_time_to_outcome=6, use_gpu=True,
+                                use_time_to_event=False,
                                 use_target_timeseries=False, target_timeseries_indices=None,
                                 target_timeseries_length=1):
     """
@@ -205,10 +246,13 @@ def prepare_subsequence_dataset(scenario, rescale=True, target_time_to_outcome=6
     """
     X_train, X_val, y_train, y_val = scenario
 
-    if not use_target_timeseries:
+    if not use_target_timeseries and not use_time_to_event:
         train_map, train_flat_labels = decompose_and_label_timeseries(X_train, y_train, target_time_to_outcome=target_time_to_outcome)
         val_map, val_flat_labels = decompose_and_label_timeseries(X_val, y_val, target_time_to_outcome=target_time_to_outcome)
-    else:
+    elif use_time_to_event:
+        train_map, train_flat_labels = decompose_and_label_timeseries_time_to_event(X_train, y_train)
+        val_map, val_flat_labels = decompose_and_label_timeseries_time_to_event(X_val, y_val)
+    elif use_target_timeseries:
         # if we want to return the target timeseries, we need to decompose the timeseries differently (whole timeseries for each sample)
         train_map = decompose_timeseries(X_train, target_timeseries_length)
         val_map = decompose_timeseries(X_val, target_timeseries_length)
@@ -250,6 +294,7 @@ def prepare_subsequence_dataset(scenario, rescale=True, target_time_to_outcome=6
 def prepare_aggregate_dataset(scenario, rescale=True, target_time_to_outcome=6, mask_after_first_positive=True):
     """
     Prepares the dataset as an aggregate dataset (one sample per timepoint) and returns the train and validation sets.
+    (only used for XGB model)
 
     Args:
         scenario (tuple): tuple of (X_train, X_val, y_train, y_val)

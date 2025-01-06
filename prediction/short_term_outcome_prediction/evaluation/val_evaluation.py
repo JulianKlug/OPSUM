@@ -27,7 +27,8 @@ def validation_evaluation(data_path:str, model_config_path:str, model_path:str=N
     model_config = pd.read_csv(model_config_path)
 
     if output_path is None:
-        output_path = os.path.join(os.path.dirname(model_config_path), 'validation_evaluation_results')
+        output_path = os.path.join(os.path.dirname(model_config_path),
+                                   f'validation_evaluation_results_{eval_n_time_steps_before_event}h')
     ensure_dir(output_path)
 
     # Load the data
@@ -141,7 +142,6 @@ def validation_evaluation(data_path:str, model_config_path:str, model_path:str=N
         if len(np.unique(y_true)) == 1:
             auprc_scores.append(np.nan)
         else:
-            # auprc_scores.append(binary_auprc(y_true, y_pred))
             auprc_scores.append(average_precision_score(y_true, y_pred))
 
     # compute MCC scores for each time step
@@ -187,6 +187,9 @@ def validation_evaluation(data_path:str, model_config_path:str, model_path:str=N
     ax.set_xlabel('Time step')
     ax.set_ylabel('Score')
     ax.set_title('Validation scores over time')
+
+    # save plot
+    plt.savefig(os.path.join(output_path, 'validation_scores_over_time.png'))
 
     with PdfPages(os.path.join(output_path, 'predictions_over_time.pdf')) as pdf:
         for i in range(pred_over_ts_np.shape[0]):

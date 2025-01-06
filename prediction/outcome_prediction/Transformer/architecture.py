@@ -153,7 +153,7 @@ class OPSUMTransformer(nn.Module):
     
     def __init__(self, input_dim, num_layers, model_dim, ff_dim,
                  num_heads, dropout, num_classes=1, pos_encode_factor=0.1,
-                 max_dim=5000):
+                 max_dim=5000, enforce_non_negative=False):
         super().__init__()
         self.embedder = nn.Linear(input_dim, model_dim)
         self.pe = PositionalEncoding(model_dim, dropout, max_dim, factor=pos_encode_factor)
@@ -162,7 +162,8 @@ class OPSUMTransformer(nn.Module):
         attn = MultiHeadedAttention(num_heads, model_dim)
         c = copy.deepcopy
         self.encoder = Encoder(EncoderLayer(model_dim, c(attn), c(ff), dropout), num_layers)
-        self.classifier = FinalClassification(model_dim, 1)
+        self.classifier = FinalClassification(model_dim, num_classes)
+        self.enforce_non_negative = enforce_non_negative
 
     def forward(self, x):
         bs, t, f = x.shape
@@ -171,6 +172,11 @@ class OPSUMTransformer(nn.Module):
         x = self.pe(x)
         x = self.encoder(x)
         x = self.classifier(x)
+
+        # for time to event prediction
+        if self.enforce_non_negative:
+            x = F.softplus(x)
+
         return x
 
 
