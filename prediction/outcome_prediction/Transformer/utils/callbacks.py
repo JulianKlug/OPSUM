@@ -30,6 +30,8 @@ class MyEarlyStopping(Callback):
             else:
                 trainer.should_stop = self.last_improvement > self.step_limit
 
+            self.best_so_far = max(val_metric, self.best_so_far)
+
         if self.direction == 'min':
             if val_metric < self.best_so_far:
                 self.last_improvement = 0
@@ -38,6 +40,4 @@ class MyEarlyStopping(Callback):
 
             trainer.should_stop = self.last_improvement > self.step_limit
 
-
-
-        self.best_so_far = max(val_metric, self.best_so_far)
+            self.best_so_far = min(val_metric, self.best_so_far)
