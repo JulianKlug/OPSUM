@@ -125,7 +125,8 @@ def get_score_encoder_decoder(trial, ds, data_splits_path, output_folder, gridse
         trainer = pl.Trainer(accelerator=accelerator, devices=1, max_epochs=gridsearch_config['max_epochs'],
                              logger=logger,
                              log_every_n_steps=25, enable_checkpointing=True,
-                             callbacks=[MyEarlyStopping(step_limit=early_stopping_step_limit, metric='val_cos_sim'),
+                             callbacks=[MyEarlyStopping(step_limit=early_stopping_step_limit, metric='val_cos_sim',
+                                                        direction='max'),
                                         checkpoint_callback],
                              gradient_clip_val=grad_clip)
         trainer.fit(model=module, train_dataloaders=train_loader, val_dataloaders=val_loader)

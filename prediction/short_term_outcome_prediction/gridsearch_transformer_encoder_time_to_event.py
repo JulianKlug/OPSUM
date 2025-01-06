@@ -130,7 +130,8 @@ def get_score_encoder_tte(trial, ds, data_splits_path, output_folder, gridsearch
         trainer = pl.Trainer(accelerator=accelerator, devices=1, max_epochs=gridsearch_config['max_epochs'],
                              logger=logger,
                              log_every_n_steps=25, enable_checkpointing=True,
-                             callbacks=[MyEarlyStopping(step_limit=early_stopping_step_limit, metric='val_mae'), checkpoint_callback],
+                             callbacks=[MyEarlyStopping(step_limit=early_stopping_step_limit, metric='val_mae',
+                                                        direction='min'), checkpoint_callback],
                              gradient_clip_val=grad_clip)
         trainer.fit(model=module, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
