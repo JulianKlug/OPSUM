@@ -146,6 +146,7 @@ def get_score_encoder(trial, ds, data_splits_path, output_folder, gridsearch_con
         rolling_val_scores.append(rolling_val_auroc)
 
     d = dict(trial.params)
+    d['model_type'] = 'transformer_encoder'
     d['median_rolling_val_scores'] = float(np.median(rolling_val_scores))
     d['median_val_scores'] = float(np.median(val_scores))
     d['median_best_epochs'] = float(np.median(best_epochs))

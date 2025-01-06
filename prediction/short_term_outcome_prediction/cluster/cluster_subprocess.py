@@ -28,14 +28,14 @@ def subprocess_cluster_gridsearch(data_splits_path:str, output_folder:str, trial
 
     splits = ch.load(path.join(data_splits_path))
 
-    if use_decoder:
+    if use_decoder == True:
         all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu, use_target_timeseries=True,
                                                     target_timeseries_length=gridsearch_config[
                                                         'target_timeseries_length']) for x in splits]
         study.optimize(partial(get_score_encoder_decoder, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
                             gridsearch_config=gridsearch_config,
                            use_gpu=use_gpu), n_trials=gridsearch_config['n_trials'])
-    if use_time_to_event:
+    if use_time_to_event == True:
         all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu, use_time_to_event=True) for x in splits]
         study.optimize(partial(get_score_encoder_tte, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
                                 gridsearch_config=gridsearch_config,
@@ -68,6 +68,7 @@ if __name__ == '__main__':
     use_gpu = (args.use_gpu == 1) | (args.use_gpu == '1') | (args.use_gpu == 'True')
     use_decoder = (args.use_decoder == 1) | (args.use_decoder == '1') | (args.use_decoder == 'True')
     use_time_to_event = (args.use_time_to_event == 1) | (args.use_time_to_event == '1') | (args.use_time_to_event == 'True')
+
     subprocess_cluster_gridsearch(args.data_splits_path, args.output_folder, args.trial_name, args.gridsearch_config_path,
-                                    use_gpu=use_gpu, use_decoder=args.use_decoder, use_time_to_event=args.use_time_to_event,
+                                    use_gpu=use_gpu, use_decoder=use_decoder, use_time_to_event=use_time_to_event,
                                     storage_pwd=args.storage_pwd, storage_port=args.storage_port, storage_host=args.storage_host)

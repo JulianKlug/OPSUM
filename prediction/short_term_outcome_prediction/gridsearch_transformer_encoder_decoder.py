@@ -136,6 +136,7 @@ def get_score_encoder_decoder(trial, ds, data_splits_path, output_folder, gridse
         best_epochs.append(best_epoch)
 
     d = dict(trial.params)
+    d['model_type'] = 'transformer_encoder_decoder'
     d['median_val_scores'] = float(np.median(val_scores))
     d['median_best_epochs'] = float(np.median(best_epochs))
     d['timestamp'] = timestamp

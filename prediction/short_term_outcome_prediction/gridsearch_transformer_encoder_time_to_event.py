@@ -153,6 +153,7 @@ def get_score_encoder_tte(trial, ds, data_splits_path, output_folder, gridsearch
         rolling_val_mapes.append(rolling_val_mape)
 
     d = dict(trial.params)
+    d['model_type'] = 'transformer_encoder_time_to_event'
     d['median_rolling_val_mae'] = float(np.median(rolling_val_maes))
     d['median_rolling_val_mape'] = float(np.median(rolling_val_mapes))
     d['median_val_mae'] = float(np.median(val_mae_scores))
