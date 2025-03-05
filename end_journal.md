@@ -7,7 +7,7 @@
 | 2024-08-01 ||
 
 ### Metrics
-- 25.09.24: AUROC might be be unsuited because of very rare events (XGB fits to predicting 0 all the time)
+- 25.09.24: AUROC might be unsuited because of very rare events (XGB fits to predicting 0 all the time)
 - but: when always predicting 0 -> AUROC = 0.5
 
 TODO: try AUPRC, MCC
