@@ -175,7 +175,7 @@ class LitEncoderDecoderModel(pl.LightningModule):
 
 
 class LitEncoderRegressionModel(pl.LightningModule):
-    def __init__(self, model, lr, wd, train_noise, lr_warmup_steps=0):
+    def __init__(self, model, lr, wd, train_noise, lr_warmup_steps=0, classification_threshold=None):
         super().__init__()
         self.model = model
         self.lr = lr
@@ -191,6 +191,11 @@ class LitEncoderRegressionModel(pl.LightningModule):
         self.train_mape_epoch = MeanAbsolutePercentageError()
         self.val_mae = ch.nn.L1Loss()
         self.val_mape = MeanAbsolutePercentageError()
+
+        if classification_threshold is not None:
+            self.classification_threshold = classification_threshold
+            self.val_accuracy_epoch = Accuracy(task='binary')
+            self.val_auroc = AUROC(task="binary")
 
     def training_step(self, batch, batch_idx, mode='train'):
         x, y = batch
@@ -221,8 +226,23 @@ class LitEncoderRegressionModel(pl.LightningModule):
         val_mae = self.val_mae(predictions.ravel(), y.ravel())
         self.val_mape(predictions.ravel(), y.ravel())
 
-        # log mae and mape and loss
-        self.log_dict({'val_mae': val_mae, 'val_mape': self.val_mape, 'val_loss': loss}, on_step=False, on_epoch=True, prog_bar=True)
+        if self.classification_threshold is not None:
+            # binary predictions (predicted event is within time to event threshold)
+            binary_predictions = (predictions <= self.classification_threshold).float()
+            # binary ground truth
+            binary_y = (y <= self.classification_threshold).float()
+            self.val_accuracy_epoch(binary_predictions, binary_y)
+            self.val_auroc(binary_predictions, binary_y)
+
+            # log
+            self.log_dict({'val_mae': val_mae, 'val_mape': self.val_mape, 'val_loss': loss, 'val_accuracy': self.val_accuracy_epoch, 'val_auroc': self.val_auroc}, on_step=False,
+                          on_epoch=True, prog_bar=True)
+
+        else:
+            # log mae and mape and loss
+            self.log_dict({'val_mae': val_mae, 'val_mape': self.val_mape, 'val_loss': loss}, on_step=False,
+                          on_epoch=True, prog_bar=True)
+
         return loss
 
     def predict_step(self, batch, batch_idx):

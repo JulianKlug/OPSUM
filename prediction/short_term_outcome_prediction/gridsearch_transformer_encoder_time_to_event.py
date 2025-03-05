@@ -33,7 +33,8 @@ DEFAULT_GRIDEARCH_CONFIG = {
     "n_lr_warm_up_steps": [0],
     "grad_clip_value": [1e-3, 0.2],
     "early_stopping_step_limit": [10],
-    "max_epochs": 50
+    "max_epochs": 50,
+    "classification_threshold": 6
 }
 
 def launch_gridsearch_encoder_time_to_event(data_splits_path:str, output_folder:str, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG, use_gpu:bool=True,
@@ -87,9 +88,12 @@ def get_score_encoder_tte(trial, ds, data_splits_path, output_folder, gridsearch
 
     val_mae_scores = []
     val_mape_scores = []
+    val_auroc_scores = []
+    val_acc_scores = []
     best_epochs = []
     rolling_val_maes = []
     rolling_val_mapes = []
+    rolling_val_aurocs = []
 
     for i, (train_dataset, val_dataset) in enumerate(ds):
         checkpoint_dir = os.path.join(output_folder, f'checkpoints_short_opsum_transformer_tte_{timestamp}_cv_{i}')
@@ -126,7 +130,8 @@ def get_score_encoder_tte(trial, ds, data_splits_path, output_folder, gridsearch
             filename="short_opsum_transformer_tte_{epoch:02d}_{val_mae:.4f}",
         )
 
-        module = LitEncoderRegressionModel(model, lr, wd, train_noise, lr_warmup_steps=n_lr_warm_up_steps)
+        module = LitEncoderRegressionModel(model, lr, wd, train_noise, lr_warmup_steps=n_lr_warm_up_steps,
+                                           classification_threshold=gridsearch_config['classification_threshold'])
         trainer = pl.Trainer(accelerator=accelerator, devices=1, max_epochs=gridsearch_config['max_epochs'],
                              logger=logger,
                              log_every_n_steps=25, enable_checkpointing=True,
@@ -153,6 +158,15 @@ def get_score_encoder_tte(trial, ds, data_splits_path, output_folder, gridsearch
         rolling_val_maes.append(rolling_val_mae)
         rolling_val_mapes.append(rolling_val_mape)
 
+        if gridsearch_config['classification_threshold'] is not None:
+            val_aurocs = np.array([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x])
+            rolling_val_auroc = np.median(val_aurocs[max(0, best_idx - 1): best_idx + 2])
+            best_val_auroc = np.max([x['val_auroc'] for x in logger.metrics if 'val_auroc' in x])
+            best_val_acc = np.max([x['val_accuracy'] for x in logger.metrics if 'val_accuracy' in x])
+            val_auroc_scores.append(best_val_auroc)
+            val_acc_scores.append(best_val_acc)
+            rolling_val_aurocs.append(rolling_val_auroc)
+
     d = dict(trial.params)
     d['model_type'] = 'transformer_encoder_time_to_event'
     d['median_rolling_val_mae'] = float(np.median(rolling_val_maes))
@@ -160,6 +174,9 @@ def get_score_encoder_tte(trial, ds, data_splits_path, output_folder, gridsearch
     d['median_val_mae'] = float(np.median(val_mae_scores))
     d['median_val_mape'] = float(np.median(val_mape_scores))
     d['median_best_epochs'] = float(np.median(best_epochs))
+    d['median_rolling_val_auroc'] = float(np.median(rolling_val_aurocs))
+    d['median_val_auroc'] = float(np.median(val_auroc_scores))
+    d['median_val_acc'] = float(np.median(val_acc_scores))
     d['timestamp'] = timestamp
     d['best_cv_fold'] = int(np.argmin(val_mae_scores))
     d['worst_cv_fold_val_score'] = float(np.max(val_mae_scores))
