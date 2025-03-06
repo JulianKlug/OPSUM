@@ -26,6 +26,7 @@ def validation_evaluation(data_path:str, model_config_path:str, model_path:str=N
     Gist: Use a separate evaluation then the one formalised in the model training
     """
     model_config = pd.read_csv(model_config_path)
+    model_config = model_config.to_dict(orient='records')[0]
 
     if output_path is None:
         output_path = os.path.join(os.path.dirname(model_config_path),
@@ -38,7 +39,7 @@ def validation_evaluation(data_path:str, model_config_path:str, model_path:str=N
     if use_cross_validation:
         loop_range = range(len(splits))
     else:
-        loop_range = [model_config['best_cv_fold'].values[0]]
+        loop_range = [model_config['best_cv_fold']]
 
     all_folds_results = pd.DataFrame()
     for cv_fold in loop_range:
@@ -88,12 +89,17 @@ def validation_evaluation(data_path:str, model_config_path:str, model_path:str=N
                 max_dim=500,
                 pos_encode_factor=pos_encode_factor
             )
+            
+            try:
+                imbalance_factor = model_config['imbalance_factor']
+            except:
+                imbalance_factor = 64
 
             trained_model = LitModel.load_from_checkpoint(checkpoint_path=model_path, model=model_architecture,
                                                           lr=model_config['lr'],
                                                           wd=model_config['weight_decay'],
                                                           train_noise=model_config['train_noise'],
-                                                          imbalance_factor=ch.tensor(model_config['imbalance_factor']))
+                                                          imbalance_factor=ch.tensor(imbalance_factor))
 
             # compute predictions
             pred_over_ts = []
@@ -114,6 +120,8 @@ def validation_evaluation(data_path:str, model_config_path:str, model_path:str=N
                     y_pred = np.array(ch.sigmoid(trainer.predict(trained_model, val_loader)[0])[:, -1])
 
                 pred_over_ts.append(np.squeeze(y_pred))
+
+            ch.save(pred_over_ts, os.path.join(fold_result_dir, f'predictions_cv{cv_fold}.pt'))
 
             pred_over_ts_np = np.squeeze(pred_over_ts).T
 
@@ -172,6 +180,12 @@ def validation_evaluation(data_path:str, model_config_path:str, model_path:str=N
                 auprc_scores.append(average_precision_score(y_true, y_pred))
                 mcc_scores.append(matthews_corrcoef(y_true, y_pred_binary))
 
+    # Ensure true_label is binary
+        overall_prediction_df['true_label'] = overall_prediction_df['true_label'].astype(int)
+    # Ensure prediction is a continuous value between 0 and 1
+        overall_prediction_df['prediction'] = overall_prediction_df['prediction'].astype(float)
+
+
         # compute overall metrics
         overall_results_df = pd.DataFrame({'overall_roc': roc_auc_score(overall_prediction_df.true_label,
                                                                          overall_prediction_df.prediction),
@@ -223,7 +237,7 @@ def validation_evaluation(data_path:str, model_config_path:str, model_path:str=N
         # save plot
         plt.savefig(os.path.join(fold_result_dir, 'validation_scores_over_time.png'))
 
-        if cv_fold == model_config['best_cv_fold'].values[0]:
+        if cv_fold == model_config['best_cv_fold']:
             # plot predictions over time for a subset of patients
             with PdfPages(os.path.join(fold_result_dir, 'predictions_over_time.pdf')) as pdf:
                 for i in range(pred_over_ts_np.shape[0]):
