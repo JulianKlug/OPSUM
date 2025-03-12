@@ -1,3 +1,4 @@
+import json
 import os
 
 import pandas as pd
@@ -25,8 +26,11 @@ def validation_evaluation(data_path:str, model_config_path:str, model_path:str=N
     Evaluate the model on the validation set
     Gist: Use a separate evaluation then the one formalised in the model training
     """
-    model_config = pd.read_csv(model_config_path)
-    model_config = model_config.to_dict(orient='records')[0]
+    if model_config_path.endswith('.json'):
+        model_config = json.load(open(model_config_path))
+    else:
+        model_config = pd.read_csv(model_config_path)
+        model_config = model_config.to_dict(orient='records')[0]
 
     if output_path is None:
         output_path = os.path.join(os.path.dirname(model_config_path),
@@ -99,7 +103,13 @@ def validation_evaluation(data_path:str, model_config_path:str, model_path:str=N
                                                           lr=model_config['lr'],
                                                           wd=model_config['weight_decay'],
                                                           train_noise=model_config['train_noise'],
-                                                          imbalance_factor=ch.tensor(imbalance_factor))
+                                                          imbalance_factor=ch.tensor(imbalance_factor),
+                                                          lr_warmup_steps=model_config['n_lr_warm_up_steps'],
+                                                          loss_function=model_config['loss_function'],
+                                                          alpha=model_config['alpha'],
+                                                          gamma=model_config['gamma'],
+                                                          scheduler=model_config['scheduler']
+                                                          )
 
             # compute predictions
             pred_over_ts = []
