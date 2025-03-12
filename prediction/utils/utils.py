@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 import tensorflow.keras.backend as K
+import torch
+import torch.nn as nn
 
 # define function for balanced training
 def generate_balanced_arrays(X_train, y_train):
@@ -121,3 +123,46 @@ def ensure_tensor(x):
     if not isinstance(x, tf.Tensor):
         x = K.constant(x)
     return x
+
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=0.25, gamma=2.0, reduction='mean'):
+        """
+        Implements Focal Loss.
+
+        Args:
+            alpha (float, optional): Weighting factor for the rare class (outliers). Default: 0.25
+            gamma (float, optional): Focusing parameter to reduce loss for easy examples. Default: 2.0
+            reduction (str, optional): 'mean' (default), 'sum', or 'none'.
+        """
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.reduction = reduction
+
+    def forward(self, logits, targets):
+        """
+        Args:
+            logits (Tensor): Model output logits before sigmoid activation.
+            targets (Tensor): Binary ground truth labels.
+
+        Returns:
+            Tensor: Computed focal loss.
+        """
+        probs = torch.sigmoid(logits)  # Convert logits to probabilities
+        targets = targets.float()  # Ensure targets are float for calculations
+
+        pt = probs * targets + (1 - probs) * (1 - targets)  # p_t for focal loss
+        focal_weight = (1 - pt) ** self.gamma  # Compute focal weight
+
+        bce_loss = nn.functional.binary_cross_entropy_with_logits(logits, targets, reduction="none")
+
+        alpha_weight = self.alpha * targets + (1 - self.alpha) * (1 - targets)
+        focal_loss = alpha_weight * focal_weight * bce_loss
+
+        if self.reduction == "mean":
+            return focal_loss.mean()
+        elif self.reduction == "sum":
+            return focal_loss.sum()
+        else:
+            return focal_loss  # No reduction

@@ -8,6 +8,7 @@ import numpy as np
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
+from pytorch_lightning import loggers as pl_loggers
 import json
 
 from prediction.outcome_prediction.Transformer.architecture import OPSUMTransformer
@@ -34,7 +35,8 @@ DEFAULT_GRIDEARCH_CONFIG = {
     "grad_clip_value": [1e-3, 0.2],
     "early_stopping_step_limit": [10],
     "max_epochs": 50,
-    "classification_threshold": 6
+    "classification_threshold": 6,
+    "loss_function": "log_cosh",
 }
 
 def launch_gridsearch_encoder_time_to_event(data_splits_path:str, output_folder:str, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG, use_gpu:bool=True,
@@ -121,6 +123,8 @@ def get_score_encoder_tte(trial, ds, data_splits_path, output_folder, gridsearch
         val_bucket_sampler = BucketBatchSampler(val_dataset.idx_to_len_map, 1024)
         val_loader = DataLoader(val_dataset, batch_sampler=val_bucket_sampler)
         logger = DictLogger(0)
+        tb_logger = pl_loggers.TensorBoardLogger(save_dir=output_folder, name='tb_logs', version=f'short_opsum_transformer_{timestamp}_cv_{i}')
+        loggers = [logger, tb_logger]
 
         checkpoint_callback = ModelCheckpoint(
             save_top_k=1,
@@ -131,9 +135,10 @@ def get_score_encoder_tte(trial, ds, data_splits_path, output_folder, gridsearch
         )
 
         module = LitEncoderRegressionModel(model, lr, wd, train_noise, lr_warmup_steps=n_lr_warm_up_steps,
-                                           classification_threshold=gridsearch_config['classification_threshold'])
+                                           classification_threshold=gridsearch_config['classification_threshold'],
+                                             loss_function=gridsearch_config['loss_function'])
         trainer = pl.Trainer(accelerator=accelerator, devices=1, max_epochs=gridsearch_config['max_epochs'],
-                             logger=logger,
+                             logger=loggers,
                              log_every_n_steps=25, enable_checkpointing=True,
                              callbacks=[MyEarlyStopping(step_limit=early_stopping_step_limit, metric='val_mae',
                                                         direction='min'), checkpoint_callback],

@@ -8,6 +8,7 @@ import numpy as np
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
+from pytorch_lightning import loggers as pl_loggers
 import json
 
 from prediction.outcome_prediction.Transformer.architecture import OPSUM_encoder_decoder
@@ -112,6 +113,8 @@ def get_score_encoder_decoder(trial, ds, data_splits_path, output_folder, gridse
         val_bucket_sampler = BucketBatchSampler(val_dataset.idx_to_len_map, 1024)
         val_loader = DataLoader(val_dataset, batch_sampler=val_bucket_sampler)
         logger = DictLogger(0)
+        tb_logger = pl_loggers.TensorBoardLogger(save_dir=output_folder, name='tb_logs', version=f'short_opsum_transformer_{timestamp}_cv_{i}')
+        loggers = [logger, tb_logger]
 
         checkpoint_callback = ModelCheckpoint(
             save_top_k=1,
@@ -123,12 +126,13 @@ def get_score_encoder_decoder(trial, ds, data_splits_path, output_folder, gridse
 
         module = LitEncoderDecoderModel(model, lr, wd, train_noise, lr_warmup_steps=n_lr_warm_up_steps)
         trainer = pl.Trainer(accelerator=accelerator, devices=1, max_epochs=gridsearch_config['max_epochs'],
-                             logger=logger,
+                             logger=loggers,
                              log_every_n_steps=25, enable_checkpointing=True,
                              callbacks=[MyEarlyStopping(step_limit=early_stopping_step_limit, metric='val_cos_sim',
                                                         direction='max'),
                                         checkpoint_callback],
-                             gradient_clip_val=grad_clip)
+                             gradient_clip_val=grad_clip,
+                             num_sanity_val_steps=0)
         trainer.fit(model=module, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
         best_val_score = np.max([x['val_cos_sim'] for x in logger.metrics if 'val_cos_sim' in x])

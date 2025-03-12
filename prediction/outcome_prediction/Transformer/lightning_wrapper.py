@@ -1,30 +1,48 @@
 import torch as ch
 from torch import optim
 import pytorch_lightning as pl
-from torchmetrics import AUROC
+from torchmetrics import AUROC, MeanAbsoluteError, AveragePrecision
 from torchmetrics.classification import Accuracy
 from torchmetrics.regression import CosineSimilarity, MeanAbsolutePercentageError
 
 from prediction.outcome_prediction.Transformer.architecture import OPSUM_encoder_decoder
+from prediction.utils.utils import FocalLoss
 
 
 class LitModel(pl.LightningModule):
-    def __init__(self, model, lr, wd, train_noise, lr_warmup_steps=0, imbalance_factor=None):
+    def __init__(self, model, lr, wd, train_noise, lr_warmup_steps=0,
+                 loss_function='bce', alpha=0.25, gamma=2.0,
+                 imbalance_factor=None, debug_mode=False, scheduler='exponential'):
         super().__init__()
         self.model = model
         self.lr = lr
         self.lr_warmup_steps = lr_warmup_steps
         self.wd = wd
         self.train_noise = train_noise
-        if imbalance_factor is not None:
-            self.criterion = ch.nn.BCEWithLogitsLoss(pos_weight=imbalance_factor)
-        else:
-            self.criterion = ch.nn.BCEWithLogitsLoss()
+        self.scheduler = scheduler
+
+        if loss_function == 'bce':
+            if imbalance_factor is not None:
+                self.criterion = ch.nn.BCEWithLogitsLoss(pos_weight=imbalance_factor)
+            else:
+                self.criterion = ch.nn.BCEWithLogitsLoss()
+        elif loss_function == 'focal':
+            self.criterion = FocalLoss(alpha=alpha, gamma=gamma)
+
+
         self.train_accuracy = Accuracy(task='binary')
         self.train_accuracy_epoch = Accuracy(task='binary')
         self.val_accuracy_epoch = Accuracy(task='binary')
         self.train_auroc = AUROC(task="binary")
         self.val_auroc = AUROC(task="binary")
+        self.train_auroc_epoch = AUROC(task="binary")
+        self.train_auprc = AveragePrecision(task="binary")
+        self.train_auprc_epoch = AveragePrecision(task="binary")
+        self.val_auprc = AveragePrecision(task="binary")
+
+
+        # more logs
+        self.debug_mode = debug_mode
 
     def training_step(self, batch, batch_idx, mode='train'):
         x, y = batch
@@ -36,6 +54,36 @@ class LitModel(pl.LightningModule):
         loss = self.criterion(predictions, y.float()).ravel()
         self.train_accuracy(predictions.ravel(), y.ravel())
         self.train_accuracy_epoch(predictions.ravel(), y.ravel())
+        self.train_auroc(predictions.ravel(), y.ravel())
+        self.train_auroc_epoch(predictions.ravel(), y.ravel())
+        self.train_auprc(predictions.ravel(), y.ravel())
+        self.train_auprc_epoch(predictions.ravel(), y.ravel())
+
+        if self.debug_mode:
+            self.log_dict(
+                {
+                    'train_loss': loss,
+                    'train_auroc': self.train_auroc,
+                    'train_auprc': self.train_auprc
+                },
+                on_step=True,
+                on_epoch=False,
+                prog_bar=True
+            )
+
+            self.log_dict(
+                {
+                    'train_loss_epoch': loss,
+                    'train_accuracy_epoch': self.train_accuracy_epoch,
+                    'train_auroc_epoch': self.train_auroc_epoch,
+                    'train_auprc_epoch': self.train_auprc_epoch
+                },
+                on_step=False,
+                on_epoch=True,
+                prog_bar=True
+            )
+
+
         return loss
 
     def validation_step(self ,batch, batch_idx, mode='train'):
@@ -44,7 +92,21 @@ class LitModel(pl.LightningModule):
         y = y.unsqueeze(1).repeat(1, x.shape[1]).ravel()
         loss = self.criterion(predictions, y.float()).ravel()
         self.val_auroc(ch.sigmoid(predictions.ravel()), y.ravel())
-        self.log("val_auroc", self.val_auroc, on_step=False, on_epoch=True, prog_bar=True)
+        self.val_auprc(ch.sigmoid(predictions.ravel()), y.ravel())
+
+        self.log_dict({
+            'val_auroc': self.val_auroc,
+            'val_auprc': self.val_auprc
+        }, on_step=False, on_epoch=True, prog_bar=True)
+
+        if self.debug_mode:
+            self.log_dict(
+                {
+                    'val_loss': loss,
+                },
+                on_step=False,
+                on_epoch=True,
+            )
         return loss
 
     def predict_step(self, batch, batch_idx):
@@ -61,7 +123,10 @@ class LitModel(pl.LightningModule):
 
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.wd)
 
-        train_scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.99)
+        if self.scheduler == 'exponential':
+            train_scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.99)
+        elif self.scheduler == 'cosine':
+            train_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)
 
         if self.lr_warmup_steps == 0:
             return [optimizer], [train_scheduler]
@@ -97,8 +162,7 @@ class LitEncoderDecoderModel(pl.LightningModule):
 
         self.train_cos_sim = CosineSimilarity(reduction='mean')
         self.train_cos_sim_epoch = CosineSimilarity(reduction='mean')
-        self.val_cos_sim_epoch = CosineSimilarity(reduction='mean')
-
+        self.val_cos_sim = CosineSimilarity(reduction='mean')
 
 
     def training_step(self, batch, batch_idx, mode='train'):
@@ -132,7 +196,7 @@ class LitEncoderDecoderModel(pl.LightningModule):
         self.val_cos_sim(predictions.reshape(x.shape[0],-1), y.reshape(x.shape[0],-1))
 
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val_cos_sim", self.val_cos_sim_epoch, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val_cos_sim", self.val_cos_sim, on_step=False, on_epoch=True, prog_bar=True)
 
         return loss
 
@@ -175,19 +239,24 @@ class LitEncoderDecoderModel(pl.LightningModule):
 
 
 class LitEncoderRegressionModel(pl.LightningModule):
-    def __init__(self, model, lr, wd, train_noise, lr_warmup_steps=0, classification_threshold=None):
+    def __init__(self, model, lr, wd, train_noise, lr_warmup_steps=0, classification_threshold=None,
+                 loss_function='rmse'):
         super().__init__()
         self.model = model
         self.lr = lr
         self.lr_warmup_steps = lr_warmup_steps
         self.wd = wd
         self.train_noise = train_noise
-        self.criterion = ch.nn.MSELoss()
+
+        if loss_function == 'rmse':
+            self.criterion = self.rmse_loss
+        elif loss_function == 'log_cosh':
+            self.criterion = self.log_cosh_loss
 
         # define monitoring metrics: MAE, MAPE
-        self.train_mae = ch.nn.L1Loss()
+        self.train_mae = MeanAbsoluteError()
         self.train_mape = MeanAbsolutePercentageError()
-        self.train_mae_epoch = ch.nn.L1Loss()
+        self.train_mae_epoch = MeanAbsoluteError()
         self.train_mape_epoch = MeanAbsolutePercentageError()
         self.val_mae = ch.nn.L1Loss()
         self.val_mape = MeanAbsolutePercentageError()
@@ -197,6 +266,17 @@ class LitEncoderRegressionModel(pl.LightningModule):
             self.val_accuracy_epoch = Accuracy(task='binary')
             self.val_auroc = AUROC(task="binary")
 
+    def log_cosh_loss(self, predictions, targets):
+        """ Log-Cosh Loss: smoother alternative to exponential loss """
+        diff = predictions - targets
+        loss = ch.log(ch.cosh(diff + 1e-12))  # Small constant to avoid log(0)
+        return loss.mean()
+
+    def rmse_loss(self, predictions, targets):
+        """ Computes Root Mean Squared Error (RMSE) Loss """
+        loss = ch.sqrt(ch.nn.functional.mse_loss(predictions, targets))
+        return loss
+
     def training_step(self, batch, batch_idx, mode='train'):
         x, y = batch
         if self.train_noise != 0:
@@ -204,14 +284,26 @@ class LitEncoderRegressionModel(pl.LightningModule):
             x = x + ch.randn(x.shape[0], x.shape[1], device=x.device)[:, :, None].repeat(1, 1, x.shape[2]) * self.train_noise
         predictions = self.model(x).squeeze().ravel()
         y = y.unsqueeze(1).repeat(1, x.shape[1]).ravel()
-        # loss = self.criterion(predictions, y.float()).ravel()
-        # use RMSE
-        loss = ch.sqrt(self.criterion(predictions, y.float())).ravel()
+
+        # compute loss
+        loss = self.criterion(predictions, y.float())
 
         self.train_mae(predictions.ravel(), y.ravel())
         self.train_mape(predictions.ravel(), y.ravel())
         self.train_mae_epoch(predictions.ravel(), y.ravel())
         self.train_mape_epoch(predictions.ravel(), y.ravel())
+
+        # log batch train loss and mae
+        self.log_dict(
+            {
+                'train_mae': self.train_mae_epoch.compute(),
+                'train_loss': loss
+            },
+            on_step=True,
+            on_epoch=False,
+            prog_bar=True
+        )
+        self.train_mae_epoch.reset()
 
         return loss
 
@@ -219,9 +311,9 @@ class LitEncoderRegressionModel(pl.LightningModule):
         x, y = batch
         predictions = self.model(x).squeeze().ravel()
         y = y.unsqueeze(1).repeat(1, x.shape[1]).ravel()
-        # loss = self.criterion(predictions, y.float()).ravel()
-        # use RMSE
-        loss = ch.sqrt(self.criterion(predictions, y.float())).ravel()
+
+        # compute loss
+        loss = self.criterion(predictions, y.float())
 
         val_mae = self.val_mae(predictions.ravel(), y.ravel())
         self.val_mape(predictions.ravel(), y.ravel())

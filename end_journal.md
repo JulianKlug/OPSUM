@@ -17,6 +17,17 @@ TODO: try AUPRC, MCC
 - 25.09.24: not too bad of a model (a lot of over prediction before the event)
   - at 6h: AUROC 0.73; AUPRC 0.019; MCC 0.028
 
+    - Manually tuned model:
+      - Parameters:
+        - grad clip to 1
+        - lr to 1e-5
+        - wd to 5e-4
+        - dropout to 0.5
+        - loss function to focal
+        - num layers to 2
+        - model_dim to 256
+        - num_head 32
+
 ### XGB
 
 - 25.09.24: model seems useless, overfitting towards predicting 0
