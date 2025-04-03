@@ -1,12 +1,13 @@
+import math
 import torch as ch
 from torch import optim
 import pytorch_lightning as pl
 from torchmetrics import AUROC, MeanAbsoluteError, AveragePrecision
 from torchmetrics.classification import Accuracy
 from torchmetrics.regression import CosineSimilarity, MeanAbsolutePercentageError
-
+from flash.core.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 from prediction.outcome_prediction.Transformer.architecture import OPSUM_encoder_decoder
-from prediction.utils.utils import FocalLoss
+from prediction.utils.utils import FocalLoss, APLoss
 
 
 class LitModel(pl.LightningModule):
@@ -28,6 +29,8 @@ class LitModel(pl.LightningModule):
                 self.criterion = ch.nn.BCEWithLogitsLoss()
         elif loss_function == 'focal':
             self.criterion = FocalLoss(alpha=alpha, gamma=gamma)
+        elif loss_function == 'aploss':
+            self.criterion = APLoss()
 
 
         self.train_accuracy = Accuracy(task='binary')
@@ -240,13 +243,15 @@ class LitEncoderDecoderModel(pl.LightningModule):
 
 class LitEncoderRegressionModel(pl.LightningModule):
     def __init__(self, model, lr, wd, train_noise, lr_warmup_steps=0, classification_threshold=None,
-                 loss_function='rmse'):
+                 loss_function='rmse', scheduler='exponential', debug_mode=False):
         super().__init__()
         self.model = model
         self.lr = lr
         self.lr_warmup_steps = lr_warmup_steps
         self.wd = wd
         self.train_noise = train_noise
+        self.debug_mode = debug_mode
+        self.scheduler = scheduler
 
         if loss_function == 'rmse':
             self.criterion = self.rmse_loss
@@ -260,6 +265,7 @@ class LitEncoderRegressionModel(pl.LightningModule):
         self.train_mape_epoch = MeanAbsolutePercentageError()
         self.val_mae = ch.nn.L1Loss()
         self.val_mape = MeanAbsolutePercentageError()
+        self.val_auprc = AveragePrecision(task="binary")
 
         if classification_threshold is not None:
             self.classification_threshold = classification_threshold
@@ -293,17 +299,31 @@ class LitEncoderRegressionModel(pl.LightningModule):
         self.train_mae_epoch(predictions.ravel(), y.ravel())
         self.train_mape_epoch(predictions.ravel(), y.ravel())
 
-        # log batch train loss and mae
-        self.log_dict(
-            {
-                'train_mae': self.train_mae_epoch.compute(),
-                'train_loss': loss
-            },
-            on_step=True,
-            on_epoch=False,
-            prog_bar=True
-        )
-        self.train_mae_epoch.reset()
+        if self.debug_mode:
+            self.log_dict(
+                {
+                    'train_loss': loss,
+                    'train_mae': self.train_mae,
+                    'train_mape': self.train_mape
+                },
+                on_step=True,
+                on_epoch=False,
+                prog_bar=True
+            )
+
+            self.log_dict(
+                {
+                    'train_loss_epoch': loss,
+                    'train_mae_epoch': self.train_mae_epoch,
+                    'train_mape_epoch': self.train_mape_epoch,
+                },
+                on_step=False,
+                on_epoch=True,
+                prog_bar=True
+            )
+            # self.train_mae_epoch.reset()
+
+
 
         return loss
 
@@ -325,15 +345,20 @@ class LitEncoderRegressionModel(pl.LightningModule):
             binary_y = (y <= self.classification_threshold).float()
             self.val_accuracy_epoch(binary_predictions, binary_y)
             self.val_auroc(binary_predictions, binary_y)
+            self.val_auprc(binary_predictions, binary_y.int())
 
             # log
-            self.log_dict({'val_mae': val_mae, 'val_mape': self.val_mape, 'val_loss': loss, 'val_accuracy': self.val_accuracy_epoch, 'val_auroc': self.val_auroc}, on_step=False,
+            self.log_dict({'val_mae': val_mae, 'val_mape': self.val_mape, 'val_accuracy': self.val_accuracy_epoch,
+                           'val_loss': loss,
+                           'val_auroc': self.val_auroc, 'val_auprc': self.val_auprc}, on_step=False,
                           on_epoch=True, prog_bar=True)
 
         else:
             # log mae and mape and loss
             self.log_dict({'val_mae': val_mae, 'val_mape': self.val_mape, 'val_loss': loss}, on_step=False,
                           on_epoch=True, prog_bar=True)
+        self.val_mape.reset()
+
 
         return loss
 
@@ -351,14 +376,35 @@ class LitEncoderRegressionModel(pl.LightningModule):
 
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.wd)
 
-        train_scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.99)
+        for param_group in optimizer.param_groups:
+            param_group['initial_lr'] = optimizer.defaults['lr']
+
+        if self.scheduler == 'exponential':
+            train_scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.99)
+        elif self.scheduler == 'cosine':
+            # train_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.trainer.max_epochs, eta_min=1e-6)
+            # train_scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,
+            #                                                                  T_0=10,
+            #                                                                  T_mult=2,
+            #                                                                  eta_min=1e-5
+            #                                                                  )
+            train_scheduler = LinearWarmupCosineAnnealingLR(optimizer, warmup_epochs=self.lr_warmup_steps, max_epochs=self.trainer.max_epochs)
+            return [optimizer],  [
+                        {
+                            'scheduler': train_scheduler,
+                            'interval': 'step',
+                            'frequency': 1
+                        }
+                    ]
 
         if self.lr_warmup_steps == 0:
             return [optimizer], [train_scheduler]
 
         # using warmup scheduler
         def warmup(current_step: int):
-            return 1 / (10 ** (float(self.lr_warmup_steps - current_step)))
+            if current_step >= self.lr_warmup_steps:
+                return 1 / math.sqrt(1 + (current_step / self.lr_warmup_steps))  # Inverse square root decay
+            return max(1e-8, 1 / (10 ** float(min(self.lr_warmup_steps - current_step, 50))))  # Clamped
 
         warmup_scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup)
 
