@@ -13,6 +13,7 @@ from prediction.short_term_outcome_prediction.timeseries_decomposition import pr
 
 def subprocess_cluster_gridsearch(data_splits_path:str, output_folder:str, trial_name:str, gridsearch_config_path: dict,
                                   use_gpu:bool=True, use_decoder:bool=False, use_time_to_event:bool=False,
+                                    normalisation_data_path:str=None, outcome_data_path:str=None,
                                 storage_pwd:str=None, storage_port:int=None, storage_host:str='localhost'):
     # load config
     with open(gridsearch_config_path, 'r') as f:
@@ -34,6 +35,7 @@ def subprocess_cluster_gridsearch(data_splits_path:str, output_folder:str, trial
                                                         'target_timeseries_length']) for x in splits]
         study.optimize(partial(get_score_encoder_decoder, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
                             gridsearch_config=gridsearch_config,
+                            normalisation_data_path=normalisation_data_path, outcome_data_path=outcome_data_path,
                            use_gpu=use_gpu), n_trials=gridsearch_config['n_trials'])
     if use_time_to_event == True:
         all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu, use_time_to_event=True) for x in splits]
@@ -57,6 +59,8 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--gridsearch_config_path', type=str, required=True)
     parser.add_argument('-g', '--use_gpu', type=str, required=False, default=1)
     parser.add_argument('-dec', '--use_decoder', type=str, required=False, default=0)
+    parser.add_argument('-nd', '--normalisation_data_path', type=str, required=False, default=None)
+    parser.add_argument('-od', '--outcome_data_path', type=str, required=False, default=None)
     parser.add_argument('-tte', '--use_time_to_event', type=str, required=False, default=0)
 
     parser.add_argument('-spwd', '--storage_pwd', type=str, required=False, default=None)
@@ -71,4 +75,6 @@ if __name__ == '__main__':
 
     subprocess_cluster_gridsearch(args.data_splits_path, args.output_folder, args.trial_name, args.gridsearch_config_path,
                                     use_gpu=use_gpu, use_decoder=use_decoder, use_time_to_event=use_time_to_event,
+                                    normalisation_data_path=args.normalisation_data_path,
+                                    outcome_data_path=args.outcome_data_path,
                                     storage_pwd=args.storage_pwd, storage_port=args.storage_port, storage_host=args.storage_host)

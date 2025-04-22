@@ -22,5 +22,5 @@ conda activate opsum
 export PYTHONPATH="${PYTHONPATH}:/home/users/k/klug/opsum"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/
 
-srun python $subprocess_py_file_path -d $data_splits_path -o $output_folder -t $trial_name -c $gridsearch_config_path -g $use_gpu -dec $use_decoder -tte $use_time_to_event -spwd $storage_pwd -sport $storage_port -shost $storage_host
+srun python $subprocess_py_file_path -d $data_splits_path -o $output_folder -t $trial_name -c $gridsearch_config_path -g $use_gpu -dec $use_decoder -tte $use_time_to_event -spwd $storage_pwd -sport $storage_port -shost $storage_host -nd $normalisation_data_path -od $outcome_data_path
 mv $OPSUM_LOGS_PATH $output_folder/logs
