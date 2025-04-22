@@ -7,7 +7,7 @@ from torchmetrics.classification import Accuracy
 from torchmetrics.regression import CosineSimilarity, MeanAbsolutePercentageError
 from flash.core.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 from prediction.outcome_prediction.Transformer.architecture import OPSUM_encoder_decoder
-from prediction.utils.utils import FocalLoss, APLoss
+from prediction.utils.utils import FocalLoss, APLoss, WeightedCosineSimilarity, WeightedMSELoss
 
 
 class LitModel(pl.LightningModule):
@@ -153,7 +153,7 @@ class LitModel(pl.LightningModule):
 
 
 class LitEncoderDecoderModel(pl.LightningModule):
-    def __init__(self, model, lr, wd, train_noise, lr_warmup_steps=0):
+    def __init__(self, model, lr, wd, train_noise, lr_warmup_steps=0, loss_function='weighted_mse'):
         super().__init__()
         self.model = model
         self.lr = lr
@@ -161,11 +161,18 @@ class LitEncoderDecoderModel(pl.LightningModule):
         self.wd = wd
         self.train_noise = train_noise
 
-        self.criterion = ch.nn.MSELoss()
+        if loss_function == 'mse':
+            self.criterion = ch.nn.MSELoss()
+        elif loss_function == 'weighted_mse':
+            # using weighted mse loss with weighting of max_NIHSS
+            self.criterion = WeightedMSELoss(weight_idx = 37, weight_value = 10, vector_length = 84)
 
-        self.train_cos_sim = CosineSimilarity(reduction='mean')
-        self.train_cos_sim_epoch = CosineSimilarity(reduction='mean')
-        self.val_cos_sim = CosineSimilarity(reduction='mean')
+        # self.train_cos_sim = CosineSimilarity(reduction='mean')
+        # self.train_cos_sim_epoch = CosineSimilarity(reduction='mean')
+        # self.val_cos_sim = CosineSimilarity(reduction='mean')
+        self.train_cos_sim = WeightedCosineSimilarity(weight_idx = 37, weight_value = 10, vector_length = 84, reduction='mean')
+        self.train_cos_sim_epoch = WeightedCosineSimilarity(weight_idx = 37, weight_value = 10, vector_length = 84, reduction='mean')
+        self.val_cos_sim = WeightedCosineSimilarity(weight_idx = 37, weight_value = 10, vector_length = 84, reduction='mean')
 
 
     def training_step(self, batch, batch_idx, mode='train'):

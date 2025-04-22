@@ -2,6 +2,7 @@ import os
 from functools import partial
 from datetime import datetime
 import optuna
+from sqlalchemy import over
 import torch as ch
 from os import path
 import numpy as np
@@ -15,6 +16,7 @@ from prediction.outcome_prediction.Transformer.architecture import OPSUM_encoder
 from prediction.outcome_prediction.Transformer.lightning_wrapper import LitEncoderDecoderModel
 from prediction.outcome_prediction.Transformer.utils.callbacks import MyEarlyStopping
 from prediction.outcome_prediction.Transformer.utils.utils import DictLogger
+from prediction.short_term_outcome_prediction.evaluation.dec_val_evaluation import encoder_decoder_validation_evaluation
 from prediction.short_term_outcome_prediction.timeseries_decomposition import BucketBatchSampler, \
     prepare_subsequence_dataset
 from prediction.utils.utils import ensure_dir
@@ -38,11 +40,14 @@ DEFAULT_GRIDEARCH_CONFIG = {
     "early_stopping_step_limit": [10],
     "imbalance_factor": 62,
     "max_epochs": 50,
-    "target_timeseries_length": 1
+    "target_timeseries_length": 1,
+    "loss_function": 'weighted_mse',
 }
 
-def launch_gridsearch_encoder_decoder(data_splits_path:str, output_folder:str, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG, use_gpu:bool=True,
-                      storage_pwd:str=None, storage_port:int=None, storage_host:str='localhost'):
+def launch_gridsearch_encoder_decoder(data_splits_path:str, output_folder:str, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG, 
+                                      normalisation_data_path:str=None, outcome_data_path:str=None,
+                                      use_gpu:bool=True,
+                                     storage_pwd:str=None, storage_port:int=None, storage_host:str='localhost'):
     if gridsearch_config is None:
         gridsearch_config = DEFAULT_GRIDEARCH_CONFIG
 
@@ -66,10 +71,13 @@ def launch_gridsearch_encoder_decoder(data_splits_path:str, output_folder:str, g
 
     study.optimize(partial(get_score_encoder_decoder, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
                             gridsearch_config=gridsearch_config,
+                            normalisation_data_path=normalisation_data_path, outcome_data_path=outcome_data_path,
                            use_gpu=use_gpu), n_trials=gridsearch_config['n_trials'])
 
 
-def get_score_encoder_decoder(trial, ds, data_splits_path, output_folder, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG, use_gpu=True):
+def get_score_encoder_decoder(trial, ds, data_splits_path, output_folder, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG,
+                              normalisation_data_path:str=None, outcome_data_path:str=None,
+                               use_gpu=True):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     if gridsearch_config is None:
@@ -92,12 +100,20 @@ def get_score_encoder_decoder(trial, ds, data_splits_path, output_folder, gridse
 
     accelerator = 'gpu' if use_gpu else 'cpu'
 
-    val_scores = []
-    best_epochs = []
+    val_cos_sim_scores = []
+    val_roc_scores = []
 
     for i, (train_dataset, val_dataset) in enumerate(ds):
         checkpoint_dir = os.path.join(output_folder, f'checkpoints_short_opsum_transformer_{timestamp}_cv_{i}')
         ensure_dir(checkpoint_dir)
+
+        # save trial.params as model config json
+        trial_params = dict(trial.params)
+        trial_params['loss_function'] = gridsearch_config['loss_function']
+        trial_params_path = os.path.join(output_folder, f'trial_params_{timestamp}.json')
+        with open(trial_params_path, 'w') as json_file:
+            json.dump(trial.params, json_file, indent=4)    
+
 
         input_dim = train_dataset[0][0].shape[-1]
 
@@ -124,7 +140,7 @@ def get_score_encoder_decoder(trial, ds, data_splits_path, output_folder, gridse
             filename="short_opsum_dec_transformer_{epoch:02d}_{val_cos_sim:.4f}",
         )
 
-        module = LitEncoderDecoderModel(model, lr, wd, train_noise, lr_warmup_steps=n_lr_warm_up_steps)
+        module = LitEncoderDecoderModel(model, lr, wd, train_noise, lr_warmup_steps=n_lr_warm_up_steps, loss_function=gridsearch_config['loss_function'])
         trainer = pl.Trainer(accelerator=accelerator, devices=1, max_epochs=gridsearch_config['max_epochs'],
                              logger=loggers,
                              log_every_n_steps=25, enable_checkpointing=True,
@@ -135,18 +151,24 @@ def get_score_encoder_decoder(trial, ds, data_splits_path, output_folder, gridse
                              num_sanity_val_steps=0)
         trainer.fit(model=module, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
-        best_val_score = np.max([x['val_cos_sim'] for x in logger.metrics if 'val_cos_sim' in x])
-        best_epoch = np.argmax([x['val_cos_sim'] for x in logger.metrics if 'val_cos_sim' in x])
-        val_scores.append(best_val_score)
-        best_epochs.append(best_epoch)
+        overall_prediction_results_df = encoder_decoder_validation_evaluation(
+                                            data_path=data_splits_path, model_config_path=trial_params_path, model_path=checkpoint_callback.best_model_path, 
+                                            normalisation_data_path=normalisation_data_path, outcome_data_path=outcome_data_path, 
+                                            use_gpu = use_gpu,  n_time_steps = 72, eval_n_time_steps_before_event = 6)
+        
+        best_val_cos_sim = np.max([x['val_cos_sim'] for x in logger.metrics if 'val_cos_sim' in x])
+        val_cos_sim_scores.append(best_val_cos_sim)
+        best_roc = overall_prediction_results_df['overall_roc_auc'].max()
+        val_roc_scores.append(best_roc)
 
     d = dict(trial.params)
     d['model_type'] = 'transformer_encoder_decoder'
-    d['median_val_scores'] = float(np.median(val_scores))
-    d['median_best_epochs'] = float(np.median(best_epochs))
+    d['best_val_roc_auc'] = float(np.max(val_roc_scores))
+    d['median_val_cos_sim'] = float(np.median(val_cos_sim_scores))
+    d['median_val_roc_auc'] = float(np.median(val_roc_scores))
     d['timestamp'] = timestamp
-    d['best_cv_fold'] = int(np.argmax(val_scores))
-    d['worst_cv_fold_val_score'] = float(np.min(val_scores))
+    d['best_cv_fold'] = int(np.argmax(val_roc_scores))
+    d['worst_cv_fold_val_score'] = float(np.min(val_roc_scores))
     d['split_file'] = data_splits_path
     text = json.dumps(d)
     text += '\n'
@@ -154,7 +176,7 @@ def get_score_encoder_decoder(trial, ds, data_splits_path, output_folder, gridse
     with open(dest, 'a') as handle:
         handle.write(text)
     print("WRITTEN in ", dest)
-    return float(np.median(val_scores))
+    return float(np.median(val_roc_scores))
 
 
 if __name__ == '__main__':
@@ -162,6 +184,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-d', '--data_splits_path', type=str, required=True)
+    parser.add_argument('-nd', '--normalisation_data_path', type=str, required=False, default=None)
+    parser.add_argument('-od', '--outcome_data_path', type=str, required=False, default=None)
     parser.add_argument('-o', '--output_folder', type=str, required=True)
     parser.add_argument('-c', '--config', type=str, required=False, default=None)
     parser.add_argument('-g', '--use_gpu', type=int, required=False, default=1)
@@ -179,4 +203,5 @@ if __name__ == '__main__':
         gridsearch_config = None
 
     launch_gridsearch_encoder_decoder(data_splits_path=args.data_splits_path, output_folder=args.output_folder, gridsearch_config=gridsearch_config,
+                                        normalisation_data_path=args.normalisation_data_path, outcome_data_path=args.outcome_data_path,
                       use_gpu=use_gpu, storage_pwd=args.storage_pwd, storage_port=args.storage_port, storage_host=args.storage_host)

@@ -365,3 +365,55 @@ def AP_loss(logits, targets):
     metric = torch.sum(prec, dim=0, keepdim=True) / fg_num
 
     return grad, 1 - metric
+
+
+class WeightedMSELoss(nn.Module):
+    def __init__(self, weight_idx: int, weight_value: float, vector_length: int):
+        """
+        Args:
+            weight_idx (int): Index of the variable to weight more.
+            weight_value (float): Weight multiplier for the selected index.
+            vector_length (int): Length of the vector (e.g., 84).
+        """
+        super().__init__()
+        weights = torch.ones(vector_length)
+        weights[weight_idx] = weight_value
+        self.register_buffer('weights', weights)
+
+    def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        # Flatten last dimension (assuming shape [batch_size, ..., vector_length])
+        pred_flat = pred.view(pred.size(0), -1)
+        target_flat = target.view(target.size(0), -1)
+
+        loss = ((pred_flat - target_flat) ** 2) * self.weights
+        return loss.mean()
+    
+
+class WeightedCosineSimilarity(nn.Module):
+    def __init__(self, weight_idx: int, weight_value: float, vector_length: int, reduction: str = 'mean'):
+        """
+        Args:
+            weight_idx (int): Index of the variable to weight more.
+            weight_value (float): Multiplier for the selected variable.
+            vector_length (int): Length of the vector (e.g., 84).
+            reduction (str): 'mean' or 'none'
+        """
+        super().__init__()
+        weights = torch.ones(vector_length)
+        weights[weight_idx] = weight_value
+        self.register_buffer('weights', weights)
+        self.reduction = reduction
+
+    def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        # x, y assumed to be shape [batch_size, vector_length]
+        x = x * self.weights
+        y = y * self.weights
+
+        x_norm = F.normalize(x, p=2, dim=-1)
+        y_norm = F.normalize(y, p=2, dim=-1)
+
+        cos_sim = (x_norm * y_norm).sum(dim=-1)  # shape: [batch_size]
+        if self.reduction == 'mean':
+            return cos_sim.mean()
+        else:
+            return cos_sim  # shape: [batch_size]
