@@ -190,30 +190,105 @@ class StrokeUnitBucketDataset(Dataset):
 
 
 class BucketBatchSampler(Sampler):
-    # Ref: https://discuss.pytorch.org/t/tensorflow-esque-bucket-by-sequence-length/41284/13
-    # want inputs to be an array
-    def __init__(self, idx_to_len_map, batch_size):
+    """
+    A PyTorch batch sampler that addresses two common challenges in sequence modeling:
+    1. Variable sequence lengths - Groups sequences of similar length to minimize padding
+    2. Class imbalance - Provides oversampling of the minority class
+    
+    This sampler first groups samples by their sequence length into "buckets," then
+    creates batches from sequences of similar length. When labels are provided,
+    it can oversample the minority class (positive samples) within each length bucket
+    according to the specified oversampling factor.
+    
+    Args:
+        idx_to_len_map (list): List of tuples (idx, length) where idx is the sample 
+                               index and length is the sequence length
+        batch_size (int): Number of samples per batch
+        labels (array-like, optional): Labels for each sample, used to identify minority class.
+                                      When provided, enables oversampling. Default: None
+        oversampling_factor (float): Factor by which to oversample the minority class (positive samples).
+                                    Example: 2.0 means positive samples appear twice as often. Default: 1.0
+    
+                                    
+    Example:
+        # Create a balanced sampler by oversampling the positive class
+        train_bucket_sampler = BucketBatchSampler(
+            train_dataset.idx_to_len_map,
+            batch_size=32,
+            labels=train_dataset.targets,
+            oversampling_factor=3.0  # Oversample positive class 3x
+        )
+                                    
+    References:
+        https://discuss.pytorch.org/t/tensorflow-esque-bucket-by-sequence-length/41284/13
+    """
+    def __init__(self, idx_to_len_map, batch_size, labels=None, oversampling_factor=1.0):
         self.batch_size = batch_size
-        self.idx_to_len_map = idx_to_len_map # list of tuples (idx, length)
+        self.idx_to_len_map = idx_to_len_map  # list of tuples (idx, length)
+        self.labels = labels  # array/list of labels for each sample
+        self.oversampling_factor = oversampling_factor  # how much to oversample minority class
         self.batch_list = self._generate_batch_map()
         self.num_batches = len(self.batch_list)
 
     def _generate_batch_map(self):
         # shuffle all of the indices first so they are put into buckets differently
         shuffle(self.idx_to_len_map)
+        
         # Organize lengths, e.g., batch_map[10] = [30, 124, 203, ...] <= indices of sequences of length 10
         batch_map = OrderedDict()
-        for idx, length in self.idx_to_len_map:
-            if length not in batch_map:
-                batch_map[length] = [idx]
-            else:
-                batch_map[length].append(idx)
+        
+        if self.labels is None:
+            # Original code without oversampling
+            for idx, length in self.idx_to_len_map:
+                if length not in batch_map:
+                    batch_map[length] = [idx]
+                else:
+                    batch_map[length].append(idx)
+        else:
+            # With oversampling - track positive and negative samples separately
+            positive_map = OrderedDict()
+            negative_map = OrderedDict()
+            
+            for idx, length in self.idx_to_len_map:
+                if self.labels[idx] == 1:  # Positive/minority class
+                    if length not in positive_map:
+                        positive_map[length] = [idx]
+                    else:
+                        positive_map[length].append(idx)
+                else:  # Negative/majority class
+                    if length not in negative_map:
+                        negative_map[length] = [idx]
+                    else:
+                        negative_map[length].append(idx)
+            
+            # Combine into batch_map, oversampling positives
+            for length in set(list(positive_map.keys()) + list(negative_map.keys())):
+                batch_map[length] = []
+                pos_samples = positive_map.get(length, [])
+                neg_samples = negative_map.get(length, [])
+                
+                # Add oversampled positives
+                if pos_samples:
+                    oversampled_pos = pos_samples * int(self.oversampling_factor)
+                    if self.oversampling_factor % 1 > 0:  # Handle fractional oversampling
+                        extra_samples = int(len(pos_samples) * (self.oversampling_factor % 1))
+                        if extra_samples > 0:
+                            oversampled_pos.extend(pos_samples[:extra_samples])
+                    batch_map[length].extend(oversampled_pos)
+                
+                # Add negatives
+                batch_map[length].extend(neg_samples)
+                
+                # Re-shuffle within each length bucket
+                shuffle(batch_map[length])
+        
         # Use batch_map to split indices into batches of equal size
-        # e.g., for batch_size=3, batch_list = [[23,45,47], [49,50,62], [63,65,66], ...]
         batch_list = []
         for length, indices in batch_map.items():
             for group in [indices[i:(i + self.batch_size)] for i in range(0, len(indices), self.batch_size)]:
-                batch_list.append(group)
+                if group:  # Only add non-empty groups
+                    batch_list.append(group)
+        
         return batch_list
 
     def batch_count(self):
@@ -224,7 +299,7 @@ class BucketBatchSampler(Sampler):
 
     def __iter__(self):
         self.batch_list = self._generate_batch_map()
-        # shuffle all the batches so they arent ordered by bucket size
+        # shuffle all the batches so they aren't ordered by bucket size
         shuffle(self.batch_list)
         for i in self.batch_list:
             yield i
