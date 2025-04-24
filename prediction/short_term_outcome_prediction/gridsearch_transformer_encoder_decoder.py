@@ -41,7 +41,7 @@ DEFAULT_GRIDEARCH_CONFIG = {
     "imbalance_factor": 62,
     "max_epochs": 50,
     "target_timeseries_length": 1,
-    "loss_function": 'weighted_mse',
+    "loss_function": ['weighted_mse'],
 }
 
 def launch_gridsearch_encoder_decoder(data_splits_path:str, output_folder:str, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG, 
@@ -97,6 +97,7 @@ def get_score_encoder_decoder(trial, ds, data_splits_path, output_folder, gridse
     n_lr_warm_up_steps = trial.suggest_categorical("n_lr_warm_up_steps", gridsearch_config['n_lr_warm_up_steps'])
     grad_clip = trial.suggest_loguniform('grad_clip_value', gridsearch_config['grad_clip_value'][0], gridsearch_config['grad_clip_value'][1])
     early_stopping_step_limit = trial.suggest_categorical('early_stopping_step_limit', gridsearch_config['early_stopping_step_limit'])
+    loss_function = trial.suggest_categorical('loss_function', gridsearch_config['loss_function'])
 
     accelerator = 'gpu' if use_gpu else 'cpu'
 
@@ -108,8 +109,6 @@ def get_score_encoder_decoder(trial, ds, data_splits_path, output_folder, gridse
         ensure_dir(checkpoint_dir)
 
         # save trial.params as model config json
-        trial_params = dict(trial.params)
-        trial_params['loss_function'] = gridsearch_config['loss_function']
         trial_params_path = os.path.join(output_folder, f'trial_params_{timestamp}.json')
         with open(trial_params_path, 'w') as json_file:
             json.dump(trial.params, json_file, indent=4)    
@@ -140,7 +139,8 @@ def get_score_encoder_decoder(trial, ds, data_splits_path, output_folder, gridse
             filename="short_opsum_dec_transformer_{epoch:02d}_{val_cos_sim:.4f}",
         )
 
-        module = LitEncoderDecoderModel(model, lr, wd, train_noise, lr_warmup_steps=n_lr_warm_up_steps, loss_function=gridsearch_config['loss_function'])
+        module = LitEncoderDecoderModel(model, lr, wd, train_noise, lr_warmup_steps=n_lr_warm_up_steps, 
+                                        loss_function=loss_function)
         trainer = pl.Trainer(accelerator=accelerator, devices=1, max_epochs=gridsearch_config['max_epochs'],
                              logger=loggers,
                              log_every_n_steps=25, enable_checkpointing=True,

@@ -36,7 +36,7 @@ DEFAULT_GRIDEARCH_CONFIG = {
     "early_stopping_step_limit": [10],
     "max_epochs": 50,
     "classification_threshold": 6,
-    "loss_function": "log_cosh",
+    "loss_function": ["log_cosh"],
 }
 
 def launch_gridsearch_encoder_time_to_event(data_splits_path:str, output_folder:str, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG, use_gpu:bool=True,
@@ -85,6 +85,7 @@ def get_score_encoder_tte(trial, ds, data_splits_path, output_folder, gridsearch
     n_lr_warm_up_steps = trial.suggest_categorical("n_lr_warm_up_steps", gridsearch_config['n_lr_warm_up_steps'])
     grad_clip = trial.suggest_loguniform('grad_clip_value', gridsearch_config['grad_clip_value'][0], gridsearch_config['grad_clip_value'][1])
     early_stopping_step_limit = trial.suggest_categorical('early_stopping_step_limit', gridsearch_config['early_stopping_step_limit'])
+    loss_function = trial.suggest_categorical('loss_function', gridsearch_config['loss_function'])
 
     accelerator = 'gpu' if use_gpu else 'cpu'
 
@@ -100,6 +101,11 @@ def get_score_encoder_tte(trial, ds, data_splits_path, output_folder, gridsearch
     for i, (train_dataset, val_dataset) in enumerate(ds):
         checkpoint_dir = os.path.join(output_folder, f'checkpoints_short_opsum_transformer_tte_{timestamp}_cv_{i}')
         ensure_dir(checkpoint_dir)
+
+        # save trial.params as model config json
+        trial_params_path = os.path.join(output_folder, f'trial_params_{timestamp}.json')
+        with open(trial_params_path, 'w') as json_file:
+            json.dump(trial.params, json_file, indent=4)    
 
         input_dim = train_dataset[0][0].shape[-1]
 
@@ -136,7 +142,7 @@ def get_score_encoder_tte(trial, ds, data_splits_path, output_folder, gridsearch
 
         module = LitEncoderRegressionModel(model, lr, wd, train_noise, lr_warmup_steps=n_lr_warm_up_steps,
                                            classification_threshold=gridsearch_config['classification_threshold'],
-                                             loss_function=gridsearch_config['loss_function'])
+                                             loss_function=loss_function)
         trainer = pl.Trainer(accelerator=accelerator, devices=1, max_epochs=gridsearch_config['max_epochs'],
                              logger=loggers,
                              log_every_n_steps=25, enable_checkpointing=True,

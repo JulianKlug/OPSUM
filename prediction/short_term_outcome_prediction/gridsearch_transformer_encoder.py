@@ -37,7 +37,7 @@ DEFAULT_GRIDSEARCH_CONFIG = {
     "early_stopping_step_limit": [10],
     'scheduler': ['exponential', 'cosine'],
     "imbalance_factor": 62,
-    "loss_function": "focal",
+    "loss_function": ["focal"],
     'alpha': [0.25, 0.5, 0.6],
     'gamma': [2.0, 3.0, 4.0],
     "max_epochs": 100
@@ -91,7 +91,7 @@ def get_score_encoder(trial, ds, data_splits_path, output_folder, gridsearch_con
     grad_clip = trial.suggest_categorical('grad_clip_value', gridsearch_config['grad_clip_value'])
     early_stopping_step_limit = trial.suggest_categorical('early_stopping_step_limit', gridsearch_config['early_stopping_step_limit'])
     scheduler = trial.suggest_categorical('scheduler', gridsearch_config['scheduler'])
-    loss_function = gridsearch_config['loss_function']
+    loss_function = trial.suggest_categorical('loss_function', gridsearch_config['loss_function'])
     alpha = trial.suggest_categorical('alpha', gridsearch_config['alpha'])
     gamma = trial.suggest_categorical('gamma', gridsearch_config['gamma'])
 
@@ -107,6 +107,11 @@ def get_score_encoder(trial, ds, data_splits_path, output_folder, gridsearch_con
     for i, (train_dataset, val_dataset) in enumerate(ds):
         checkpoint_dir = os.path.join(output_folder, f'checkpoints_short_opsum_transformer_{timestamp}_cv_{i}')
         ensure_dir(checkpoint_dir)
+
+        # save trial.params as model config json
+        trial_params_path = os.path.join(output_folder, f'trial_params_{timestamp}.json')
+        with open(trial_params_path, 'w') as json_file:
+            json.dump(trial.params, json_file, indent=4)    
 
         input_dim = train_dataset[0][0].shape[-1]
 
