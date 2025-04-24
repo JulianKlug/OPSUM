@@ -38,5 +38,4 @@ TODO: reframe training to be more like actual problem?
 ### Transformer Encoder-Decoder
 
 - 25.09.24: model training done
-
-TODO: test inference / evaluation 
+- 22.04.25: evaluation on validation set: overall roc auc 0.620030623208774

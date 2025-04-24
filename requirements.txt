@@ -21,7 +21,7 @@ tensorflow-io-gcs-filesystem==0.25.0
 termcolor==1.1.0
 terminado==0.9.4
 tf-estimator-nightly==2.8.0.dev2021122109
-torch==1.11.0
+torch==1.11.0 # torch==2.0.1 ?
 xgboost==1.6.1
 pytorch_lightning
 lightning-flash
