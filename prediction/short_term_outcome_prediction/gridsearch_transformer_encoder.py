@@ -40,6 +40,7 @@ DEFAULT_GRIDSEARCH_CONFIG = {
     "loss_function": ["focal"],
     'alpha': [0.25, 0.5, 0.6],
     'gamma': [2.0, 3.0, 4.0],
+    'oversampling_ratio': [1, 10, 50],
     "max_epochs": 100
 }
 
@@ -94,6 +95,7 @@ def get_score_encoder(trial, ds, data_splits_path, output_folder, gridsearch_con
     loss_function = trial.suggest_categorical('loss_function', gridsearch_config['loss_function'])
     alpha = trial.suggest_categorical('alpha', gridsearch_config['alpha'])
     gamma = trial.suggest_categorical('gamma', gridsearch_config['gamma'])
+    oversampling_ratio = trial.suggest_categorical('oversampling_ratio', gridsearch_config['oversampling_ratio'])
 
     accelerator = 'gpu' if use_gpu else 'cpu'
 
@@ -127,7 +129,9 @@ def get_score_encoder(trial, ds, data_splits_path, output_folder, gridsearch_con
             pos_encode_factor=pos_encode_factor
         )
 
-        train_bucket_sampler = BucketBatchSampler(train_dataset.idx_to_len_map, batch_size)
+        train_bucket_sampler = BucketBatchSampler(train_dataset.idx_to_len_map, batch_size,
+                                                  labels=train_dataset.targets,  # Pass the target labels
+                                                   oversampling_factor=oversampling_ratio)
         train_loader = DataLoader(train_dataset, batch_sampler=train_bucket_sampler,
                                   # shuffling is done in the bucket sampler
                                   shuffle=False, drop_last=False)
