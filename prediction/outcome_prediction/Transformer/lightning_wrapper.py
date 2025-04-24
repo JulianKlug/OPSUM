@@ -7,7 +7,7 @@ from torchmetrics.classification import Accuracy
 from torchmetrics.regression import CosineSimilarity, MeanAbsolutePercentageError
 from flash.core.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 from prediction.outcome_prediction.Transformer.architecture import OPSUM_encoder_decoder
-from prediction.utils.utils import FocalLoss, APLoss, WeightedCosineSimilarity, WeightedMSELoss
+from prediction.utils.loss_functions import FocalLoss, APLoss, WeightedCosineSimilarity, WeightedMSELoss
 
 
 class LitModel(pl.LightningModule):
