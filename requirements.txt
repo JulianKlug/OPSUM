@@ -21,10 +21,15 @@ tensorflow-io-gcs-filesystem==0.25.0
 termcolor==1.1.0
 terminado==0.9.4
 tf-estimator-nightly==2.8.0.dev2021122109
-torch==1.11.0 # min propable 1.12
+torch==1.12 # min propable 1.12
 xgboost==1.6.1
 pytorch_lightning
 lightning-flash
+optuna==3.6.1
+optuna_dashboard
+redis
+
+# Cave: also install - cudatoolkit=11.2 (conda install -c conda-forge cudatoolkit=11.2)
 
 modun @ git+git://github.com/Jimmy2027/MODUN@b106ed60d97bcab0dc629030447c73011d06a3f9
 

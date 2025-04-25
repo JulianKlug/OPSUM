@@ -5,3 +5,6 @@
    - this will also launch subprocesses
    - as well as an optuna frontend at localhost:5555
 3. The dashboard can also be relaunched at a later time: `optuna-dashboard redis://default:opsum@cpu004:6380/opsum --port 5555`'
+
+Requirements
+- Redis install: https://redis.io/docs/latest/operate/oss_and_stack/install/archive/install-redis/install-redis-from-source/ and https://github.com/liukidar/stune 
