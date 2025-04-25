@@ -7,12 +7,12 @@ from torchmetrics.classification import Accuracy
 from torchmetrics.regression import CosineSimilarity, MeanAbsolutePercentageError
 from flash.core.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 from prediction.outcome_prediction.Transformer.architecture import OPSUM_encoder_decoder
-from prediction.utils.loss_functions import FocalLoss, APLoss, WeightedCosineSimilarity, WeightedMSELoss
+from prediction.utils.loss_functions import FocalLoss, SoftAPLoss, WeightedCosineSimilarity, WeightedMSELoss
 
 
 class LitModel(pl.LightningModule):
     def __init__(self, model, lr, wd, train_noise, lr_warmup_steps=0,
-                 loss_function='bce', alpha=0.25, gamma=2.0,
+                 loss_function='bce', alpha=0.25, gamma=2.0, tau=1.0,
                  imbalance_factor=None, debug_mode=False, scheduler='exponential'):
         super().__init__()
         self.model = model
@@ -30,7 +30,7 @@ class LitModel(pl.LightningModule):
         elif loss_function == 'focal':
             self.criterion = FocalLoss(alpha=alpha, gamma=gamma)
         elif loss_function == 'aploss':
-            self.criterion = APLoss()
+            self.criterion = SoftAPLoss(tau=tau)
 
 
         self.train_accuracy = Accuracy(task='binary')

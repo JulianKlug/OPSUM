@@ -1,3 +1,4 @@
+from math import tau
 import os
 from functools import partial
 from datetime import datetime
@@ -37,9 +38,10 @@ DEFAULT_GRIDSEARCH_CONFIG = {
     "early_stopping_step_limit": [10],
     'scheduler': ['exponential', 'cosine'],
     "imbalance_factor": 62,
-    "loss_function": ["focal"],
+    "loss_function": ["focal", "bce", "aploss"],
     'alpha': [0.25, 0.5, 0.6],
     'gamma': [2.0, 3.0, 4.0],
+    'tau': [0.01, 0.1, 1.0, 10.0],
     'oversampling_ratio': [1, 10, 50],
     "max_epochs": 100
 }
@@ -92,9 +94,23 @@ def get_score_encoder(trial, ds, data_splits_path, output_folder, gridsearch_con
     grad_clip = trial.suggest_categorical('grad_clip_value', gridsearch_config['grad_clip_value'])
     early_stopping_step_limit = trial.suggest_categorical('early_stopping_step_limit', gridsearch_config['early_stopping_step_limit'])
     scheduler = trial.suggest_categorical('scheduler', gridsearch_config['scheduler'])
+
     loss_function = trial.suggest_categorical('loss_function', gridsearch_config['loss_function'])
-    alpha = trial.suggest_categorical('alpha', gridsearch_config['alpha'])
-    gamma = trial.suggest_categorical('gamma', gridsearch_config['gamma'])
+    if loss_function == 'focal':
+        alpha = trial.suggest_categorical('alpha', gridsearch_config['alpha'])
+        gamma = trial.suggest_categorical('gamma', gridsearch_config['gamma'])
+    else:
+        alpha = 0.0
+        gamma = 0.0
+    if loss_function == 'bce':
+        imbalance_factor = trial.suggest_categorical('imbalance_factor', gridsearch_config['imbalance_factor'])
+    else:
+        imbalance_factor = 1.0
+    if loss_function == 'aploss':
+        tau = trial.suggest_categorical('tau', gridsearch_config['tau'])
+    else:
+        tau = 1
+
     oversampling_ratio = trial.suggest_categorical('oversampling_ratio', gridsearch_config['oversampling_ratio'])
 
     accelerator = 'gpu' if use_gpu else 'cpu'
@@ -156,6 +172,7 @@ def get_score_encoder(trial, ds, data_splits_path, output_folder, gridsearch_con
                           loss_function=loss_function,
                           alpha=alpha,
                           gamma=gamma,
+                          tau=tau, 
                           scheduler=scheduler
                           )
         trainer = pl.Trainer(accelerator=accelerator, devices=1, max_epochs=gridsearch_config['max_epochs'],
