@@ -192,7 +192,7 @@ class LitEncoderDecoderModel(pl.LightningModule):
         self.train_cos_sim_epoch(predictions.reshape(x.shape[0],-1), y.reshape(x.shape[0],-1))
 
         self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("train_cos_sim", self.train_cos_sim_epoch, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("train_cos_sim", self.train_cos_sim_epoch.compute(), on_step=False, on_epoch=True, prog_bar=True)
 
         return loss
 
@@ -206,7 +206,7 @@ class LitEncoderDecoderModel(pl.LightningModule):
         self.val_cos_sim(predictions.reshape(x.shape[0],-1), y.reshape(x.shape[0],-1))
 
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val_cos_sim", self.val_cos_sim, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val_cos_sim", self.val_cos_sim.compute(), on_step=False, on_epoch=True, prog_bar=True)
 
         return loss
 
