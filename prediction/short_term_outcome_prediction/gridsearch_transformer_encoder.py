@@ -202,6 +202,7 @@ def get_score_encoder(trial, ds, data_splits_path, output_folder, gridsearch_con
     d['model_type'] = 'transformer_encoder'
     d['median_rolling_val_scores'] = float(np.median(rolling_val_scores))
     d['median_val_scores'] = float(np.median(val_scores))
+    d['median_best_auprc'] = float(np.median(best_auprcs))
     d['median_best_epochs'] = float(np.median(best_epochs))
     d['timestamp'] = timestamp
     d['best_cv_fold'] = int(np.argmax(val_scores))
