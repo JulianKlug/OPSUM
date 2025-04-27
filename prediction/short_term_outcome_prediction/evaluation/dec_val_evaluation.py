@@ -11,6 +11,7 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
 from prediction.utils.utils import ensure_dir
+from prediction.short_term_outcome_prediction.inference.encoder_decoder_inference import encoder_decoder_predict
 
 
 def reverse_normalisation(data, variable_name, normalisation_parameters_df):
@@ -29,7 +30,7 @@ def reverse_normalisation(data, variable_name, normalisation_parameters_df):
 
 
 def encoder_decoder_validation_evaluation(data_path:str, model_config_path:str, model_path:str=None, normalisation_data_path:str=None,
-                                            outcome_data_path:str=None, predictions_path:str=None,
+                                            outcome_data_path:str=None, predictions_path:str=None, cv_fold:int=None,
                                         output_path=None, use_gpu = False,  n_time_steps = 72, eval_n_time_steps_before_event = 6):
     
     if model_config_path.endswith('.json'):
@@ -43,8 +44,11 @@ def encoder_decoder_validation_evaluation(data_path:str, model_config_path:str, 
                                    f'decoder_validation_evaluation_results_{eval_n_time_steps_before_event}h')
     ensure_dir(output_path)
 
+    if cv_fold is None:
+        cv_fold = model_config['best_cv_fold']
+
     splits = ch.load(os.path.join(data_path))
-    full_X_train, full_X_val, y_train, y_val = splits[model_config['best_cv_fold']]
+    full_X_train, full_X_val, y_train, y_val = splits[cv_fold]
     val_patient_cids = full_X_val[:, 0, 0, 0]
 
     # prepare scaler (needed for reverse scaling)
@@ -143,7 +147,7 @@ def encoder_decoder_validation_evaluation(data_path:str, model_config_path:str, 
                                                                         overall_prediction_df.prediction >= 4),
                                     'n_pos_samples': np.sum(overall_prediction_df.true_label),
                                     'n_samples': len(overall_prediction_df),
-                                    'cv_fold': model_config['best_cv_fold']
+                                    'cv_fold': cv_fold
                                 }, index=[0])
     
     median_results_df = pd.DataFrame({'median_roc': np.nanmedian(roc_scores),

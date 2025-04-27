@@ -154,11 +154,12 @@ def get_score_encoder_decoder(trial, ds, data_splits_path, output_folder, gridse
         overall_prediction_results_df = encoder_decoder_validation_evaluation(
                                             data_path=data_splits_path, model_config_path=trial_params_path, model_path=checkpoint_callback.best_model_path, 
                                             normalisation_data_path=normalisation_data_path, outcome_data_path=outcome_data_path, 
+                                            cv_fold=i,
                                             use_gpu = use_gpu,  n_time_steps = 72, eval_n_time_steps_before_event = 6)
         
         best_val_cos_sim = np.max([x['val_cos_sim'] for x in logger.metrics if 'val_cos_sim' in x])
         val_cos_sim_scores.append(best_val_cos_sim)
-        best_roc = overall_prediction_results_df['overall_roc_auc'].max()
+        best_roc = overall_prediction_results_df['overall_roc_augit ac'].max()
         val_roc_scores.append(best_roc)
 
     d = dict(trial.params)
