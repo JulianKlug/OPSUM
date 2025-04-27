@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from torchsort import soft_rank
 import torch.nn.functional as F
+from torchmetrics import Metric
 
 
 class FocalLoss(nn.Module):
@@ -46,52 +46,58 @@ class FocalLoss(nn.Module):
         else:
             return focal_loss  # No reduction
 
-
 class SoftAPLoss(nn.Module):
-    def __init__(self, regularization: str = 'l2', tau: float = 1.0):
+    def __init__(self, tau: float = 1.0, eps: float = 1e-6):
         """
+        A soft?~@~PAP loss that does not rely on torchsort.
+
         Args:
-            regularization: one of {'l2','kl'} passed to soft_rank
-            tau: temperature for the soft ranking (lower = smoother)
+            tau: temperature for the sigmoid approximation (smaller = smoother)
+            eps: small constant for numerical stability
         """
         super().__init__()
-        self.reg = regularization
+        if tau <= 0:
+            raise ValueError("tau must be > 0")
         self.tau = tau
+        self.eps = eps
 
     def forward(self, scores: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            scores:  shape (batch_size,) — raw model outputs (higher = more positive)
-            targets: shape (batch_size,) — binary {0,1} labels
+            scores: 1D float tensor of model outputs (higher ?~F~R more positive), shape (N,)
+            targets: 1D binary tensor of labels {0,1}, shape (N,)
+
         Returns:
-            A scalar loss = 1 − SoftAP
+            scalar loss = 1 ?~H~R (soft AP)
         """
-        # sanity checks
         if scores.dim() != 1 or targets.dim() != 1 or scores.shape != targets.shape:
-            raise ValueError("scores and targets must be 1D tensors of the same shape")
+            raise ValueError("scores and targets must be 1D tensors of same shape")
+
         y = targets.float()
         N = scores.size(0)
 
-        # 1) compute soft ranks (shape: [N])
-        ranks = soft_rank(
-            scores.unsqueeze(0),
-            regularization=self.reg,
-            temperature=self.tau
-        ).squeeze(0)
+        # 1) pairwise differences
+        diff = scores.unsqueeze(1) - scores.unsqueeze(0)  # (N,N)
 
-        # 2) build pairwise indicator H_ij ≈ 1[r_j ≤ r_i]
-        diff = ranks.unsqueeze(1) - ranks.unsqueeze(0)   # (N,N)
-        H = torch.sigmoid(diff * self.tau)               # (N,N)
+        # 2) soft comparison matrix Hij ?~I~H 1{score_j ?~I? score_i}
+        H = torch.sigmoid((-diff) / self.tau)             # (N,N)
 
-        # 3) soft true-positives above each i
-        tp = (H * y.unsqueeze(0)).sum(dim=1)             # (N,)
+        # instead of in-place diag assignment, build a new matrix
+        eye = torch.eye(N, device=scores.device, dtype=scores.dtype)
+        H = H * (1.0 - eye) + eye                         # now H[ii]=1 but no in-place
 
-        # 4) precision at each i, averaged only over positives
-        precision_i = tp / ranks
-        P = y.sum().clamp(min=1.0)                       # avoid div by zero
-        soft_ap = (precision_i * y).sum() / P
+        # 3) soft true-positives above each threshold
+        tp = (H * y.unsqueeze(0)).sum(dim=1)              # (N,)
 
-        # 5) loss
+        # 4) soft "predicted positives" above each threshold
+        denom = H.sum(dim=1).clamp(min=self.eps)          # (N,)
+
+        # 5) precision@i and average over true positives
+        precision = tp / denom                            # (N,)
+        P = y.sum().clamp(min=self.eps)
+        soft_ap = (precision * y).sum() / P               # scalar
+
+        # 6) final loss
         return 1.0 - soft_ap
 
 
@@ -118,7 +124,7 @@ class WeightedMSELoss(nn.Module):
         return loss.mean()
     
 
-class WeightedCosineSimilarity(nn.Module):
+class WeightedCosineSimilarity(Metric):
     def __init__(self, weight_idx: int, weight_value: float, vector_length: int, reduction: str = 'mean'):
         """
         Args:
@@ -132,9 +138,35 @@ class WeightedCosineSimilarity(nn.Module):
         weights[weight_idx] = weight_value
         self.register_buffer('weights', weights)
         self.reduction = reduction
+        self.add_state("sum_cos_sim", default=torch.tensor(0.0), dist_reduce_fx="sum")
+        self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
 
-    def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    def update(self, x: torch.Tensor, y: torch.Tensor):
         # x, y assumed to be shape [batch_size, vector_length]
+        x = x * self.weights
+        y = y * self.weights
+
+        x_norm = F.normalize(x, p=2, dim=-1)
+        y_norm = F.normalize(y, p=2, dim=-1)
+
+        cos_sim = (x_norm * y_norm).sum(dim=-1)  # shape: [batch_size]
+        
+        if self.reduction == 'mean':
+            self.sum_cos_sim += cos_sim.sum()
+            self.total += x.shape[0]
+        else:
+            # Store individual similarities
+            self.sum_cos_sim = cos_sim
+            self.total = torch.tensor(x.shape[0], device=x.device)
+
+    def compute(self):
+        if self.reduction == 'mean':
+            return self.sum_cos_sim / self.total if self.total > 0 else torch.tensor(0.0)
+        else:
+            return self.sum_cos_sim  # shape: [batch_size]
+    
+    def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        # For backward compatibility
         x = x * self.weights
         y = y * self.weights
 

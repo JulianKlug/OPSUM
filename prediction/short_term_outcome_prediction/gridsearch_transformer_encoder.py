@@ -151,8 +151,12 @@ def get_score_encoder(trial, ds, data_splits_path, output_folder, gridsearch_con
         train_loader = DataLoader(train_dataset, batch_sampler=train_bucket_sampler,
                                   # shuffling is done in the bucket sampler
                                   shuffle=False, drop_last=False)
-
-        val_bucket_sampler = BucketBatchSampler(val_dataset.idx_to_len_map, 1024)
+        
+        if loss_function == 'aploss':
+            val_batch_size = 256
+        else:
+            val_batch_size = 1024
+        val_bucket_sampler = BucketBatchSampler(val_dataset.idx_to_len_map, val_batch_size)
         val_loader = DataLoader(val_dataset, batch_sampler=val_bucket_sampler)
 
         logger = DictLogger(0)
