@@ -3,16 +3,13 @@ import os
 import pandas as pd
 import torch as ch
 import numpy as np
-from numba.np.arrayobj import np_concatenate
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
-from sklearn.metrics import matthews_corrcoef, average_precision_score, roc_auc_score, accuracy_score
 from sklearn.preprocessing import StandardScaler
 import pytorch_lightning as pl
 from prediction.outcome_prediction.Transformer.utils.utils import DictLogger
-from prediction.outcome_prediction.Transformer.architecture import OPSUMTransformer, OPSUM_encoder_decoder
-from prediction.outcome_prediction.Transformer.lightning_wrapper import LitEncoderRegressionModel, \
-    LitEncoderDecoderModel
+from prediction.outcome_prediction.Transformer.architecture import OPSUM_encoder_decoder
+from prediction.outcome_prediction.Transformer.lightning_wrapper import LitEncoderDecoderModel
 from prediction.utils.utils import ensure_dir
 
 

@@ -167,12 +167,12 @@ class LitEncoderDecoderModel(pl.LightningModule):
             # using weighted mse loss with weighting of max_NIHSS
             self.criterion = WeightedMSELoss(weight_idx = 37, weight_value = 10, vector_length = 84)
 
-        # self.train_cos_sim = CosineSimilarity(reduction='mean')
-        # self.train_cos_sim_epoch = CosineSimilarity(reduction='mean')
-        # self.val_cos_sim = CosineSimilarity(reduction='mean')
-        self.train_cos_sim = WeightedCosineSimilarity(weight_idx = 37, weight_value = 10, vector_length = 84, reduction='mean')
-        self.train_cos_sim_epoch = WeightedCosineSimilarity(weight_idx = 37, weight_value = 10, vector_length = 84, reduction='mean')
-        self.val_cos_sim = WeightedCosineSimilarity(weight_idx = 37, weight_value = 10, vector_length = 84, reduction='mean')
+        self.train_cos_sim = CosineSimilarity(reduction='mean')
+        self.train_cos_sim_epoch = CosineSimilarity(reduction='mean')
+        self.val_cos_sim = CosineSimilarity(reduction='mean')
+        # self.train_cos_sim = WeightedCosineSimilarity(weight_idx = 37, weight_value = 10, vector_length = 84, reduction='mean')
+        # self.train_cos_sim_epoch = WeightedCosineSimilarity(weight_idx = 37, weight_value = 10, vector_length = 84, reduction='mean')
+        # self.val_cos_sim = WeightedCosineSimilarity(weight_idx = 37, weight_value = 10, vector_length = 84, reduction='mean')
 
 
     def training_step(self, batch, batch_idx, mode='train'):
