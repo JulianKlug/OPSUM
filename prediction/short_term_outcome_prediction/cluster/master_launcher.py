@@ -102,5 +102,7 @@ if __name__ == '__main__':
                                 use_decoder=args.use_decoder,
                                 use_time_to_event=args.use_time_to_event,
                                 storage_pwd=args.storage_pwd, storage_port=args.storage_port, storage_host=args.storage_host,
+                                normalisation_data_path=args.normalisation_data_path,
+                                outcome_data_path=args.outcome_data_path,                               
                                 use_optuna_frontend=args.use_optuna_frontend)
 
