@@ -12,17 +12,21 @@ from random import shuffle
 from prediction.utils.utils import aggregate_features_over_time
 
 
-def decompose_and_label_timeseries(timeseries: np.ndarray, y_df: pd.DataFrame, target_time_to_outcome: int = 6):
+def decompose_and_label_timeseries(timeseries: np.ndarray, y_df: pd.DataFrame, target_time_to_outcome: int = 6, 
+                                   target_interval=True, restrict_to_first_event=False):
     """
     Decompose the timeseries data into individual samples (every sample is a subtimeseries) and associate each sample with a label.
     Args:
         timeseries (np.array): array of shape (num_samples, num_features, num_timesteps)
         y_df (pd.DataFrame): dataframe with case_admission_id and relative_sample_date_hourly_cat (start of the target event)
         delta (int): number of timesteps to predict in the future
+        target_interval (bool): whether target an interval (between current time_step and target_time_to_outcome) or a single timestep
+        restrict_to_first_event (bool): whether to restrict to the first event or not (if True, only the first event is considered for the label)
 
     Returns:
-        map (list): list of tuples (cid_idx, ts) where idx in list is the index of the sample in the flattened targets array, cid_idx is the idx of case admission id, and ts is the last timestep for this idx
-        flat_labels (list): list of labels for every subsequence
+        Tuple: 
+        - map (list): list of tuples (cid_idx, ts) where idx in list is the index of the sample in the flattened targets array, cid_idx is the idx of case admission id, and ts is the last timestep for this idx
+        - flat_labels (list): list of labels for every subsequence
     """
 
     # create index mapping (list of (cid, ts) in which the index in the list is the index of the sample in the flattened targets array)
@@ -33,27 +37,47 @@ def decompose_and_label_timeseries(timeseries: np.ndarray, y_df: pd.DataFrame, t
     overall_max_ts = timeseries.shape[1]
     for idx, cid in enumerate(timeseries[:, 0, 0, 0]):
         if cid in y_df.case_admission_id.values:
-            max_ts = y_df[y_df.case_admission_id == cid].relative_sample_date_hourly_cat.values[0]
+            target_events_ts = y_df[y_df.case_admission_id == cid].relative_sample_date_hourly_cat.values
+        else:
+            # no event for this patient - empty array
+            target_events_ts = np.array([])
+        
+        if (cid in y_df.case_admission_id.values) and (restrict_to_first_event):
+            # if we restrict to the first event, we need to get the max ts for this patient by looking at the first event
+            max_ts = np.min(target_events_ts)
         else:
             max_ts = overall_max_ts
+
         for ts in range(int(max_ts)):
             # store idx of cid and idx of ts
             map.append((idx, ts))
-            if cid in y_df.case_admission_id.values and ts + target_time_to_outcome >= max_ts:
-                flat_labels.append(1)
+            # if the event occurs in the next delta timesteps, we label it as 1 (event occurs)
+            # else we label it as 0 (no event)
+            if target_interval:
+                    # if any of target_events_ts is between ts and ts + target_time_to_outcome:
+                    if np.any((target_events_ts > ts) & (target_events_ts <= ts + target_time_to_outcome)):
+                        flat_labels.append(1)
+                    else:
+                        flat_labels.append(0)
+            # event occus exactly at ts + target_time_to_outcome
             else:
-                flat_labels.append(0)
+                # if any of target_events_ts is equal to ts + target_time_to_outcome:
+                if np.any(target_events_ts == ts + target_time_to_outcome):
+                    flat_labels.append(1)
+                else:
+                    flat_labels.append(0)
 
     return map, flat_labels
 
 
-def decompose_and_label_timeseries_time_to_event(timeseries: np.ndarray, y_df: pd.DataFrame):
+def decompose_and_label_timeseries_time_to_event(timeseries: np.ndarray, y_df: pd.DataFrame, restrict_to_first_event=False):
     """
     Decompose the timeseries data into individual samples (every sample is a subtimeseries) and associate each sample with a label.
     The label is given by a tuple and represents the time to event or censoring (time to event|censoring, event y|n)
     Args:
         timeseries (np.array): array of shape (num_samples, num_features, num_timesteps)
         y_df (pd.DataFrame): dataframe with case_admission_id and relative_sample_date_hourly_cat (start of the target event)
+        restrict_to_first_event (bool): whether to restrict to the first event or not (if True, only the first event is considered for the label)
 
     Returns:
         map (list): list of tuples (cid_idx, ts) where idx in list is the index of the sample in the flattened targets array, cid_idx is the idx of case admission id, and ts is the last timestep for this idx
@@ -69,20 +93,40 @@ def decompose_and_label_timeseries_time_to_event(timeseries: np.ndarray, y_df: p
     overall_max_ts = timeseries.shape[1]
     for idx, cid in enumerate(timeseries[:, 0, 0, 0]):
         if cid in y_df.case_admission_id.values:
-            max_ts = y_df[y_df.case_admission_id == cid].relative_sample_date_hourly_cat.values[0]
+            target_events_ts = y_df[y_df.case_admission_id == cid].relative_sample_date_hourly_cat.values
+        else:
+            # no event for this patient - empty array
+            target_events_ts = np.array([])
+        
+        if (cid in y_df.case_admission_id.values) and (restrict_to_first_event):
+            # if we restrict to the first event, we need to get the max ts for this patient by looking at the first event
+            max_ts = np.min(target_events_ts)
         else:
             max_ts = overall_max_ts
+
         for ts in range(int(max_ts)):
             # store idx of cid and idx of ts
             map.append((idx, ts))
-            time_to_event = max_ts - ts
-            if cid in y_df.case_admission_id.values:
-                # flat_labels.append((time_to_event, 1))
-                flat_labels.append(time_to_event)
+            if restrict_to_first_event:
+                time_to_event = max_ts - ts
+                if cid in y_df.case_admission_id.values:
+                    # flat_labels.append((time_to_event, 1))
+                    flat_labels.append(time_to_event)
+                else:
+                    # data censored (no event)
+                    # flat_labels.append((time_to_event, 0))
+                    flat_labels.append(max_ts)
             else:
-                # data censored (no event)
-                # flat_labels.append((time_to_event, 0))
-                flat_labels.append(max_ts)
+                # next event is first event after ts
+                next_event = np.min(target_events_ts[target_events_ts > ts]) if len(target_events_ts[target_events_ts > ts]) > 0 else np.nan
+                if np.isnan(next_event):
+                    # no event
+                    # flat_labels.append((time_to_event, 0))
+                    flat_labels.append(overall_max_ts)
+                else:
+                    time_to_event = next_event - ts
+                    # flat_labels.append((time_to_event, 1))
+                    flat_labels.append(time_to_event)     
 
     return map, flat_labels
 
@@ -306,6 +350,7 @@ class BucketBatchSampler(Sampler):
 
 
 def prepare_subsequence_dataset(scenario, rescale=True, target_time_to_outcome=6, use_gpu=True,
+                                target_interval=True, restrict_to_first_event=False,
                                 use_time_to_event=False,
                                 use_target_timeseries=False, target_timeseries_indices=None,
                                 target_timeseries_length=1):
@@ -318,15 +363,24 @@ def prepare_subsequence_dataset(scenario, rescale=True, target_time_to_outcome=6
         target_time_to_outcome (int): number of timesteps to predict in the future
         use_gpu (bool): whether to use GPU or not
         use_target_timeseries (bool): whether to return the target timeseries or not (only relevant for the encoder/decoder model)
+        target_interval (bool): whether target an interval (between current time_step and target_time_to_outcome) or a single timestep
+        restrict_to_first_event (bool): whether to restrict to the first event or not (if True, only the first event is considered for the label)
+
     """
     X_train, X_val, y_train, y_val = scenario
 
     if not use_target_timeseries and not use_time_to_event:
-        train_map, train_flat_labels = decompose_and_label_timeseries(X_train, y_train, target_time_to_outcome=target_time_to_outcome)
-        val_map, val_flat_labels = decompose_and_label_timeseries(X_val, y_val, target_time_to_outcome=target_time_to_outcome)
+        train_map, train_flat_labels = decompose_and_label_timeseries(X_train, y_train, target_time_to_outcome=target_time_to_outcome,
+                                                                        target_interval=target_interval,
+                                                                        restrict_to_first_event=restrict_to_first_event)
+        val_map, val_flat_labels = decompose_and_label_timeseries(X_val, y_val, target_time_to_outcome=target_time_to_outcome,
+                                                                    target_interval=target_interval,
+                                                                    restrict_to_first_event=restrict_to_first_event)
     elif use_time_to_event:
-        train_map, train_flat_labels = decompose_and_label_timeseries_time_to_event(X_train, y_train)
-        val_map, val_flat_labels = decompose_and_label_timeseries_time_to_event(X_val, y_val)
+        train_map, train_flat_labels = decompose_and_label_timeseries_time_to_event(X_train, y_train, 
+                                                                                     restrict_to_first_event=restrict_to_first_event)
+        val_map, val_flat_labels = decompose_and_label_timeseries_time_to_event(X_val, y_val, 
+                                                                                     restrict_to_first_event=restrict_to_first_event)
     elif use_target_timeseries:
         # if we want to return the target timeseries, we need to decompose the timeseries differently (whole timeseries for each sample)
         train_map = decompose_timeseries(X_train, target_timeseries_length)

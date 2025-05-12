@@ -25,6 +25,8 @@ ch.set_float32_matmul_precision('high')
 
 DEFAULT_GRIDSEARCH_CONFIG = {
     "n_trials": 1000,
+    "target_interval": True,
+    "restrict_to_first_event": False,
     "batch_size": [416],
     "num_layers": [2,3,4],
     "model_dim": [256, 512],
@@ -67,7 +69,10 @@ def launch_gridsearch_encoder(data_splits_path:str, output_folder:str, gridsearc
         storage = None
     study = optuna.create_study(direction='maximize', storage=storage)
     splits = ch.load(path.join(data_splits_path))
-    all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu) for x in splits]
+    all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu,
+                                                target_interval=gridsearch_config['target_interval'], 
+                                                restrict_to_first_event=gridsearch_config['restrict_to_first_event'],
+                                                ) for x in splits]
 
     study.optimize(partial(get_score_encoder, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
                             gridsearch_config=gridsearch_config,

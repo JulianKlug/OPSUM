@@ -30,6 +30,7 @@ def subprocess_cluster_gridsearch(data_splits_path:str, output_folder:str, trial
     splits = ch.load(path.join(data_splits_path))
 
     if use_decoder == True:
+        # use decoder 
         all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu, use_target_timeseries=True,
                                                     target_timeseries_length=gridsearch_config[
                                                         'target_timeseries_length']) for x in splits]
@@ -38,12 +39,19 @@ def subprocess_cluster_gridsearch(data_splits_path:str, output_folder:str, trial
                             normalisation_data_path=normalisation_data_path, outcome_data_path=outcome_data_path,
                            use_gpu=use_gpu), n_trials=gridsearch_config['n_trials'])
     if use_time_to_event == True:
-        all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu, use_time_to_event=True) for x in splits]
+        # predict time to event
+        all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu, use_time_to_event=True,
+                                                    restrict_to_first_event=gridsearch_config['restrict_to_first_event'],
+                                                    ) for x in splits]
         study.optimize(partial(get_score_encoder_tte, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
                                 gridsearch_config=gridsearch_config,
                                use_gpu=use_gpu), n_trials=gridsearch_config['n_trials'])
     else:
-        all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu) for x in splits]
+        # Use encoder/classifier
+        all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu,                                 
+                                                    target_interval=gridsearch_config['target_interval'], 
+                                                    restrict_to_first_event=gridsearch_config['restrict_to_first_event'],
+                                                    ) for x in splits]
         study.optimize(partial(get_score_encoder, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
                                 gridsearch_config=gridsearch_config,
                                use_gpu=use_gpu), n_trials=gridsearch_config['n_trials'])
