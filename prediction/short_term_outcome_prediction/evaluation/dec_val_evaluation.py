@@ -71,6 +71,7 @@ def encoder_decoder_validation_evaluation(data_path:str, model_config_path:str, 
             data_path=data_path,
             model_path=model_path,
             model_config_path=model_config_path,
+            split_idx=cv_fold,
             predict_n_time_steps=eval_n_time_steps_before_event,
             n_time_steps=n_time_steps,
             use_gpu=use_gpu

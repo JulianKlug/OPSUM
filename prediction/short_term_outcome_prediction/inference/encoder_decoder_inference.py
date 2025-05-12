@@ -50,7 +50,7 @@ def predict_n_next_steps(input_data, n_steps, model, trainer, use_gpu):
     return predictions_np
 
 
-def encoder_decoder_predict(data_path:str, model_path:str, model_config_path:str,
+def encoder_decoder_predict(data_path:str, model_path:str, model_config_path:str, split_idx:int=None,
             predict_n_time_steps:int=None, n_time_steps=None, use_gpu:bool=False):
     """
     Predict the next predict_n_time_steps using the encoder-decoder model.
@@ -66,8 +66,11 @@ def encoder_decoder_predict(data_path:str, model_path:str, model_config_path:str
     model_config = pd.read_csv(model_config_path)
     model_config = model_config.to_dict(orient='records')[0]
 
+    if split_idx is None:
+        split_idx = model_config['best_cv_fold']
+
     splits = ch.load(os.path.join(data_path))
-    full_X_train, full_X_val, y_train, y_val = splits[model_config['best_cv_fold']]
+    full_X_train, full_X_val, y_train, y_val = splits[split_idx]
 
     # prepare input data
     X_train = full_X_train[:, :, :, -1].astype('float32')
