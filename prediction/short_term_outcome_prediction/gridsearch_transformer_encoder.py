@@ -205,6 +205,10 @@ def get_score_encoder(trial, ds, data_splits_path, output_folder, gridsearch_con
 
     d = dict(trial.params)
     d['model_type'] = 'transformer_encoder'
+    d["n_trials"] = gridsearch_config['n_trials']
+    d['target_interval'] = gridsearch_config['target_interval']
+    d['restrict_to_first_event'] = gridsearch_config['restrict_to_first_event']
+    d['max_epochs'] = gridsearch_config['max_epochs']
     d['median_rolling_val_scores'] = float(np.median(rolling_val_scores))
     d['best_val_score'] = float(np.max(val_scores))
     d['median_val_scores'] = float(np.median(val_scores))
