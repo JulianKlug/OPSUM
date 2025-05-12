@@ -121,7 +121,7 @@ def get_score_encoder(trial, ds, data_splits_path, output_folder, gridsearch_con
     accelerator = 'gpu' if use_gpu else 'cpu'
 
     # used for BCEWithLogitsLoss(pos_weight=imbalance_factor)
-    imbalance_factor = gridsearch_config['imbalance_factor']
+    imbalance_factor = trial.suggest_categorical('imbalance_factor', gridsearch_config['imbalance_factor'])
 
     val_scores = []
     best_epochs = []
@@ -202,10 +202,11 @@ def get_score_encoder(trial, ds, data_splits_path, output_folder, gridsearch_con
         best_auprcs.append(best_auprc)
         best_epochs.append(best_epoch)
         rolling_val_scores.append(rolling_val_auroc)
-ZQ
+
     d = dict(trial.params)
     d['model_type'] = 'transformer_encoder'
     d['median_rolling_val_scores'] = float(np.median(rolling_val_scores))
+    d['best_val_score'] = float(np.max(val_scores))
     d['median_val_scores'] = float(np.median(val_scores))
     d['median_best_auprc'] = float(np.median(best_auprcs))
     d['median_best_epochs'] = float(np.median(best_epochs))
