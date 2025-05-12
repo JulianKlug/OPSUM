@@ -157,6 +157,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--include_short_term_outcomes', action='store_true', help='Include short term outcomes', default=False)
     parser.add_argument('-end_min_repeats', '--end_min_repeats', type=bool, help='Whether to require a minimum number of repeated measurements for detection of END', default=False)
     parser.add_argument('-end_min_delta', '--end_min_delta', type=int, help='The minimum difference in NIHSS scores to consider as END', default=4)
+    parser.add_argument('-end_keep_multiple_events', '--end_keep_multiple_events', type=bool, help='If True, allows detection of multiple deterioration events by resetting the baseline after each event', default=True)
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose', default=False)
 
     args = parser.parse_args()
@@ -165,5 +166,9 @@ if __name__ == '__main__':
                         imaging_data_path=args.imaging,
                         restrict_to_patients_with_imaging_data_available=args.restrict_to_patients_with_imaging_data_available,
                         include_short_term_outcomes=args.include_short_term_outcomes,
-                        short_term_outcomes_config={'end_require_min_repeats': args.end_min_repeats, 'end_min_delta': args.end_min_delta},
+                        short_term_outcomes_config={
+                            'end_require_min_repeats': args.end_min_repeats, 
+                            'end_min_delta': args.end_min_delta,
+                            'end_keep_multiple_events': args.end_keep_multiple_events
+                            },
                         verbose=args.verbose)

@@ -2,7 +2,7 @@ from preprocessing.geneva_stroke_unit_preprocessing.outcome_preprocessing.short_
     early_neurological_deterioration
 
 
-def preprocess_short_term_outcomes(df, end_require_min_repeats=False, end_min_delta=4):
+def preprocess_short_term_outcomes(df, end_require_min_repeats=False, end_min_delta=4, end_keep_multiple_events=True):
     """
     Preprocess short term outcomes:
         - Early neurological deterioration
@@ -16,6 +16,7 @@ def preprocess_short_term_outcomes(df, end_require_min_repeats=False, end_min_de
             Example: restricted_feature_df
         end_require_min_repeats (bool): Whether to require a minimum number of repeated measurements for detection of END
         end_min_delta (int): The minimum difference in NIHSS scores to consider as END.
+        keep_multiple_events (bool): If True, allows detection of multiple deterioration events by resetting the baseline after each event.
 
     Returns:
         pandas DataFrame: A subset of the input DataFrame with short term outcomes detected.
@@ -24,7 +25,7 @@ def preprocess_short_term_outcomes(df, end_require_min_repeats=False, end_min_de
         ValueError: If the input DataFrame is empty or does not contain the required columns.
     """
 
-    end_df = early_neurological_deterioration(df, require_min_repeats=end_require_min_repeats, min_delta=end_min_delta)
+    end_df = early_neurological_deterioration(df, require_min_repeats=end_require_min_repeats, min_delta=end_min_delta, keep_multiple_events=end_keep_multiple_events)
     end_df['outcome_label'] = 'early_neurological_deterioration'
     # store arguments for each outcome
     end_df['outcome_args'] = f'require_min_repeats={end_require_min_repeats}, min_delta={end_min_delta}'

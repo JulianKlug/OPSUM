@@ -46,6 +46,10 @@ def variable_presence_verification(normalised_df: pd.DataFrame, target_feature_p
                                                    selected_variables))
             # check if all target features are present (ie a variable can be encoded into multiple features)
             all_features_present.append(set(temp_cid_df[temp_cid_df.relative_sample_date_hourly_cat == time_bin].sample_label.unique()) == set(target_features))
+            if not all(all_features_present):
+                print(f'Difference in features for case {cid} at time bin {time_bin}')
+                print(f'Excess features: {set(temp_cid_df[temp_cid_df.relative_sample_date_hourly_cat == time_bin].sample_label.unique()) - set(target_features)}')
+                print(f'Missing features: {set(target_features) - set(temp_cid_df[temp_cid_df.relative_sample_date_hourly_cat == time_bin].sample_label.unique())}')
     assert all(all_variables_present), 'Not all selected variables are present in the final dataset'
     assert all(all_features_present), f'Not all target features are present in the final dataset, as defined in {target_feature_path}'
 
