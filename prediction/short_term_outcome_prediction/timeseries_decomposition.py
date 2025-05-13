@@ -153,7 +153,8 @@ def decompose_timeseries(timeseries: np.ndarray, target_timeseries_length: int =
     return map
 
 
-def aggregate_and_label_timeseries(timeseries, y_df, target_time_to_outcome=6, mask_after_first_positive=True):
+def aggregate_and_label_timeseries(timeseries, y_df, target_time_to_outcome=6,
+                                   target_interval=True, restrict_to_first_event=False):
     all_subj_labels = []
     all_subj_data = []
     n_timepoints = timeseries.shape[1]
@@ -162,16 +163,32 @@ def aggregate_and_label_timeseries(timeseries, y_df, target_time_to_outcome=6, m
         if cid not in y_df.case_admission_id.values:
             labels = np.zeros(n_timepoints)
         else:
-            event_ts = int(y_df[y_df.case_admission_id == cid].relative_sample_date_hourly_cat.values[0])
-            # let labels be 0 until 6 ts before the event then 1 until the end then 0
-            n_pos_start = max(0, event_ts - target_time_to_outcome)
-            n_pos_end = event_ts
-            labels = np.concatenate(
-                (np.zeros(n_pos_start), np.ones(n_pos_end - n_pos_start), np.zeros(n_timepoints - n_pos_end)))
+            target_events_ts = y_df[y_df.case_admission_id == cid].relative_sample_date_hourly_cat.values
+            if restrict_to_first_event:
+                # if we restrict to the first event, we need to get the max ts for this patient by looking at the first event
+                max_ts = np.min(target_events_ts)
+            else:
+                max_ts = n_timepoints
 
-            if mask_after_first_positive:
-                labels = labels[:n_pos_start + 1]
-                x_data = x_data[:, :n_pos_start + 1, :]
+            labels = []
+            for ts in range(int(max_ts)):
+                # if the event occurs in the next delta timesteps, we label it as 1 (event occurs)
+                # else we label it as 0 (no event)
+                if target_interval:
+                        # if any of target_events_ts is between ts and ts + target_time_to_outcome:
+                        if np.any((target_events_ts > ts) & (target_events_ts <= ts + target_time_to_outcome)):
+                            labels.append(1)
+                        else:
+                            labels.append(0)
+                # event occus exactly at ts + target_time_to_outcome
+                else:
+                    # if any of target_events_ts is equal to ts + target_time_to_outcome:
+                    if np.any(target_events_ts == ts + target_time_to_outcome):
+                        labels.append(1)
+                    else:
+                        labels.append(0)
+            labels = np.array(labels)
+
         x_data, _ = aggregate_features_over_time(x_data, np.array([None]), moving_average=False)
         all_subj_labels.append(labels)
         all_subj_data.append(x_data)
@@ -420,7 +437,8 @@ def prepare_subsequence_dataset(scenario, rescale=True, target_time_to_outcome=6
     return train_dataset, val_dataset
 
 
-def prepare_aggregate_dataset(scenario, rescale=True, target_time_to_outcome=6, mask_after_first_positive=True):
+def prepare_aggregate_dataset(scenario, rescale=True, target_time_to_outcome=6, 
+                              target_interval=True, restrict_to_first_event=False):
     """
     Prepares the dataset as an aggregate dataset (one sample per timepoint) and returns the train and validation sets.
     (only used for XGB model)
@@ -429,13 +447,15 @@ def prepare_aggregate_dataset(scenario, rescale=True, target_time_to_outcome=6, 
         scenario (tuple): tuple of (X_train, X_val, y_train, y_val)
         rescale (bool): whether to rescale the data or not
         target_time_to_outcome (int): number of timesteps to predict in the future
+        target_interval (bool): whether target an interval (between current time_step and target_time_to_outcome) or a single timestep
+        restrict_to_first_event (bool): whether to restrict to the first event or not (if True, only the first event is considered for the label)
     """
     X_train, X_val, y_train, y_val = scenario
 
     train_data, train_labels = aggregate_and_label_timeseries(X_train, y_train, target_time_to_outcome,
-                                                              mask_after_first_positive)
+                                                              target_interval=target_interval, restrict_to_first_event=restrict_to_first_event)
     val_data, val_labels = aggregate_and_label_timeseries(X_val, y_val, target_time_to_outcome,
-                                                          mask_after_first_positive)
+                                                          target_interval=target_interval, restrict_to_first_event=restrict_to_first_event)
 
     train_data = np.concatenate(train_data)
     train_labels = np.concatenate(train_labels)

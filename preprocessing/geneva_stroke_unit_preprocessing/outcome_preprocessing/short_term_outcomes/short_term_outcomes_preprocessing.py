@@ -28,6 +28,6 @@ def preprocess_short_term_outcomes(df, end_require_min_repeats=False, end_min_de
     end_df = early_neurological_deterioration(df, require_min_repeats=end_require_min_repeats, min_delta=end_min_delta, keep_multiple_events=end_keep_multiple_events)
     end_df['outcome_label'] = 'early_neurological_deterioration'
     # store arguments for each outcome
-    end_df['outcome_args'] = f'require_min_repeats={end_require_min_repeats}, min_delta={end_min_delta}'
+    end_df['outcome_args'] = f'require_min_repeats={end_require_min_repeats}, min_delta={end_min_delta}, keep_multiple_events={end_keep_multiple_events}'
 
     return end_df

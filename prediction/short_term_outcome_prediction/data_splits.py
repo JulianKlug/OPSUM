@@ -158,7 +158,7 @@ def generate_splits(X, y, outcome, test_size, n_splits, seed,
 if __name__ == '__main__':
     '''
     Example usage:
-    python data_splits_to_file.py -f '/Users/jk1/.../preprocessed_features_24022024_133425.csv' -l '/Users/jk1/.../preprocessed_outcomes_24022024_133425.csv' -o '3M mRS 0-2' -ptest '/Users/jk1/.../pid_test.tsv' -ptrain '/Users/jk1/.../pid_train.tsv' -od '/Users/jk1/.../train_data_splits' -ts 0.2 -s 42 -ns 5
+    python data_splits_to_file.py -f '/Users/jk1/.../preprocessed_features_24022024_133425.csv' -l '/Users/jk1/.../preprocessed_outcomes_24022024_133425.csv' -o 'early_neurological_deterioration' -ptest '/Users/jk1/.../pid_test.tsv' -ptrain '/Users/jk1/.../pid_train.tsv' -od '/Users/jk1/.../train_data_splits' -ts 0.2 -s 42 -ns 5
 
     If pid_test and pid_train are given, the data is split according to these patient ids
     If pid_test and pid_train are not given, the data is split randomly  

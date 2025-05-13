@@ -18,12 +18,23 @@ from prediction.utils.utils import ensure_dir
 
 DEFAULT_GRIDEARCH_CONFIG = {
     "n_trials": 1000,
+    "target_interval": True,
+    "restrict_to_first_event": False,
     "max_depth": [2, 4, 6, 8, 10],
-    "n_estimators": [50, 100, 200, 300],
-    "learning_rate": [0.001, 0.1],
+    "n_estimators": [100, 250, 500, 1000],
+    "learning_rate": [0.001, 0.1, 0.5],
     "reg_lambda": [1, 10, 50],
-    "alpha": [0, 50, 70, 100],
-    "early_stopping_rounds": 10
+    "alpha": [0, 1, 10],
+    "early_stopping_rounds": [25, 50, 100],
+    "scale_pos_weight": [25, 55, 100],
+    "min_child_weight": [1, 3, 5],
+    "subsample": [0.5, 0.8, 1],
+    "colsample_bytree": [0.8, 1],
+    "colsample_bylevel": [0.8, 1],
+    "booster": ['gbtree', 'dart'],
+    "grow_policy": ['depthwise', 'lossguide'],
+    "num_boost_round": [100, 200, 300],
+    "gamma": [0, 0.5, 1],
 }
 
 def launch_gridsearch_xgb(data_splits_path:str, output_folder:str, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG,
@@ -48,7 +59,9 @@ def launch_gridsearch_xgb(data_splits_path:str, output_folder:str, gridsearch_co
     splits = ch.load(path.join(data_splits_path))
 
     all_datasets = [prepare_aggregate_dataset(x, rescale=True, target_time_to_outcome=6,
-                                              mask_after_first_positive=True) for x in splits]
+                                                target_interval=gridsearch_config['target_interval'], 
+                                                restrict_to_first_event=gridsearch_config['restrict_to_first_event'],
+                                              ) for x in splits]
 
 
     study.optimize(partial(get_score_xgb, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
@@ -68,6 +81,14 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
     reg_lambda = trial.suggest_categorical("reg_lambda", choices=gridsearch_config['reg_lambda'])
     alpha = trial.suggest_categorical("alpha", choices=gridsearch_config['alpha'])
     early_stopping_rounds = gridsearch_config['early_stopping_rounds']
+    scale_pos_weight = trial.suggest_categorical("scale_pos_weight", choices=gridsearch_config['scale_pos_weight'])
+    min_child_weight = trial.suggest_categorical("min_child_weight", choices=gridsearch_config['min_child_weight'])
+    subsample = trial.suggest_categorical("subsample", choices=gridsearch_config['subsample'])
+    colsample_bytree = trial.suggest_categorical("colsample_bytree", choices=gridsearch_config['colsample_bytree'])
+    colsample_bylevel = trial.suggest_categorical("colsample_bylevel", choices=gridsearch_config['colsample_bylevel'])
+    booster = trial.suggest_categorical("booster", choices=gridsearch_config['booster'])
+    grow_policy = trial.suggest_categorical("grow_policy", choices=gridsearch_config['grow_policy'])
+    num_boost_round = trial.suggest_categorical("num_boost_round", choices=gridsearch_config['num_boost_round'])
 
     val_scores = []
     best_epochs = []
@@ -76,9 +97,22 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
         checkpoint_dir = os.path.join(output_folder, f'checkpoints_short_opsum_xgb_{timestamp}')
         ensure_dir(checkpoint_dir)
 
-        xgb_model = xgb.XGBClassifier(learning_rate=learning_rate, max_depth=max_depth, n_estimators=n_estimators,
-                                      reg_lambda=reg_lambda, alpha=alpha)
-        trained_xgb = xgb_model.fit(fold_X_train, fold_y_train, early_stopping_rounds=early_stopping_rounds, eval_metric=["aucpr"],
+        xgb_model = xgb.XGBClassifier(
+            learning_rate=learning_rate, 
+            max_depth=max_depth, 
+            n_estimators=n_estimators,
+            reg_lambda=reg_lambda, 
+            reg_alpha=alpha,
+            scale_pos_weight=scale_pos_weight,
+            min_child_weight=min_child_weight,
+            subsample=subsample,
+            colsample_bytree=colsample_bytree,
+            colsample_bylevel=colsample_bylevel,
+            booster=booster,
+            grow_policy=grow_policy,
+            num_boost_round=num_boost_round,
+            )
+        trained_xgb = xgb_model.fit(fold_X_train, fold_y_train, early_stopping_rounds=early_stopping_rounds, eval_metric=["aucpr", "auc"],
                                     eval_set=[(fold_X_train, fold_y_train), (fold_X_val, fold_y_val)])
 
         # save trained model
@@ -141,6 +175,9 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
     model_df.to_csv(os.path.join(output_folder, f'xgb_{timestamp}.csv'))
 
     d = dict(trial.params)
+    d["n_trials"] = gridsearch_config['n_trials']
+    d['target_interval'] = gridsearch_config['target_interval']
+    d['restrict_to_first_event'] = gridsearch_config['restrict_to_first_event']
     d['median_val_scores'] = float(np.median(val_scores))
     d['median_best_epochs'] = float(np.median(best_epochs))
     d['timestamp'] = timestamp

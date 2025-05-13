@@ -20,7 +20,8 @@ from prediction.utils.utils import ensure_dir
 
 def validation_evaluation(data_path:str, model_config_path:str, model_path:str=None,
                           output_path=None, predictions_dir:str=None,
-                            use_gpu = False,  n_time_steps = 72, eval_n_time_steps_before_event = 6,
+                          use_gpu = False,  n_time_steps = 72, eval_n_time_steps_before_event = 6,
+                          target_interval=True, restrict_to_first_event=False,
                           use_cross_validation = True):
     """
     Evaluate the model on the validation set
@@ -65,7 +66,7 @@ def validation_evaluation(data_path:str, model_config_path:str, model_path:str=N
         if predictions_dir is not None:
             # look for file ending in cv{cv_fold}.pt
             fold_predictions_path = [f for f in os.listdir(predictions_dir) if f.endswith(f'cv{cv_fold}.pt')][0]
-            predictions_data = ch.load(fold_predictions_path)
+            predictions_data = ch.load(os.path.join(predictions_dir, fold_predictions_path))
             pred_over_ts_np = np.squeeze(predictions_data).T
 
         # else load model and compute predictions
@@ -142,14 +143,38 @@ def validation_evaluation(data_path:str, model_config_path:str, model_path:str=N
             if cid not in y_val.case_admission_id.values:
                 cid_y = np.zeros(n_time_steps)
             else:
-                cid_event_ts = y_val[y_val.case_admission_id == cid].relative_sample_date_hourly_cat.values
-                if cid_event_ts < (eval_n_time_steps_before_event + 1):
-                    # if the event occurs before a detection window, ignore the patient
-                    cid_y = np.array([])
+                if restrict_to_first_event:
+                    cid_event_ts = np.min(y_val[y_val.case_admission_id == cid].relative_sample_date_hourly_cat.values)
                 else:
-                    # let y be 0s until 6 hours before the event then stop the series
-                    cid_y = np.zeros(int(cid_event_ts) - eval_n_time_steps_before_event - 1)
-                    cid_y = np.append(cid_y, 1)
+                    cid_event_ts = y_val[y_val.case_admission_id == cid].relative_sample_date_hourly_cat.values
+
+                if (not target_interval) and (cid_event_ts < (eval_n_time_steps_before_event + 1)):
+                        # if the event occurs before a detection window, ignore the patient
+                        cid_y = np.array([])
+                        continue
+                
+                if restrict_to_first_event:
+                    # if we restrict to the first event, we need to get the max ts for this patient by looking at the first event
+                    max_ts = np.min(cid_event_ts)
+                else:
+                    max_ts = n_time_steps
+                    
+                cid_y = []
+                for ts in range(int(max_ts)):
+                    if target_interval:
+                        # if any of target_events_ts is between ts and ts + eval_n_time_steps_before_event:
+                        if np.any((cid_event_ts > ts) & (cid_event_ts <= ts + eval_n_time_steps_before_event)):
+                            cid_y.append(1)
+                        else:
+                            cid_y.append(0)
+                    else:
+                        # not targerting interval -> event occurs exactly at ts + eval_n_time_steps_before_event
+                        # if any of target_events_ts is equal to ts + eval_n_time_steps_before_event:
+                        if np.any(cid_event_ts == ts + eval_n_time_steps_before_event):
+                            cid_y.append(1)
+                        else:
+                            cid_y.append(0)
+                cid_y = np.array(cid_y)
 
             y_val_list.append(cid_y)
 
@@ -262,10 +287,10 @@ def validation_evaluation(data_path:str, model_config_path:str, model_path:str=N
                     ax.set_title(f'Prediction over time for patient {cid}')
 
                     if cid in y_val.case_admission_id.values:
-                        ax.axvline(
-                            x=y_val[y_val.case_admission_id == cid].relative_sample_date_hourly_cat.values,
-                            color='red'
-                        )
+                        for end_ts in y_val[y_val.case_admission_id == cid].relative_sample_date_hourly_cat.values:
+                            # plot vertical line for each event
+                            ax.axvline(x=end_ts, color='red')
+
 
                     pdf.savefig()  # Save the current figure into the PDF
                     plt.close()  # Close the figure to free memory
@@ -286,6 +311,8 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--model_config_path', type=str, required=True)
     parser.add_argument('-o', '--output_path', type=str, default=None)
     parser.add_argument('-p', '--predictions_dir', type=str, default=None)
+    parser.add_argument('-ti', '--target_interval', default=True)
+    parser.add_argument('-fi', '--restrict_to_first_event', default=False, action='store_true')
     parser.add_argument('--use_gpu', action='store_true')
     parser.add_argument('--n_time_steps', type=int, default=72)
     parser.add_argument('--eval_n_time_steps_before_event', type=int, default=6)
@@ -305,6 +332,8 @@ if __name__ == '__main__':
                             use_gpu=args.use_gpu,
                             n_time_steps=args.n_time_steps,
                             eval_n_time_steps_before_event=args.eval_n_time_steps_before_event,
-                            use_cross_validation=use_cross_validation)
+                            use_cross_validation=use_cross_validation,
+                            target_interval=args.target_interval,
+                            restrict_to_first_event=args.restrict_to_first_event)
 
 
