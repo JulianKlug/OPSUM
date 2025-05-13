@@ -1,3 +1,4 @@
+import json
 import os
 
 import pandas as pd
@@ -63,8 +64,11 @@ def encoder_decoder_predict(data_path:str, model_path:str, model_config_path:str
     :return: The predictions for the next predict_n_time_steps.
     """
     
-    model_config = pd.read_csv(model_config_path)
-    model_config = model_config.to_dict(orient='records')[0]
+    if model_config_path.endswith('.json'):
+        model_config = json.load(open(model_config_path))
+    else:
+        model_config = pd.read_csv(model_config_path)
+        model_config = model_config.to_dict(orient='records')[0]
 
     if split_idx is None:
         split_idx = model_config['best_cv_fold']
