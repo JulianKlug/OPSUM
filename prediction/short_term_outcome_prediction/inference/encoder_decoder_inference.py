@@ -115,7 +115,8 @@ def encoder_decoder_predict(data_path:str, model_path:str, model_config_path:str
                                                 lr=model_config['lr'],
                                                 wd=model_config['weight_decay'],
                                                 train_noise=model_config['train_noise'],
-                                                lr_warmup_steps=model_config['n_lr_warm_up_steps'])
+                                                lr_warmup_steps=model_config['n_lr_warm_up_steps'],
+                                                loss_function=model_config['loss_function'])
     
     # compute predictions
     pred_over_ts = []

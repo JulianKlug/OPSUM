@@ -164,6 +164,7 @@ class LitEncoderDecoderModel(pl.LightningModule):
         if loss_function == 'mse':
             self.criterion = ch.nn.MSELoss()
         elif loss_function == 'weighted_mse':
+            # TODO: addapt to different input sizes
             # using weighted mse loss with weighting of max_NIHSS
             self.criterion = WeightedMSELoss(weight_idx = 37, weight_value = 10, vector_length = 84)
 
