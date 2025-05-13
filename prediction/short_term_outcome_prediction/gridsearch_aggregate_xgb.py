@@ -77,10 +77,10 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
 
     max_depth = trial.suggest_categorical("max_depth", choices=gridsearch_config['max_depth'])
     n_estimators = trial.suggest_categorical("n_estimators", choices=gridsearch_config['n_estimators'])
-    learning_rate = trial.suggest_loguniform("learning_rate", gridsearch_config['learning_rate'][0], gridsearch_config['learning_rate'][1])
+    learning_rate = trial.suggest_loguniform("learning_rate", gridsearch_config['learning_rate'][0], gridsearch_config['learning_rate'][2])
     reg_lambda = trial.suggest_categorical("reg_lambda", choices=gridsearch_config['reg_lambda'])
     alpha = trial.suggest_categorical("alpha", choices=gridsearch_config['alpha'])
-    early_stopping_rounds = gridsearch_config['early_stopping_rounds']
+    early_stopping_rounds = trial.suggest_categorical("early_stopping_rounds", choices=gridsearch_config['early_stopping_rounds'])
     scale_pos_weight = trial.suggest_categorical("scale_pos_weight", choices=gridsearch_config['scale_pos_weight'])
     min_child_weight = trial.suggest_categorical("min_child_weight", choices=gridsearch_config['min_child_weight'])
     subsample = trial.suggest_categorical("subsample", choices=gridsearch_config['subsample'])
@@ -90,7 +90,8 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
     grow_policy = trial.suggest_categorical("grow_policy", choices=gridsearch_config['grow_policy'])
     num_boost_round = trial.suggest_categorical("num_boost_round", choices=gridsearch_config['num_boost_round'])
 
-    val_scores = []
+    val_auprc = []
+    val_auroc = []
     best_epochs = []
     model_df = pd.DataFrame()
     for i, (fold_X_train, fold_X_val, fold_y_train, fold_y_val) in enumerate(ds):
@@ -167,9 +168,11 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
         run_performance_df['sp_val'] = model_sp_val
         model_df = pd.concat([model_df, run_performance_df])
 
-        best_val_score = model_auprc_val
+        best_val_auprc = model_auprc_val
+        best_val_auc = model_auc_val
         best_epoch = trained_xgb.best_iteration
-        val_scores.append(best_val_score)
+        val_auprc.append(best_val_auprc)
+        val_auroc.append(best_val_auc)
         best_epochs.append(best_epoch)
 
     model_df.to_csv(os.path.join(output_folder, f'xgb_{timestamp}.csv'))
@@ -178,11 +181,13 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
     d["n_trials"] = gridsearch_config['n_trials']
     d['target_interval'] = gridsearch_config['target_interval']
     d['restrict_to_first_event'] = gridsearch_config['restrict_to_first_event']
-    d['median_val_scores'] = float(np.median(val_scores))
+    d['median_val_auprc'] = float(np.median(val_auprc))
+    d['median_val_auc'] = float(np.median(val_auroc))
+
     d['median_best_epochs'] = float(np.median(best_epochs))
     d['timestamp'] = timestamp
-    d['best_cv_fold'] = int(np.argmax(val_scores))
-    d['worst_cv_fold_val_score'] = float(np.min(val_scores))
+    d['best_cv_fold'] = int(np.argmax(val_auprc))
+    d['worst_cv_fold_val_score'] = float(np.min(val_auprc))
     d['split_file'] = data_splits_path
     text = json.dumps(d)
     text += '\n'
@@ -190,7 +195,7 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
     with open(dest, 'a') as handle:
         handle.write(text)
     print("WRITTEN in ", dest)
-    return np.median(val_scores)
+    return np.median(val_auroc)
 
 
 if __name__ == '__main__':
