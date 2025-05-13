@@ -126,7 +126,7 @@ def encoder_decoder_predict(data_path:str, model_path:str, model_config_path:str
         X_val_with_first_n_ts = X_val[:, 0:modified_time_steps, :]
 
          # predict recursively for predict_n_time_steps time steps
-        predictions_np = predict_n_next_steps(X_val_with_first_n_ts, predict_n_time_steps, trained_model, trainer)
+        predictions_np = predict_n_next_steps(X_val_with_first_n_ts, predict_n_time_steps, trained_model, trainer, use_gpu=use_gpu)
         pred_over_ts.append(predictions_np)
 
     pred_over_ts_np = np.squeeze(pred_over_ts)
@@ -142,7 +142,7 @@ def main():
     parser.add_argument('-mc', '--model_config_path', type=str, required=True)
     parser.add_argument('-o', '--output_dir', type=str, required=False, default=None)
     parser.add_argument('-ts', '--predict_n_time_steps', type=int, required=False, default=6)
-    parser.add_argument('-ts', '--n_time_steps', type=int, required=False, default=None)
+    parser.add_argument('-nts', '--n_time_steps', type=int, required=False, default=72)
     parser.add_argument('-g', '--use_gpu', action='store_true', required=False, default=False)
 
     args = parser.parse_args()
