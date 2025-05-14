@@ -5,19 +5,22 @@ from functools import partial
 import optuna
 import json
 
+from prediction.short_term_outcome_prediction.gridsearch_aggregate_xgb import get_score_xgb
 from prediction.short_term_outcome_prediction.gridsearch_transformer_encoder import get_score_encoder
 from prediction.short_term_outcome_prediction.gridsearch_transformer_encoder_decoder import get_score_encoder_decoder
 from prediction.short_term_outcome_prediction.gridsearch_transformer_encoder_time_to_event import get_score_encoder_tte
-from prediction.short_term_outcome_prediction.timeseries_decomposition import prepare_subsequence_dataset
+from prediction.short_term_outcome_prediction.timeseries_decomposition import prepare_aggregate_dataset, prepare_subsequence_dataset
 
 
 def subprocess_cluster_gridsearch(data_splits_path:str, output_folder:str, trial_name:str, gridsearch_config_path: dict,
-                                  use_gpu:bool=True, use_decoder:bool=False, use_time_to_event:bool=False,
+                                  use_gpu:bool=True, use_decoder:bool=False, use_time_to_event:bool=False, use_xgb:bool=False,
                                     normalisation_data_path:str=None, outcome_data_path:str=None,
                                 storage_pwd:str=None, storage_port:int=None, storage_host:str='localhost'):
     # load config
     with open(gridsearch_config_path, 'r') as f:
         gridsearch_config = json.load(f)
+
+    outcome = "early_neurological_deterioration"
 
     if storage_pwd is not None and storage_port is not None:
         storage = optuna.storages.JournalStorage(optuna.storages.JournalRedisStorage(
@@ -29,7 +32,7 @@ def subprocess_cluster_gridsearch(data_splits_path:str, output_folder:str, trial
 
     splits = ch.load(path.join(data_splits_path))
 
-    if use_decoder == True:
+    if use_decoder:
         # use decoder 
         all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu, use_target_timeseries=True,
                                                     target_timeseries_length=gridsearch_config[
@@ -37,8 +40,10 @@ def subprocess_cluster_gridsearch(data_splits_path:str, output_folder:str, trial
         study.optimize(partial(get_score_encoder_decoder, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
                             gridsearch_config=gridsearch_config,
                             normalisation_data_path=normalisation_data_path, outcome_data_path=outcome_data_path,
-                           use_gpu=use_gpu), n_trials=gridsearch_config['n_trials'])
-    if use_time_to_event == True:
+                           use_gpu=use_gpu), n_trials=gridsearch_config['n_trials']
+                           )
+        
+    elif use_time_to_event:
         # predict time to event
         all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu, use_time_to_event=True,
                                                     restrict_to_first_event=gridsearch_config['restrict_to_first_event'],
@@ -46,6 +51,17 @@ def subprocess_cluster_gridsearch(data_splits_path:str, output_folder:str, trial
         study.optimize(partial(get_score_encoder_tte, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
                                 gridsearch_config=gridsearch_config,
                                use_gpu=use_gpu), n_trials=gridsearch_config['n_trials'])
+        
+    elif use_xgb:
+        all_datasets = [prepare_aggregate_dataset(x, rescale=True, target_time_to_outcome=6,
+                                                target_interval=gridsearch_config['target_interval'], 
+                                                restrict_to_first_event=gridsearch_config['restrict_to_first_event'],
+                                              ) for x in splits]
+        study.optimize(partial(get_score_xgb, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
+                            gridsearch_config=gridsearch_config, outcome=outcome),
+                            n_trials=gridsearch_config['n_trials'])
+
+
     else:
         # Use encoder/classifier
         all_datasets = [prepare_subsequence_dataset(x, use_gpu=use_gpu,                                 
@@ -66,10 +82,11 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--trial_name', type=str, required=True)
     parser.add_argument('-c', '--gridsearch_config_path', type=str, required=True)
     parser.add_argument('-g', '--use_gpu', type=str, required=False, default=1)
-    parser.add_argument('-dec', '--use_decoder', type=str, required=False, default=0)
     parser.add_argument('-nd', '--normalisation_data_path', type=str, required=False, default=None)
     parser.add_argument('-od', '--outcome_data_path', type=str, required=False, default=None)
+    parser.add_argument('-dec', '--use_decoder', type=str, required=False, default=0)
     parser.add_argument('-tte', '--use_time_to_event', type=str, required=False, default=0)
+    parser.add_argument('-xgb', '--use_xgb', type=str, required=False, default=0)
 
     parser.add_argument('-spwd', '--storage_pwd', type=str, required=False, default=None)
     parser.add_argument('-sport', '--storage_port', type=int, required=False, default=None)
@@ -80,9 +97,11 @@ if __name__ == '__main__':
     use_gpu = (args.use_gpu == 1) | (args.use_gpu == '1') | (args.use_gpu == 'True')
     use_decoder = (args.use_decoder == 1) | (args.use_decoder == '1') | (args.use_decoder == 'True')
     use_time_to_event = (args.use_time_to_event == 1) | (args.use_time_to_event == '1') | (args.use_time_to_event == 'True')
+    use_xgb = (args.use_xgb == 1) | (args.use_xgb == '1') | (args.use_xgb == 'True')
 
     subprocess_cluster_gridsearch(args.data_splits_path, args.output_folder, args.trial_name, args.gridsearch_config_path,
                                     use_gpu=use_gpu, use_decoder=use_decoder, use_time_to_event=use_time_to_event,
+                                    use_xgb=use_xgb,
                                     normalisation_data_path=args.normalisation_data_path,
                                     outcome_data_path=args.outcome_data_path,
                                     storage_pwd=args.storage_pwd, storage_port=args.storage_port, storage_host=args.storage_host)

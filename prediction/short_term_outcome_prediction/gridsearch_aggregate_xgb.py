@@ -20,11 +20,11 @@ DEFAULT_GRIDEARCH_CONFIG = {
     "n_trials": 1000,
     "target_interval": True,
     "restrict_to_first_event": False,
-    "max_depth": [2, 4, 6, 8, 10],
+    "max_depth": [2, 6, 8, 10, 12],
     "n_estimators": [100, 250, 500, 1000],
-    "learning_rate": [0.001, 0.1, 0.5],
-    "reg_lambda": [1, 10, 50],
-    "alpha": [0, 1, 10],
+    "learning_rate": [0.001, 0.1],
+    "reg_lambda": [1, 10, 50, 75],
+    "alpha": [0, 1, 10, 25],
     "early_stopping_rounds": [25, 50, 100],
     "scale_pos_weight": [25, 55, 100],
     "min_child_weight": [1, 3, 5],
@@ -77,7 +77,7 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
 
     max_depth = trial.suggest_categorical("max_depth", choices=gridsearch_config['max_depth'])
     n_estimators = trial.suggest_categorical("n_estimators", choices=gridsearch_config['n_estimators'])
-    learning_rate = trial.suggest_loguniform("learning_rate", gridsearch_config['learning_rate'][0], gridsearch_config['learning_rate'][2])
+    learning_rate = trial.suggest_loguniform("learning_rate", gridsearch_config['learning_rate'][0], gridsearch_config['learning_rate'][1])
     reg_lambda = trial.suggest_categorical("reg_lambda", choices=gridsearch_config['reg_lambda'])
     alpha = trial.suggest_categorical("alpha", choices=gridsearch_config['alpha'])
     early_stopping_rounds = trial.suggest_categorical("early_stopping_rounds", choices=gridsearch_config['early_stopping_rounds'])
@@ -89,6 +89,9 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
     booster = trial.suggest_categorical("booster", choices=gridsearch_config['booster'])
     grow_policy = trial.suggest_categorical("grow_policy", choices=gridsearch_config['grow_policy'])
     num_boost_round = trial.suggest_categorical("num_boost_round", choices=gridsearch_config['num_boost_round'])
+    gamma = trial.suggest_categorical("gamma", choices=gridsearch_config['gamma'])
+
+    device = "cuda" if ch.cuda.is_available() else "cpu"
 
     val_auprc = []
     val_auroc = []
@@ -112,6 +115,8 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
             booster=booster,
             grow_policy=grow_policy,
             num_boost_round=num_boost_round,
+            gamma=gamma,
+            device=device
             )
         trained_xgb = xgb_model.fit(fold_X_train, fold_y_train, early_stopping_rounds=early_stopping_rounds, eval_metric=["aucpr", "auc"],
                                     eval_set=[(fold_X_train, fold_y_train), (fold_X_val, fold_y_val)])
@@ -150,8 +155,19 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
         run_performance_df['learning_rate'] = learning_rate
         run_performance_df['alpha'] = alpha
         run_performance_df['reg_lambda'] = reg_lambda
+        run_performance_df['early_stopping_rounds'] = early_stopping_rounds
+        run_performance_df['scale_pos_weight'] = scale_pos_weight
+        run_performance_df['min_child_weight'] = min_child_weight
+        run_performance_df['subsample'] = subsample
+        run_performance_df['colsample_bytree'] = colsample_bytree
+        run_performance_df['colsample_bylevel'] = colsample_bylevel
+        run_performance_df['booster'] = booster
+        run_performance_df['grow_policy'] = grow_policy
+        run_performance_df['num_boost_round'] = num_boost_round
+        run_performance_df['gamma'] = gamma 
         run_performance_df['moving_average'] = False
         run_performance_df['outcome'] = outcome
+
         run_performance_df['auc_train'] = model_auc_train
         run_performance_df['auc_val'] = model_auc_val
         run_performance_df['auprc_train'] = model_auprc_train
