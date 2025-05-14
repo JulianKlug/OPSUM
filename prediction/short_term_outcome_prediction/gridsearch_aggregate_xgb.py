@@ -18,8 +18,8 @@ from prediction.utils.utils import ensure_dir
 
 DEFAULT_GRIDEARCH_CONFIG = {
     "n_trials": 1000,
-    "target_interval": True,
-    "restrict_to_first_event": False,
+    "target_interval": 1,
+    "restrict_to_first_event": 0,
     "max_depth": [2, 6, 8, 10, 12],
     "n_estimators": [100, 250, 500, 1000],
     "learning_rate": [0.001, 0.1],
@@ -31,8 +31,8 @@ DEFAULT_GRIDEARCH_CONFIG = {
     "subsample": [0.5, 0.8, 1],
     "colsample_bytree": [0.8, 1],
     "colsample_bylevel": [0.8, 1],
-    "booster": ['gbtree', 'dart'],
-    "grow_policy": ['depthwise', 'lossguide'],
+    "booster": ["gbtree", "dart"],
+    "grow_policy": ["depthwise", "lossguide"],
     "num_boost_round": [100, 200, 300],
     "gamma": [0, 0.5, 1],
 }
