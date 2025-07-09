@@ -98,7 +98,7 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
     best_epochs = []
     model_df = pd.DataFrame()
     for i, (fold_X_train, fold_X_val, fold_y_train, fold_y_val) in enumerate(ds):
-        checkpoint_dir = os.path.join(output_folder, f'checkpoints_short_opsum_xgb_{timestamp}')
+        checkpoint_dir = os.path.join(output_folder, f'checkpoints_short_opsum_xgb_{timestamp}_cv_{i}')
         ensure_dir(checkpoint_dir)
 
         xgb_model = xgb.XGBClassifier(
