@@ -6,7 +6,7 @@ import torch as ch
 import numpy as np
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
-from sklearn.metrics import matthews_corrcoef, average_precision_score, roc_auc_score, accuracy_score
+from sklearn.metrics import matthews_corrcoef, average_precision_score, roc_auc_score, accuracy_score, roc_curve
 from sklearn.preprocessing import StandardScaler
 import pytorch_lightning as pl
 from matplotlib.backends.backend_pdf import PdfPages
@@ -198,10 +198,18 @@ def xgb_validation_evaluation(data_path:str, model_config_path:str, model_path:s
     # Ensure prediction is a continuous value between 0 and 1
         overall_prediction_df['prediction'] = overall_prediction_df['prediction'].astype(float)
 
+        def cutoff_youdens_j(fpr,tpr,thresholds):
+            j_scores = tpr-fpr
+            j_ordered = sorted(zip(j_scores,thresholds))
+            return j_ordered[-1][1]
+        
+        fpr, tpr, thresholds = roc_curve(overall_prediction_df.true_label, overall_prediction_df.prediction)
 
         # compute overall metrics
         overall_results_df = pd.DataFrame({'overall_roc': roc_auc_score(overall_prediction_df.true_label,
                                                                          overall_prediction_df.prediction),
+                                            # get youden j index
+                                            'overall_youden_index': cutoff_youdens_j(fpr, tpr, thresholds),
                                         'overall_auprc': average_precision_score(overall_prediction_df.true_label,
                                                                                overall_prediction_df.prediction),
                                         'overall_mcc': matthews_corrcoef(overall_prediction_df.true_label,
@@ -279,69 +287,41 @@ def xgb_validation_evaluation(data_path:str, model_config_path:str, model_path:s
     return overall_results_df
 
 
-# data_path = '/Users/jk1/temp/opsum_end/preprocessing/gsu_Extraction_20220815_prepro_08062024_083500/early_neurological_deterioration_train_data_splits/train_data_splits_early_neurological_deterioration_ts0.8_rs42_ns5.pth'
-# data_path = '/Users/jk1/Downloads/train_data_splits_early_neurological_deterioration_ts0.8_rs42_ns5.pth'
-data_path = '/Users/jk1/temp/opsum_end/preprocessing/gsu_Extraction_20220815_prepro_09052025_220520/early_neurological_deterioration_train_data_splits/train_data_splits_early_neurological_deterioration_ts0.8_rs42_ns5.pth'
-model_path = '/Users/jk1/temp/opsum_end/training/hyperopt/xgb_gridsearch/xgb_gs_20250513_154517/checkpoints_short_opsum_xgb_20250518_001112_cv_1/xgb_20250518_001112_cv_1.model'
-model_config_path = '/Users/jk1/temp/opsum_end/training/hyperopt/xgb_gridsearch/xgb_gs_20250513_154517/xgb_auroc_best_model.csv'
-predictions_dir = '/Users/jk1/temp/opsum_end/training/hyperopt/xgb_gridsearch/xgb_gs_20250513_154517/validation_evaluation_results_6h/cv_fold_1'
-
-xgb_validation_evaluation(data_path=data_path,
-                          model_path=model_path,
-                          model_config_path=model_config_path,
-                          predictions_dir=predictions_dir,
-                          target_interval=1,
-                          restrict_to_first_event=0,
-                          use_gpu=False,
-                          n_time_steps=72,
-                          eval_n_time_steps_before_event=6,
-                          use_cross_validation=False)
-                        #   output_path=args.output_path,
-                        #     predictions_dir=args.predictions_dir,
-                        #     use_gpu=args.use_gpu,
-                        #     n_time_steps=args.n_time_steps,
-                        #     eval_n_time_steps_before_event=args.eval_n_time_steps_before_event,
-                        #     use_cross_validation=use_cross_validation,
-                        #     target_interval=args.target_interval,
-                        #     restrict_to_first_event=args.restrict_to_first_event)
 
 
+if __name__ == '__main__':
+    # Example usage
+    # python val_evaluation.py --data_path /path/to/data --model_path /path/to/model --model_config_path /path/to/model_config
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--data_path', type=str, required=True)
+    parser.add_argument('-m', '--model_path', type=str, required=False)
+    parser.add_argument('-c', '--model_config_path', type=str, required=True)
+    parser.add_argument('-o', '--output_path', type=str, default=None)
+    parser.add_argument('-p', '--predictions_dir', type=str, default=None)
+    parser.add_argument('-ti', '--target_interval', default=True)
+    parser.add_argument('-fi', '--restrict_to_first_event', default=False, action='store_true')
+    parser.add_argument('--use_gpu', action='store_true')
+    parser.add_argument('--n_time_steps', type=int, default=72)
+    parser.add_argument('--eval_n_time_steps_before_event', type=int, default=6)
+    parser.add_argument('-cv', '--use_cross_validation', action='store_true')
+    args = parser.parse_args()
 
+    if args.use_cross_validation:
+        use_cross_validation = True
+    else:
+        use_cross_validation = False
 
-
-# if __name__ == '__main__':
-#     # Example usage
-#     # python val_evaluation.py --data_path /path/to/data --model_path /path/to/model --model_config_path /path/to/model_config
-#     import argparse
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument('-d', '--data_path', type=str, required=True)
-#     parser.add_argument('-m', '--model_path', type=str, required=False)
-#     parser.add_argument('-c', '--model_config_path', type=str, required=True)
-#     parser.add_argument('-o', '--output_path', type=str, default=None)
-#     parser.add_argument('-p', '--predictions_dir', type=str, default=None)
-#     parser.add_argument('-ti', '--target_interval', default=True)
-#     parser.add_argument('-fi', '--restrict_to_first_event', default=False, action='store_true')
-#     parser.add_argument('--use_gpu', action='store_true')
-#     parser.add_argument('--n_time_steps', type=int, default=72)
-#     parser.add_argument('--eval_n_time_steps_before_event', type=int, default=6)
-#     parser.add_argument('-cv', '--use_cross_validation', action='store_true')
-#     args = parser.parse_args()
-
-#     if args.use_cross_validation:
-#         use_cross_validation = True
-#     else:
-#         use_cross_validation = False
-
-#     xgb_validation_evaluation(data_path=args.data_path,
-#                           model_path=args.model_path,
-#                           model_config_path=args.model_config_path,
-#                           output_path=args.output_path,
-#                             predictions_dir=args.predictions_dir,
-#                             use_gpu=args.use_gpu,
-#                             n_time_steps=args.n_time_steps,
-#                             eval_n_time_steps_before_event=args.eval_n_time_steps_before_event,
-#                             use_cross_validation=use_cross_validation,
-#                             target_interval=args.target_interval,
-#                             restrict_to_first_event=args.restrict_to_first_event)
+    xgb_validation_evaluation(data_path=args.data_path,
+                          model_path=args.model_path,
+                          model_config_path=args.model_config_path,
+                          output_path=args.output_path,
+                            predictions_dir=args.predictions_dir,
+                            use_gpu=args.use_gpu,
+                            n_time_steps=args.n_time_steps,
+                            eval_n_time_steps_before_event=args.eval_n_time_steps_before_event,
+                            use_cross_validation=use_cross_validation,
+                            target_interval=args.target_interval,
+                            restrict_to_first_event=args.restrict_to_first_event)
 
 
