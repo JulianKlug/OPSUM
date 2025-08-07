@@ -1,7 +1,7 @@
 # Dataset structure 
 Main files
 - {dataset}_patient_characteristics.csv : table 1
-- preprocessed_features_{version}.csv : feature dataset of 84 variables over the 72 first hours after admission
+- preprocessed_features_{version}.csv : feature dataset of selected variables over the 72 first hours after admission
 - preprocessed_outcomes_{version}.csv : outcomes for all patients
 
 Subfolders: 
