@@ -37,6 +37,8 @@ Subfolders:
 
 A dataset folder can be generated using following preprocessing pipeline: https://github.com/JulianKlug/OPSUM/blob/main/preprocessing
 
+Preprocessing steps are explained here: https://github.com/JulianKlug/OPSUM/blob/main/preprocessing/geneva_stroke_unit_preprocessing/readme.md
+
 Visualisations of the feature dataset can be created using: https://github.com/JulianKlug/OPSUM/blob/main/data_visualisation/preprocessed_patient_visualisation.ipynb
 
 > Klug, J., Leclerc, G., Dirren, E. et al. Machine learning for early dynamic prediction of functional outcome after stroke. Commun Med 4, 232 (2024). https://doi.org/10.1038/s43856-024-00666-w
