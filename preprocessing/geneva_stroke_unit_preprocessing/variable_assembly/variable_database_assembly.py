@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import shutil
 
 from preprocessing.geneva_stroke_unit_preprocessing.imaging_preprocessing.imaging_data_preprocessing import \
     preprocess_imaging_data
@@ -17,6 +18,9 @@ from preprocessing.geneva_stroke_unit_preprocessing.variable_assembly.variable_s
 from preprocessing.geneva_stroke_unit_preprocessing.ventilation_preprocessing.ventilation_preprocessing import preprocess_ventilation
 from preprocessing.geneva_stroke_unit_preprocessing.vitals_preprocessing.vitals_preprocessing import preprocess_vitals
 
+default_selected_variables_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'selected_variables.xlsx')
+default_selected_variables_path_with_imaging = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                'selected_variables_with_imaging.xlsx')
 
 def load_data_from_main_dir(data_path: str, file_start: str) -> pd.DataFrame:
     files = [pd.read_csv(os.path.join(data_path, f), delimiter=';', encoding='utf-8',
@@ -43,7 +47,7 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
                                verbose: bool = False,
                                use_stroke_registry_data: bool = True,
                                restrict_to_patients_with_imaging_data_available: bool = False,
-                               log_dir:str = '') -> pd.DataFrame:
+                               log_dir:str = '', selected_variables_path: str = '') -> pd.DataFrame:
     """
     1. Restrict to patient selection (done after geneva_stroke_unit_preprocessing for EHR data and before processing for stroke registry data)
     2. Preprocess EHR and stroke registry data
@@ -59,9 +63,17 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
     use_stroke_registry_data: If True, use stroke registry data
     restrict_to_patients_with_imaging_data_available: If True, restrict only to patients with imaging data available
     log_dir: Path to the log directory
+    selected_variables_path: Path to the selected variables file
 
     :return: Dataframe with all features under sample_label, value, sample_date, source
     """
+    # Set default variable selection path
+    if selected_variables_path == '':
+        selected_variables_path = default_selected_variables_path
+        if imaging_data_path != '':
+            # add imaging variables to the variable selection
+            selected_variables_path = default_selected_variables_path_with_imaging
+
     # load eds data
     eds_df = pd.read_csv(os.path.join(raw_data_path, 'eds_j1.csv'), delimiter=';', encoding='utf-8',
                          dtype=str)
@@ -71,7 +83,7 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
     lab_file_start = 'labo'
     lab_df = load_data_from_main_dir(raw_data_path, lab_file_start)
     lab_df = filter_ehr_patients(lab_df, patient_selection_path)
-    preprocessed_lab_df = preprocess_labs(lab_df, verbose=verbose, log_dir=log_dir)
+    preprocessed_lab_df = preprocess_labs(lab_df, verbose=verbose, log_dir=log_dir, selected_variables_path=selected_variables_path)
     preprocessed_lab_df = preprocessed_lab_df[['case_admission_id', 'sample_date', 'dosage_label', 'value']]
     preprocessed_lab_df.rename(columns={'dosage_label': 'sample_label'}, inplace=True)
     preprocessed_lab_df['source'] = 'EHR'
@@ -172,13 +184,14 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
 
         feature_database = pd.concat([feature_database, selected_stroke_registry_data_df], ignore_index=True)
 
-    # Restrict to variable selection
-    variable_selection_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'selected_variables.xlsx')
-    if imaging_data_path != '':
-        # add imaging variables to the variable selection
-        variable_selection_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                               'selected_variables_with_imaging.xlsx')
-    feature_database = restrict_to_selected_variables(feature_database, variable_selection_path, enforce=True)
+    # Restrict to selected variables
+    feature_database = restrict_to_selected_variables(feature_database, selected_variables_path, enforce=True)
+
+    # if log dir is provided, copy selected variables file to log dir
+    if log_dir != '':
+        selected_variables_log_path = os.path.join(log_dir, 'selected_variables.xlsx')
+        if not os.path.exists(selected_variables_log_path):
+            shutil.copyfile(selected_variables_path, selected_variables_log_path)
 
     # Restrict to patients with imaging data available
     if restrict_to_patients_with_imaging_data_available:

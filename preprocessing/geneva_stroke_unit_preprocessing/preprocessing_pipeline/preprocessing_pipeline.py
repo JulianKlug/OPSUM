@@ -19,7 +19,7 @@ from preprocessing.geneva_stroke_unit_preprocessing.variable_assembly.variable_d
 from preprocessing.geneva_stroke_unit_preprocessing.variable_assembly.relative_timestamps import transform_to_relative_timestamps
 
 
-def preprocess(ehr_data_path:str, stroke_registry_data_path:str, patient_selection_path:str, log_dir: str,
+def preprocess(ehr_data_path:str, stroke_registry_data_path:str, patient_selection_path:str, selected_variables_path:str, log_dir: str,
                imaging_data_path:str='', restrict_to_patients_with_imaging_data_available:bool=False,
                include_short_term_outcomes:bool=True, short_term_outcomes_config:dict={},
                 verbose:bool=True, desired_time_range:int=72) -> pd.DataFrame:
@@ -28,10 +28,11 @@ def preprocess(ehr_data_path:str, stroke_registry_data_path:str, patient_selecti
     :param ehr_data_path: path to EHR data
     :param stroke_registry_data_path: path to stroke registry (admission) data
     :param patient_selection_path: path to patient selection file
+    :param selected_variables_path: path to selected variables file
     :param log_dir: path to logging directory (this will receive logs of excluded patients and those that were not found)
     :param imaging_data_path: path to imaging data
     :param restrict_to_patients_with_imaging_data_available: if True, restricts the database to patients with imaging data available
-    :param verbose:
+    :param verbose: if True, print progress
     :param desired_time_range: number of hours to use for imputation
     :return: preprocessed feature Dataframe, preprocessed outcome dataframe
     """
@@ -44,7 +45,9 @@ def preprocess(ehr_data_path:str, stroke_registry_data_path:str, patient_selecti
     feature_df = assemble_variable_database(ehr_data_path, stroke_registry_data_path, patient_selection_path,
                                             imaging_data_path=imaging_data_path,
                                             restrict_to_patients_with_imaging_data_available=restrict_to_patients_with_imaging_data_available,
-                                            log_dir=log_dir, verbose=verbose)
+                                            log_dir=log_dir, 
+                                            selected_variables_path=selected_variables_path,
+                                            verbose=verbose)
     print(f'A. Number of patients: {feature_df.case_admission_id.nunique()}')
 
     # 5. Transform timestamps to relative timestamps from first measure
@@ -91,13 +94,13 @@ def preprocess(ehr_data_path:str, stroke_registry_data_path:str, patient_selecti
     return normalised_df, preprocessed_outcomes
 
 
-def preprocess_and_save(ehr_data_path:str, stroke_registry_data_path:str, patient_selection_path:str, output_dir:str,
+def preprocess_and_save(ehr_data_path:str, stroke_registry_data_path:str, patient_selection_path:str, selected_variables_path:str, output_dir:str,
                         imaging_data_path:str='', restrict_to_patients_with_imaging_data_available:bool=False,
                         include_short_term_outcomes: bool = True, short_term_outcomes_config: dict = {},
                         feature_file_prefix:str = 'preprocessed_features', outcome_file_prefix:str = 'preprocessed_outcomes', verbose:bool=True):
 
     # verify that all provided paths exist
-    for path in [ehr_data_path, stroke_registry_data_path, patient_selection_path, imaging_data_path]:
+    for path in [ehr_data_path, stroke_registry_data_path, patient_selection_path, selected_variables_path, imaging_data_path]:
         if path != '':
             assert os.path.exists(path), f'Path {path} does not exist'
 
@@ -113,7 +116,9 @@ def preprocess_and_save(ehr_data_path:str, stroke_registry_data_path:str, patien
         json.dump(saved_args, fp)
 
     preprocessed_feature_df, preprocessed_outcomes = preprocess(ehr_data_path, stroke_registry_data_path,
-                                                                  patient_selection_path, log_dir=log_dir,
+                                                                  patient_selection_path, 
+                                                                  selected_variables_path=selected_variables_path,
+                                                                  log_dir=log_dir,
                                                                   imaging_data_path=imaging_data_path,
                                                                   restrict_to_patients_with_imaging_data_available = restrict_to_patients_with_imaging_data_available,
                                                                     include_short_term_outcomes=include_short_term_outcomes,
@@ -151,6 +156,7 @@ if __name__ == '__main__':
     parser.add_argument('-e','--ehr', type=str, help='EHR data path')
     parser.add_argument('-r', '--registry', type=str, help='Registry data path')
     parser.add_argument('-p', '--patients', type=str, help='Patient selection file')
+    parser.add_argument('-sv', '--selected_variables_path', type=str, help='Selected variables file path', default='')
     parser.add_argument('-o', '--output_dir', type=str, help='Output directory')
     parser.add_argument('-i', '--imaging', type=str, help='Imaging data path', default='')
     parser.add_argument('-ri', '--restrict_to_patients_with_imaging_data_available', action='store_true', help='Restrict to patients with imaging data available', default=False)
@@ -162,7 +168,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    preprocess_and_save(args.ehr, args.registry, args.patients, args.output_dir,
+    preprocess_and_save(args.ehr, args.registry, args.patients, args.selected_variables_path, args.output_dir,
                         imaging_data_path=args.imaging,
                         restrict_to_patients_with_imaging_data_available=args.restrict_to_patients_with_imaging_data_available,
                         include_short_term_outcomes=args.include_short_term_outcomes,

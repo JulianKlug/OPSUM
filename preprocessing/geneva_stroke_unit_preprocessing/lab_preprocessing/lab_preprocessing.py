@@ -20,7 +20,7 @@ equivalent_labels_path = os.path.join(os.path.dirname(__file__), 'equivalent_lab
 # defining desired units of measure
 dosage_units_path = os.path.join(os.path.dirname(__file__), 'dosage_units.csv')
 # defining selected variables path (path to the variable selection file)
-selected_variables_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'variable_assembly/selected_variables.xlsx')
+default_selected_variables_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'variable_assembly/selected_variables.xlsx')
 
 blood_material_equivalents = ['sga', 'sgv', 'sgvm', 'sgc', 'sgv ponction', 'sgv cathéter', 'sga cathéter', 'cathéter artériel', 'cathéter veineux', 'plasma', 'Sang', 'sg cordon',
                               'sgv catheter', 'sga catheter', 'catheter arteriel', 'catheter veineux']
@@ -31,14 +31,14 @@ non_numerical_values_to_remove = ['ERROR', 'nan', 'SANS RES.', 'Hémolysé', 'He
                                   'NON REALISE', 'NON INTERPRÉT.', 'NON INTERPRET.', 'COA', 'TAM', '****.**', '-100000.0', '----']
 
 
-def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_blood'], log_dir:str = '',
+def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_blood'], log_dir:str = '', selected_variables_path: str = default_selected_variables_path,
                     verbose: bool = True) -> pd.DataFrame:
     """
     Preprocess the labs dataframe
     :param lab_df:
     :param material_to_include: list of materials to include where material is one of the following: 'any_blood', 'urine'
     :param log_dir: directory where to save the log file
-    :param verbose: print geneva_stroke_unit_preprocessing safety details
+    :param selected_variables_path: path to the selected variables file
     :return:
     """
     lab_df = lab_df.copy()
@@ -221,9 +221,6 @@ def preprocess_labs(lab_df: pd.DataFrame, material_to_include: list = ['any_bloo
         median_observations_per_case_admission_id_df.to_csv(os.path.join(log_dir, 'median_observations_per_case_admission_id.csv'), index=True)
         descriptive_stats_df.to_csv(os.path.join(log_dir, 'descriptive_stats.csv'), index=True)
 
-
-
-
     return equalized_reorganised_lab_df
 
 
@@ -238,7 +235,14 @@ def correct_non_numerical_values(equalized_reorganised_lab_df: pd.DataFrame) -> 
     # replace apostrophes with empty string in value column
     equalized_reorganised_lab_df['value'] = equalized_reorganised_lab_df['value'].str.replace("'", "")
 
+    # correct specific non-numerical values
+    # if 'value' is 'SANS RES.' set to NaN
+    equalized_reorganised_lab_df.loc[equalized_reorganised_lab_df['value'] == 'SANS RES.', 'value'] = np.nan
+
     # for > and < signs, add or subtract 5% of max/min value
+    # replace <1.1 value if dosage label is 'phosphates'
+    equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'phosphates') & (
+            equalized_reorganised_lab_df['value'] == '<1.1'), 'value'] = 1.1 - 0.05 * 1.1
     # replace >83.2 value if dosage label is 'glucose'
     equalized_reorganised_lab_df.loc[(equalized_reorganised_lab_df['dosage_label'] == 'glucose') & (
             equalized_reorganised_lab_df['value'] == '>83.2'), 'value'] = 83.2 + 0.05 * 83.2
