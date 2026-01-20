@@ -79,6 +79,20 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
                          dtype=str)
     eds_df = filter_ehr_patients(eds_df, patient_selection_path)
 
+    # Load stroke registry
+    if use_stroke_registry_data:
+        # Load stroke registry data and restrict to patient selection
+        stroke_registry_df = pd.read_excel(stroke_registry_data_path)
+        stroke_registry_df['patient_id'] = stroke_registry_df['Case ID'].apply(lambda x: x[8:-4])
+        stroke_registry_df['EDS_last_4_digits'] = stroke_registry_df['Case ID'].apply(lambda x: x[-4:])
+        stroke_registry_df['case_admission_id'] = create_registry_case_identification_column(stroke_registry_df)
+
+        # set sample date to stroke onset or arrival at hospital, whichever is later
+        stroke_registry_df = set_sample_date(stroke_registry_df)
+
+        restricted_stroke_registry_df = restrict_to_patient_selection(stroke_registry_df, patient_selection_path,
+                                                                      verbose=verbose, restrict_to_event_period=False)
+
     # Load and preprocess lab data
     lab_file_start = 'labo'
     lab_df = load_data_from_main_dir(raw_data_path, lab_file_start)
@@ -130,7 +144,7 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
         imaging_data_df = pd.DataFrame()
     else:
         # Load imaging data (Tmax > 10, Tmax > 8, Tmax > 6, Tmax > 4, CBF < 30%)
-        imaging_data_df = preprocess_imaging_data(imaging_data_path, patient_selection_path)
+        imaging_data_df = preprocess_imaging_data(imaging_data_path, patient_selection_path, restricted_stroke_registry_df)
         imaging_data_df['source'] = 'EHR'
 
     # Assemble feature database
@@ -138,22 +152,10 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
     feature_database = restrict_to_patient_selection(feature_database, patient_selection_path, verbose=verbose,
                                                      restrict_to_event_period=True)
 
-    # Load and preprocess admission data from stroke registry
+    # Preprocess admission data from stroke registry
     if use_stroke_registry_data:
         if verbose:
             print('Preprocessing stroke registry_data')
-        # Load stroke registry data and restrict to patient selection
-        stroke_registry_df = pd.read_excel(stroke_registry_data_path)
-        stroke_registry_df['patient_id'] = stroke_registry_df['Case ID'].apply(lambda x: x[8:-4])
-        stroke_registry_df['EDS_last_4_digits'] = stroke_registry_df['Case ID'].apply(lambda x: x[-4:])
-        stroke_registry_df['case_admission_id'] = create_registry_case_identification_column(stroke_registry_df)
-
-        # set sample date to stroke onset or arrival at hospital, whichever is later
-        stroke_registry_df = set_sample_date(stroke_registry_df)
-
-        restricted_stroke_registry_df = restrict_to_patient_selection(stroke_registry_df, patient_selection_path,
-                                                                      verbose=verbose, restrict_to_event_period=False)
-
         admission_data_df = preprocess_admission_data(restricted_stroke_registry_df, verbose=verbose)
         admission_data_df['source'] = 'stroke_registry'
 
