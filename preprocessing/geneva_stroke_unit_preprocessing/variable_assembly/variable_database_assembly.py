@@ -143,9 +143,8 @@ def assemble_variable_database(raw_data_path: str, stroke_registry_data_path: st
     if imaging_data_path == '':
         imaging_data_df = pd.DataFrame()
     else:
-        # Load imaging data (Tmax > 10, Tmax > 8, Tmax > 6, Tmax > 4, CBF < 30%)
+        # Load imaging data
         imaging_data_df = preprocess_imaging_data(imaging_data_path, patient_selection_path, restricted_stroke_registry_df)
-        imaging_data_df['source'] = 'EHR'
 
     # Assemble feature database
     feature_database = pd.concat([preprocessed_lab_df, scales_df, fio2_df, spo2_df, vitals_df, imaging_data_df], ignore_index=True)
