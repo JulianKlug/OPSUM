@@ -4,6 +4,7 @@ import os
 import json
 import numpy as np
 import pickle
+from scipy.special import expit  # sigmoid
 from sklearn.discriminant_analysis import StandardScaler
 from tqdm import tqdm
 import pandas as pd
@@ -14,7 +15,7 @@ from prediction.utils.shap_helper_functions import check_shap_version_compatibil
 from prediction.utils.utils import ensure_dir
 
 # Shap values require very specific versions
-check_shap_version_compatibility()
+# check_shap_version_compatibility()
 
 
 def compute_shap_explanations_over_time(model_config_path:str, model_weights_path:str, train_X:np.ndarray, test_X:np.ndarray,
@@ -45,13 +46,15 @@ def compute_shap_explanations_over_time(model_config_path:str, model_weights_pat
 
     xgb_model.load_model(model_weights_path)
     # Use the training data for Tree Explainer
-    explainer = shap.TreeExplainer(xgb_model, train_X)
+    # explainer = shap.TreeExplainer(xgb_model, train_X)
+    booster = xgb_model.get_booster()
 
     shap_values_over_ts = []
     for ts in tqdm(range(n_time_steps)):
         test_X_with_first_n_ts = test_X[:, ts, :]
-        # explaining each prediction requires 2 * background dataset size runs
-        shap_values = explainer.shap_values(test_X_with_first_n_ts)
+        dtest = xgb.DMatrix(test_X_with_first_n_ts)
+        # shap values in margin space (values + base value = margin prediction) 
+        shap_values = booster.predict(dtest, pred_contribs=True)
         shap_values_over_ts.append(shap_values)
 
     return shap_values_over_ts

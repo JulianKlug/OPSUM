@@ -22,13 +22,15 @@ def assert_selected_variables_presence(df: pd.DataFrame, selected_variables: lis
     return True
 
 
-def variable_presence_verification(normalised_df: pd.DataFrame, target_feature_path: str = '',
+def variable_presence_verification(normalised_df: pd.DataFrame, selected_variables_path:str = '', target_feature_path: str = '',
                                    desired_time_range:int=72) -> bool:
 
     # Verifying presence of all selected variables
     all_variables_present = []
     all_features_present = []
-    selected_variables_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'geneva_stroke_unit_preprocessing/variable_assembly/selected_variables.xlsx')
+    if selected_variables_path == '':
+        selected_variables_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'geneva_stroke_unit_preprocessing/variable_assembly/selected_variables.xlsx')
+    
     selected_variables = pd.read_excel(selected_variables_path)['included']
 
     if target_feature_path == '':
