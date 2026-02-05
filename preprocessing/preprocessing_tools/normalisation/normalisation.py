@@ -109,8 +109,9 @@ def normalise_data(df: pd.DataFrame, reference_population_normalisation_paramete
         if reference_population_normalisation_parameters_path != '':
             reference_population_normalisation_parameters_df.to_csv(os.path.join(log_dir, 'reference_population_normalisation_parameters.csv'), index=False)
         else:
-            # merge winsorizing_parameters_df to normalisation_parameters_df on variable
-            normalisation_parameters_df = normalisation_parameters_df.merge(winsorizing_parameters_df, on='variable', how='outer')
+            if winsorize:
+                # merge winsorizing_parameters_df to normalisation_parameters_df on variable
+                normalisation_parameters_df = normalisation_parameters_df.merge(winsorizing_parameters_df, on='variable', how='outer')
             normalisation_parameters_df.to_csv(os.path.join(log_dir, 'normalisation_parameters.csv'), index=False)
 
 
