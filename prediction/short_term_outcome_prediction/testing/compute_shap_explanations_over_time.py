@@ -80,11 +80,13 @@ if __name__ == '__main__':
 
     cv_fold = int(args.model_path.split('_')[-1].split('.')[0])
     X_train, _, y_train, _ = ch.load(args.train_data_path)[cv_fold]
+    y_train = pd.DataFrame(y_train)
     train_data, train_labels = aggregate_and_label_timeseries(X_train, y_train, target_time_to_outcome=args.eval_n_time_steps_before_event,
                                                               target_interval=args.target_interval, restrict_to_first_event=args.restrict_to_first_event)
     train_data = np.concatenate(train_data)
 
     X_test, full_y_test = ch.load(args.test_data_path)
+    full_y_test = pd.DataFrame(full_y_test)
     n_time_steps = X_test.shape[1]
     n_features = X_test.shape[2]
     test_data, test_labels = aggregate_and_label_timeseries(X_test, full_y_test, target_time_to_outcome=args.eval_n_time_steps_before_event,
