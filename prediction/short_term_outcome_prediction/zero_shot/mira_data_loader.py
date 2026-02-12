@@ -185,3 +185,39 @@ def get_validation_patient_ids(X_val: np.ndarray) -> np.ndarray:
         Array of case admission IDs
     """
     return X_val[:, 0, 0, 0]
+
+
+def get_all_feature_names_and_indices(X: np.ndarray) -> dict:
+    """
+    Extract mapping of all feature names to their indices.
+
+    Feature names are stored in X[0, 0, :, -2].
+
+    Args:
+        X: Data array of shape (n_cases, n_time_steps, n_features, n_dims)
+
+    Returns:
+        Dict mapping feature name (str) to index (int)
+    """
+    feature_names = X[0, 0, :, -2]
+    return {str(name): idx for idx, name in enumerate(feature_names)}
+
+
+def get_feature_index(X: np.ndarray, feature_name: str) -> int:
+    """
+    Get the index of a single feature by name.
+
+    Args:
+        X: Data array of shape (n_cases, n_time_steps, n_features, n_dims)
+        feature_name: Name of the feature to find
+
+    Returns:
+        Index of the feature
+
+    Raises:
+        ValueError: If feature not found
+    """
+    feature_map = get_all_feature_names_and_indices(X)
+    if feature_name not in feature_map:
+        raise ValueError(f"Feature '{feature_name}' not found. Available: {list(feature_map.keys())}")
+    return feature_map[feature_name]
