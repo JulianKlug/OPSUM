@@ -56,7 +56,7 @@ def moving_time_average(a, n=3):
     return ret[:, n - 1:] / n
 
 
-def aggregate_features_over_time(features, labels, moving_average=False, n=3):
+def aggregate_features_over_time(features, labels, moving_average=False, n=3, add_lag_features=False):
     """
     This function aggregates the features over time. Instead of having one row per case_admission_id and one column per feature over time,
     we have one row per case_admission_id and one column per feature aggregated over time (mean, min, max) for each timestep.
@@ -66,6 +66,7 @@ def aggregate_features_over_time(features, labels, moving_average=False, n=3):
     :param labels: a numpy array of shape (n_samples, 1)
     :param moving_average: if True, the moving average over the last n time steps is calculated
     :param n: the number of time steps for the moving average
+    :param add_lag_features: if True, add lagged values at t-2 and t-3
     """
     avg_features = np.cumsum(features, 1) / (np.arange(1, features.shape[1] + 1)[None, :, None])
     if moving_average:
@@ -73,7 +74,32 @@ def aggregate_features_over_time(features, labels, moving_average=False, n=3):
 
     min_features = np.minimum.accumulate(features, 1)
     max_features = np.maximum.accumulate(features, 1)
-    all_features = np.concatenate([features, avg_features, min_features, max_features], 2)
+    cumsum_sq = np.cumsum(features**2, 1)
+    counts = np.arange(1, features.shape[1] + 1)[None, :, None]
+    std_features = np.sqrt(np.maximum(cumsum_sq / counts - avg_features**2, 0))
+
+    # Rate of change (first-order differences)
+    diff_features = np.zeros_like(features)
+    diff_features[:, 1:, :] = features[:, 1:, :] - features[:, :-1, :]
+
+    # Timestep index (normalized to [0, 1])
+    n_ts = features.shape[1]
+    timestep_feature = np.arange(n_ts, dtype=features.dtype)[None, :, None]
+    timestep_feature = np.broadcast_to(timestep_feature, (features.shape[0], n_ts, 1)).copy()
+    timestep_feature = timestep_feature / max(n_ts - 1, 1)
+
+    feature_list = [features, avg_features, min_features, max_features, std_features, diff_features, timestep_feature]
+
+    if add_lag_features:
+        # Lag-2: value at t-2 (zero-padded for t < 2)
+        lag2 = np.zeros_like(features)
+        lag2[:, 2:, :] = features[:, :-2, :]
+        # Lag-3: value at t-3 (zero-padded for t < 3)
+        lag3 = np.zeros_like(features)
+        lag3[:, 3:, :] = features[:, :-3, :]
+        feature_list.extend([lag2, lag3])
+
+    all_features = np.concatenate(feature_list, 2)
     all_features = all_features.reshape(-1, all_features.shape[-1])
 
     labels = labels[:, None].repeat(72, 1).ravel()

@@ -16,25 +16,55 @@ from prediction.utils.scoring import precision, recall, specificity
 from prediction.utils.utils import ensure_dir
 
 
+def focal_loss_objective(y_true, y_pred, gamma_fl=2.0, pos_weight=1.0):
+    """Focal loss custom objective for XGBoost.
+
+    Operates in logit space (compatible with predict_proba sigmoid).
+    When gamma_fl=0, reduces to weighted binary cross-entropy.
+
+    Args:
+        y_true: true binary labels
+        y_pred: raw margin predictions (logit space)
+        gamma_fl: focusing parameter (higher = more focus on hard examples)
+        pos_weight: weight for positive class (equivalent to scale_pos_weight)
+    """
+    p = 1.0 / (1.0 + np.exp(-y_pred))
+    p = np.clip(p, 1e-7, 1 - 1e-7)
+
+    w = np.where(y_true == 1, pos_weight, 1.0)
+
+    # Gradient of focal loss w.r.t. logit
+    grad_pos = (1 - p) ** gamma_fl * (gamma_fl * p * np.log(p) - (1 - p))
+    grad_neg = p ** gamma_fl * (-gamma_fl * (1 - p) * np.log(1 - p) + p)
+    grad = (y_true * grad_pos + (1 - y_true) * grad_neg) * w
+
+    # Approximate hessian (weighted)
+    hess = np.maximum(2.0 * p * (1.0 - p), 1e-7) * w
+
+    return grad, hess
+
+
 DEFAULT_GRIDEARCH_CONFIG = {
     "n_trials": 1000,
     "target_interval": 1,
     "restrict_to_first_event": 0,
-    "max_depth": [2, 6, 8, 10, 12],
-    "n_estimators": [100, 250, 500, 1000],
-    "learning_rate": [0.001, 0.1],
+    "max_depth": [2, 12],
+    "n_estimators": [500, 1000, 1500, 2000, 3000],
+    "learning_rate": [0.02, 0.08],
     "reg_lambda": [1, 10, 50, 75],
-    "alpha": [0, 1, 10, 25],
-    "early_stopping_rounds": [25, 50, 100],
-    "scale_pos_weight": [25, 55, 100],
-    "min_child_weight": [1, 3, 5],
-    "subsample": [0.5, 0.8, 1],
-    "colsample_bytree": [0.8, 1],
-    "colsample_bylevel": [0.8, 1],
-    "booster": ["gbtree", "dart"],
+    "alpha": [1, 5, 10, 15, 25],
+    "early_stopping_rounds": [50],
+    "scale_pos_weight": [5, 10, 25, 45, 55],
+    "min_child_weight": [1, 10],
+    "subsample": [0.5, 1.0],
+    "colsample_bytree": [0.5, 1.0],
+    "colsample_bylevel": [1.0],
+    "booster": ["dart"],
     "grow_policy": ["depthwise", "lossguide"],
-    "num_boost_round": [100, 200, 300],
-    "gamma": [0, 0.5, 1],
+    "num_boost_round": [500],
+    "gamma": [0.1, 0.2, 0.5, 0.75, 1.0],
+    "max_delta_step": [0, 1, 5, 10],
+    "focal_gamma": [0, 1.0, 2.0],
 }
 
 def launch_gridsearch_xgb(data_splits_path:str, output_folder:str, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG,
@@ -55,12 +85,14 @@ def launch_gridsearch_xgb(data_splits_path:str, output_folder:str, gridsearch_co
         ))
     else:
         storage = None
-    study = optuna.create_study(direction='maximize', storage=storage)
+    study = optuna.create_study(directions=['maximize', 'maximize'], storage=storage)
     splits = ch.load(path.join(data_splits_path))
 
+    add_lag_features = gridsearch_config.get('add_lag_features', False)
     all_datasets = [prepare_aggregate_dataset(x, rescale=True, target_time_to_outcome=6,
-                                                target_interval=gridsearch_config['target_interval'], 
+                                                target_interval=gridsearch_config['target_interval'],
                                                 restrict_to_first_event=gridsearch_config['restrict_to_first_event'],
+                                                add_lag_features=add_lag_features,
                                               ) for x in splits]
 
 
@@ -75,21 +107,23 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
     if gridsearch_config is None:
         gridsearch_config = DEFAULT_GRIDEARCH_CONFIG
 
-    max_depth = trial.suggest_categorical("max_depth", choices=gridsearch_config['max_depth'])
+    max_depth = trial.suggest_int("max_depth", gridsearch_config['max_depth'][0], gridsearch_config['max_depth'][-1])
     n_estimators = trial.suggest_categorical("n_estimators", choices=gridsearch_config['n_estimators'])
-    learning_rate = trial.suggest_loguniform("learning_rate", gridsearch_config['learning_rate'][0], gridsearch_config['learning_rate'][1])
+    learning_rate = trial.suggest_float("learning_rate", gridsearch_config['learning_rate'][0], gridsearch_config['learning_rate'][1], log=True)
     reg_lambda = trial.suggest_categorical("reg_lambda", choices=gridsearch_config['reg_lambda'])
     alpha = trial.suggest_categorical("alpha", choices=gridsearch_config['alpha'])
     early_stopping_rounds = trial.suggest_categorical("early_stopping_rounds", choices=gridsearch_config['early_stopping_rounds'])
     scale_pos_weight = trial.suggest_categorical("scale_pos_weight", choices=gridsearch_config['scale_pos_weight'])
-    min_child_weight = trial.suggest_categorical("min_child_weight", choices=gridsearch_config['min_child_weight'])
-    subsample = trial.suggest_categorical("subsample", choices=gridsearch_config['subsample'])
-    colsample_bytree = trial.suggest_categorical("colsample_bytree", choices=gridsearch_config['colsample_bytree'])
+    min_child_weight = trial.suggest_int("min_child_weight", gridsearch_config['min_child_weight'][0], gridsearch_config['min_child_weight'][-1])
+    subsample = trial.suggest_float("subsample", gridsearch_config['subsample'][0], gridsearch_config['subsample'][-1])
+    colsample_bytree = trial.suggest_float("colsample_bytree", gridsearch_config['colsample_bytree'][0], gridsearch_config['colsample_bytree'][-1])
     colsample_bylevel = trial.suggest_categorical("colsample_bylevel", choices=gridsearch_config['colsample_bylevel'])
     booster = trial.suggest_categorical("booster", choices=gridsearch_config['booster'])
     grow_policy = trial.suggest_categorical("grow_policy", choices=gridsearch_config['grow_policy'])
     num_boost_round = trial.suggest_categorical("num_boost_round", choices=gridsearch_config['num_boost_round'])
     gamma = trial.suggest_categorical("gamma", choices=gridsearch_config['gamma'])
+    max_delta_step = trial.suggest_categorical("max_delta_step", choices=gridsearch_config['max_delta_step'])
+    focal_gamma = trial.suggest_categorical("focal_gamma", choices=gridsearch_config['focal_gamma'])
 
     device = "cuda" if ch.cuda.is_available() else "cpu"
 
@@ -101,13 +135,12 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
         checkpoint_dir = os.path.join(output_folder, f'checkpoints_short_opsum_xgb_{timestamp}_cv_{i}')
         ensure_dir(checkpoint_dir)
 
-        xgb_model = xgb.XGBClassifier(
-            learning_rate=learning_rate, 
-            max_depth=max_depth, 
+        xgb_params = dict(
+            learning_rate=learning_rate,
+            max_depth=max_depth,
             n_estimators=n_estimators,
-            reg_lambda=reg_lambda, 
+            reg_lambda=reg_lambda,
             reg_alpha=alpha,
-            scale_pos_weight=scale_pos_weight,
             min_child_weight=min_child_weight,
             subsample=subsample,
             colsample_bytree=colsample_bytree,
@@ -116,9 +149,18 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
             grow_policy=grow_policy,
             num_boost_round=num_boost_round,
             gamma=gamma,
-            device=device
-            )
-        trained_xgb = xgb_model.fit(fold_X_train, fold_y_train, early_stopping_rounds=early_stopping_rounds, eval_metric=["aucpr", "auc"],
+            max_delta_step=max_delta_step,
+            device=device,
+        )
+
+        if focal_gamma > 0:
+            xgb_params['objective'] = partial(focal_loss_objective, gamma_fl=focal_gamma, pos_weight=scale_pos_weight)
+            xgb_params['scale_pos_weight'] = 1
+        else:
+            xgb_params['scale_pos_weight'] = scale_pos_weight
+
+        xgb_model = xgb.XGBClassifier(**xgb_params)
+        trained_xgb = xgb_model.fit(fold_X_train, fold_y_train, early_stopping_rounds=early_stopping_rounds, eval_metric=["auc", "aucpr"],
                                     eval_set=[(fold_X_train, fold_y_train), (fold_X_val, fold_y_val)])
 
         # save trained model
@@ -164,7 +206,9 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
         run_performance_df['booster'] = booster
         run_performance_df['grow_policy'] = grow_policy
         run_performance_df['num_boost_round'] = num_boost_round
-        run_performance_df['gamma'] = gamma 
+        run_performance_df['gamma'] = gamma
+        run_performance_df['max_delta_step'] = max_delta_step
+        run_performance_df['focal_gamma'] = focal_gamma
         run_performance_df['moving_average'] = False
         run_performance_df['outcome'] = outcome
 
@@ -211,7 +255,7 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
     with open(dest, 'a') as handle:
         handle.write(text)
     print("WRITTEN in ", dest)
-    return np.median(val_auroc)
+    return np.median(val_auprc), np.median(val_auroc)
 
 
 if __name__ == '__main__':

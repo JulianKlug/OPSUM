@@ -100,7 +100,8 @@ if __name__ == '__main__':
     train_data = scaler.fit_transform(train_data)
     X_test = scaler.transform(test_data)
     # Reshape the data to have the shape (n_subj, n_time_steps, n_features)
-    X_test = X_test.reshape(-1, n_time_steps, n_features*4)
+    n_aggregated_features = X_test.shape[1] // n_time_steps
+    X_test = X_test.reshape(-1, n_time_steps, n_aggregated_features)
     
     shap_values_over_ts = compute_shap_explanations_over_time(model_config_path=args.model_config_path,
                                                                 model_weights_path=args.model_path,
