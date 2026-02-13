@@ -55,10 +55,13 @@ def launch_cluster_gridsearch(data_splits_path: str, output_folder: str,
     else:
         storage = None
 
-    direction = 'maximize' if not use_time_to_event else 'minimize'
-
-    study = optuna.create_study(study_name=study_name,
-                                direction=direction, storage=storage)
+    if use_xgb:
+        study = optuna.create_study(study_name=study_name,
+                                    directions=['maximize', 'maximize'], storage=storage)
+    else:
+        direction = 'maximize' if not use_time_to_event else 'minimize'
+        study = optuna.create_study(study_name=study_name,
+                                    direction=direction, storage=storage)
 
     current_dir = path.dirname(path.abspath(__file__))
     subprocess_py_file_path = path.join(current_dir, 'cluster_subprocess.py')
