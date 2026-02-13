@@ -11,7 +11,7 @@
     "early_stopping_rounds": [50],
     "scale_pos_weight": [5, 10, 25],
     "min_child_weight": [1, 5],
-    "subsample": [0.5, 0.8],
+    "subsample": [0.7, 1.0],
     "colsample_bytree": [0.8],
     "colsample_bylevel": [1.0],
     "booster": ["dart"],
