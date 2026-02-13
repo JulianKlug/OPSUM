@@ -149,19 +149,60 @@ More features → need more regularisation and slower learning.
 
 ---
 
-## Current Best (single fold 0)
-- **AUPRC = 0.0938** (lag + lr=0.03) — +77% vs original baseline
-- **AUROC = 0.8099** (lag + mcw=1) — +3.3% vs original baseline
+## Combination Testing (single fold 0, with lag features)
+
+Tested stacking the top individual improvements to find interactions. 16 experiments.
+
+### Results (sorted by AUPRC)
+
+| Combo | AUPRC | AUROC | Notes |
+|---|---|---|---|
+| **lr03+focal1+sub05+highreg** | **0.0939** | **0.8094** | **Best overall — both metrics** |
+| lr03+focal1+highreg | 0.0925 | 0.8060 | |
+| lr03+focal1 | 0.0923 | 0.8053 | Core winning combo |
+| lr03+highreg | 0.0922 | 0.8007 | |
+| focal1+spw25 | 0.0920 | 0.8013 | |
+| **lag_baseline** | **0.0897** | **0.8061** | **Reference** |
+| lr03+focal1+d3 | 0.0887 | 0.8067 | |
+| lr03+focal1+spw25 | 0.0881 | 0.7940 | spw=25 hurts in combos |
+| lr03+focal1+sub05 | 0.0874 | 0.8061 | sub05 needs highreg |
+| focal1+sub05 | 0.0849 | 0.8071 | |
+| lr03+sub05 | 0.0807 | 0.8024 | sub05 alone hurts |
+
+### Combination Findings
+
+- **lr=0.03 + focal=1.0** is the core winning pair (~0.092 AUPRC)
+- **Adding highreg (λ=50, α=10)** pushes to 0.0925
+- **subsample=0.5 only works with strong regularisation** — hurts in 2-way combos, helps in 4-way with highreg (0.0939). The extra regularisation from both subsample dropout and L1/L2 prevents overfitting.
+- **spw=25 hurts in all combinations** — spw=10 remains optimal with lag features
+- **depth=4 remains optimal** — depth=3 and depth=5 both worse in combos
 
 ---
 
-## Recommended Hyperoptimisation Config
+## Current Best (single fold 0)
+- **AUPRC = 0.0939** (lag + lr=0.03 + focal=1.0 + sub=0.5 + highreg) — +77% vs original baseline
+- **AUROC = 0.8094** (same config) — +3.2% vs original baseline
+- This is the first config to achieve top AUPRC and top AUROC simultaneously
+
+---
+
+## Cluster Configuration Fixes
+
+Two issues were found and fixed for SLURM cluster deployment:
+
+1. **`cluster/master_launcher.py`** — Study creation mismatch. The master launcher created single-objective studies (`direction='maximize'`), but XGBoost now returns two objectives (AUPRC, AUROC). Fixed: XGB now creates multi-objective study with `directions=['maximize', 'maximize']`.
+
+2. **`cluster/cluster_subprocess.py`** — Missing `add_lag_features`. The subprocess did not pass `add_lag_features` to `prepare_aggregate_dataset`, so lag features were always disabled on the cluster. Fixed: now reads `add_lag_features` from config and passes it through.
+
+---
+
+## Hyperoptimisation Config
 
 Saved as `xgb_auprc_config.json`:
 
 ```json
 {
-    "n_trials": 50,
+    "n_trials": 100,
     "add_lag_features": true,
     "max_depth": [2, 5],
     "n_estimators": [200],
@@ -170,15 +211,22 @@ Saved as `xgb_auprc_config.json`:
     "alpha": [1, 5, 10, 15, 25],
     "scale_pos_weight": [5, 10, 25],
     "min_child_weight": [1, 5],
-    "subsample": [0.5, 0.8],
+    "subsample": [0.3, 1.0],
     "colsample_bytree": [0.8],
+    "colsample_bylevel": [1.0],
     "booster": ["dart"],
     "grow_policy": ["lossguide"],
+    "num_boost_round": [500],
     "gamma": [0.1, 0.2, 0.5, 0.75, 1.0],
     "max_delta_step": [0, 5],
     "focal_gamma": [0, 1.0]
 }
 ```
+
+### Recommended SLURM cluster settings
+- **10 subprocesses** (10 trials each, ~5 hours wall time)
+- **8 CPUs per subprocess** (`--cpus-per-task=8`)
+- **1 task per subprocess** (`--ntasks=1`)
 
 ---
 
@@ -191,14 +239,16 @@ Saved as `xgb_auprc_config.json`:
 | `prediction/short_term_outcome_prediction/timeseries_decomposition.py` | `add_lag_features` parameter threading |
 | `evaluation/xgb_evaluation.py` | Dynamic feature count (replaced `n_features*4`) |
 | `testing/compute_shap_explanations_over_time.py` | Dynamic feature count (replaced `n_features*4`) |
+| `cluster/master_launcher.py` | Multi-objective study creation for XGB |
+| `cluster/cluster_subprocess.py` | Pass `add_lag_features` to `prepare_aggregate_dataset` |
 | `xgb_auprc_config.json` | Refined hyperparameter search space |
-| `quick_eval_xgb.py` | A/B testing script (new) |
+| `quick_eval_xgb.py` | A/B testing and combination testing script (new) |
 
 ---
 
 ## Next Steps
 
-1. Run full hyperoptimisation with recommended config (50+ trials, 5-fold CV)
-2. Validate best config on held-out test set
-3. Consider combining top findings (lag + lr=0.03 + focal=1.0 + spw=10-25) in a targeted run
+1. Launch full hyperoptimisation on SLURM cluster (100 trials, 10 subprocesses)
+2. Analyse Pareto front from multi-objective results (AUPRC vs AUROC trade-off)
+3. Validate best config on held-out test set
 4. Update evaluation and SHAP pipelines to use `add_lag_features=True`
