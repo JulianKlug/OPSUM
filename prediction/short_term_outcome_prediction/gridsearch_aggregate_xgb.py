@@ -8,10 +8,12 @@ import numpy as np
 import pandas as pd
 import json
 
+import pickle
 from sklearn.metrics import accuracy_score, roc_auc_score, matthews_corrcoef, average_precision_score
+from sklearn.preprocessing import StandardScaler
 import xgboost as xgb
 
-from prediction.short_term_outcome_prediction.timeseries_decomposition import prepare_aggregate_dataset
+from prediction.short_term_outcome_prediction.timeseries_decomposition import prepare_aggregate_dataset, aggregate_and_label_timeseries
 from prediction.utils.scoring import precision, recall, specificity
 from prediction.utils.utils import ensure_dir
 
@@ -266,6 +268,135 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
     return np.median(val_auprc), np.median(val_auroc)
 
 
+def retrain_on_all_data(data_splits_path: str, config: dict, output_dir: str):
+    """Retrain XGBoost on all available CV data and save the final model.
+
+    In k-fold CV, each fold's train + val = all data. This function combines
+    them, trains a single model on the full dataset, and saves:
+      - xgb_final_model.model  (XGBoost model weights)
+      - scaler.pkl             (fitted StandardScaler)
+      - final_model_config.json (config + training metadata)
+
+    Args:
+        data_splits_path: path to the .pth file with CV splits
+        config: dict with scalar hyperparameter values (not search ranges).
+                Expected keys: max_depth, n_estimators, learning_rate, reg_lambda,
+                alpha, scale_pos_weight, min_child_weight, subsample,
+                colsample_bytree, etc.
+        output_dir: directory to save model artifacts
+    """
+    # Validate that config has scalar values, not search ranges
+    range_keys = [k for k in ('max_depth', 'n_estimators', 'learning_rate', 'reg_lambda',
+                               'alpha', 'scale_pos_weight', 'min_child_weight', 'subsample',
+                               'colsample_bytree')
+                  if k in config and isinstance(config[k], list)]
+    if range_keys:
+        raise ValueError(
+            f"Config contains list values for {range_keys}. "
+            "retrain_on_all_data expects a fixed config with scalar values "
+            "(e.g. from a hyperopt trial), not a search space config."
+        )
+
+    splits = ch.load(data_splits_path)
+
+    # In k-fold CV, fold 0's train + val = all data
+    X_train, X_val, y_train, y_val = splits[0]
+    X_all = np.concatenate([X_train, X_val], axis=0)
+    y_all = pd.concat([y_train, y_val])
+
+    add_lag_features = config.get('add_lag_features', False)
+    add_rolling_features = config.get('add_rolling_features', False)
+    target_interval = config.get('target_interval', 1)
+    restrict_to_first_event = config.get('restrict_to_first_event', 0)
+
+    print(f"Preparing data (lag={add_lag_features}, rolling={add_rolling_features})...")
+    all_data, all_labels = aggregate_and_label_timeseries(
+        X_all, y_all, target_time_to_outcome=6,
+        target_interval=target_interval,
+        restrict_to_first_event=restrict_to_first_event,
+        add_lag_features=add_lag_features,
+        add_rolling_features=add_rolling_features,
+    )
+
+    all_data = np.concatenate(all_data)
+    all_labels = np.concatenate(all_labels)
+
+    scaler = StandardScaler()
+    all_data = scaler.fit_transform(all_data)
+
+    n_features = all_data.shape[1]
+    n_samples = all_data.shape[0]
+    n_positive = int(all_labels.sum())
+    print(f"Training on {n_samples} samples ({n_positive} positive, "
+          f"{n_positive/n_samples*100:.2f}%), {n_features} features")
+
+    # Build XGBoost params
+    device = "cuda" if ch.cuda.is_available() else "cpu"
+
+    focal_gamma = config.get('focal_gamma', 0)
+    scale_pos_weight = config.get('scale_pos_weight', 10)
+
+    xgb_params = dict(
+        learning_rate=config['learning_rate'],
+        max_depth=int(config['max_depth']),
+        n_estimators=int(config['n_estimators']),
+        reg_lambda=config['reg_lambda'],
+        reg_alpha=config.get('alpha', config.get('reg_alpha', 1)),
+        min_child_weight=config['min_child_weight'],
+        subsample=config['subsample'],
+        colsample_bytree=config['colsample_bytree'],
+        colsample_bylevel=config.get('colsample_bylevel', 1.0),
+        booster=config.get('booster', 'dart'),
+        grow_policy=config.get('grow_policy', 'lossguide'),
+        gamma=config.get('gamma', 0.5),
+        max_delta_step=config.get('max_delta_step', 0),
+        device=device,
+    )
+
+    if focal_gamma > 0:
+        xgb_params['objective'] = partial(focal_loss_objective,
+                                          gamma_fl=focal_gamma,
+                                          pos_weight=scale_pos_weight)
+        xgb_params['scale_pos_weight'] = 1
+    else:
+        xgb_params['scale_pos_weight'] = scale_pos_weight
+
+    print("Training XGBoost model...")
+    model = xgb.XGBClassifier(**xgb_params)
+    model.fit(all_data, all_labels,
+              eval_metric=["auc", "aucpr"],
+              eval_set=[(all_data, all_labels)],
+              verbose=True)
+
+    # Save artifacts
+    ensure_dir(output_dir)
+
+    model_path = os.path.join(output_dir, 'xgb_final_model.model')
+    model.save_model(model_path)
+    print(f"Model saved to {model_path}")
+
+    scaler_path = os.path.join(output_dir, 'scaler.pkl')
+    with open(scaler_path, 'wb') as f:
+        pickle.dump(scaler, f)
+    print(f"Scaler saved to {scaler_path}")
+
+    # Save config with training metadata
+    config_to_save = {k: v for k, v in config.items()
+                      if not callable(v)}
+    config_to_save['n_features'] = n_features
+    config_to_save['n_training_samples'] = n_samples
+    config_to_save['n_positive_samples'] = n_positive
+    config_to_save['data_splits_path'] = data_splits_path
+    config_to_save['timestamp'] = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    config_path = os.path.join(output_dir, 'final_model_config.json')
+    with open(config_path, 'w') as f:
+        json.dump(config_to_save, f, indent=2)
+    print(f"Config saved to {config_path}")
+
+    return model, scaler
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
@@ -273,6 +404,8 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--data_splits_path', type=str, required=True)
     parser.add_argument('-o', '--output_folder', type=str, required=True)
     parser.add_argument('-c', '--config', type=str, required=False, default=None)
+    parser.add_argument('--retrain', action='store_true',
+                        help='Retrain on all CV data with a fixed config (requires -c)')
 
     parser.add_argument('-spwd', '--storage_pwd', type=str, required=False, default=None)
     parser.add_argument('-sport', '--storage_port', type=int, required=False, default=None)
@@ -285,5 +418,14 @@ if __name__ == '__main__':
     else:
         gridsearch_config = None
 
-    launch_gridsearch_xgb(data_splits_path=args.data_splits_path, output_folder=args.output_folder, gridsearch_config=gridsearch_config,
-                          storage_pwd=args.storage_pwd, storage_port=args.storage_port, storage_host=args.storage_host)
+    if args.retrain:
+        if gridsearch_config is None:
+            parser.error("--retrain requires -c/--config with a fixed hyperparameter config")
+        retrain_on_all_data(data_splits_path=args.data_splits_path,
+                            config=gridsearch_config,
+                            output_dir=args.output_folder)
+    else:
+        launch_gridsearch_xgb(data_splits_path=args.data_splits_path, output_folder=args.output_folder,
+                              gridsearch_config=gridsearch_config,
+                              storage_pwd=args.storage_pwd, storage_port=args.storage_port,
+                              storage_host=args.storage_host)
