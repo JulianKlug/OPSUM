@@ -1,6 +1,6 @@
 # XGBoost Optimisation Progress Report — END Prediction
 
-**Date:** 2026-02-13
+**Date:** 2026-02-14
 **Target:** Predict early neurological deterioration (END) in the next 6 hours
 **Data:** `train_data_splits_early_neurological_deterioration_ts0.8_rs42_ns5.pth` (~1.8% positive rate)
 
@@ -39,8 +39,18 @@ Added new features on top of existing raw/mean/min/max:
 - **Rate-of-change (first-order differences)** — temporal dynamics
 - **Timestep index (normalised 0-1)** — temporal position
 - **Optional lag features (t-2, t-3)** — enabled via `add_lag_features` flag
+- **Optional rolling window features (6h)** — enabled via `add_rolling_features` flag:
+  - Rolling mean (recent average over last 6 timesteps)
+  - Rolling standard deviation (recent variability)
+  - Rolling linear trend (least-squares slope over window)
 
-Feature count: 619 (without lag) or 825 (with lag) vs original ~412.
+Feature counts by configuration:
+| Configuration | Features |
+|---|---|
+| Base (raw, mean, min, max, std, diff, timestep) | 619 |
+| + lag (t-2, t-3) | 825 |
+| + rolling (mean, std, trend) | 928 |
+| + lag + rolling | 1134 |
 
 Hard-coded `n_features*4` multipliers in evaluation and SHAP scripts replaced with dynamic inference from data shape.
 
@@ -70,6 +80,35 @@ max_depth=4, n_estimators=2000, lr=0.064, scale_pos_weight=10
 reg_lambda=10, alpha=1, colsample_bytree=0.8, subsample=0.80
 gamma=0.75, max_delta_step=5, focal_gamma=0, booster=dart, grow_policy=lossguide
 ```
+
+---
+
+## Cluster Hyperoptimisation (13 Feb 2026)
+
+Ran 141 trials on SLURM cluster with lag features enabled (`add_lag_features: true`).
+
+### Results (5-fold CV, median reported)
+
+| Metric | Best Value | Corresponding Other Metric |
+|---|---|---|
+| **Best AUPRC** | **0.0693** | AUROC=0.7910 |
+| **Best AUROC** | **0.7957** | AUPRC=0.0639 |
+
+### Top 5 by AUPRC
+| AUPRC | AUROC | depth | lr | spw | lambda | alpha | gamma | focal | subsample | colsample |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0.0693 | 0.7910 | 4 | 0.040 | 10 | 50 | 5 | 0.5 | 0 | 0.62 | 0.80 |
+| 0.0689 | 0.7923 | 3 | 0.048 | 10 | 10 | 10 | 0.75 | 0 | 0.72 | 0.80 |
+| 0.0680 | 0.7854 | 4 | 0.035 | 25 | 75 | 5 | 0.5 | 0 | 0.45 | 0.80 |
+| 0.0676 | 0.7935 | 3 | 0.053 | 10 | 50 | 15 | 0.2 | 0 | 0.88 | 0.80 |
+| 0.0673 | 0.7917 | 4 | 0.032 | 10 | 10 | 1 | 0.75 | 0 | 0.55 | 0.80 |
+
+### Key Observations from Cluster Run
+- **focal_gamma=0 dominates**: All top 10 trials by AUPRC use focal_gamma=0 (standard BCE)
+- **depth 3-4 optimal**: Consistent with A/B testing findings
+- **lr 0.03-0.05 range**: Confirms lr=0.03 finding from A/B testing
+- **spw=10 preferred**: 4/5 top trials use spw=10
+- **Single-fold vs 5-fold gap**: Fold 0 single-fold results (~0.09 AUPRC) are higher than 5-fold medians (~0.07 AUPRC), indicating fold 0 is the easiest fold
 
 ---
 
@@ -110,45 +149,6 @@ Ran systematic ablations varying one parameter at a time against the best known 
 
 ---
 
-## Key Findings
-
-### What improves AUPRC
-1. **Lag features (t-2, t-3)** — AUPRC +5.8%, AUROC +0.9%. Both metrics improve.
-2. **Feature engineering (std, diff, timestep)** — AUPRC +27.5% vs original baseline (0.053→0.068 median 5-fold)
-3. **Lower learning rate with lag** — lr=0.03 beats lr=0.064 when lag features are enabled
-4. **scale_pos_weight=10-25** — optimal range; too low (5) or too high (45+) hurts
-5. **Focal loss gamma=1.0** — consistent mild benefit (+2-4% AUPRC)
-
-### What doesn't matter
-- **n_estimators** — dart booster ignores it (100/200/500 give identical results)
-- **grow_policy** — depthwise and lossguide produce identical results
-- **max_delta_step** — no consistent effect
-- **colsample_bylevel** — no effect at 1.0
-
-### What hurts
-- **depth >= 6** — severe overfitting, -25% AUPRC
-- **gbtree booster** — 10x faster but -15-17% AUPRC vs dart
-- **High learning rate (0.10) with lag** — -15% AUPRC
-- **Very low scale_pos_weight (5)** — hurts AUPRC
-
-### Interactions (optimal settings differ with/without lag)
-| Parameter | Best without lag | Best with lag |
-|---|---|---|
-| scale_pos_weight | 25 | 10 |
-| learning_rate | 0.064 | **0.03** |
-| regularisation | low (λ=1, α=0) | high (λ=50, α=10) |
-| colsample_bytree | 1.0 | 0.8 |
-| subsample | 0.8 | 0.5 |
-
-More features → need more regularisation and slower learning.
-
-### AUROC vs AUPRC trade-off
-- Shallower trees (depth 2-3) boost AUROC but sacrifice AUPRC
-- Lower scale_pos_weight boosts AUROC but hurts AUPRC
-- Multi-objective Optuna can find Pareto-optimal configurations
-
----
-
 ## Combination Testing (single fold 0, with lag features)
 
 Tested stacking the top individual improvements to find interactions. 16 experiments.
@@ -179,10 +179,82 @@ Tested stacking the top individual improvements to find interactions. 16 experim
 
 ---
 
-## Current Best (single fold 0)
-- **AUPRC = 0.0939** (lag + lr=0.03 + focal=1.0 + sub=0.5 + highreg) — +77% vs original baseline
-- **AUROC = 0.8094** (same config) — +3.2% vs original baseline
-- This is the first config to achieve top AUPRC and top AUROC simultaneously
+## Rolling Window Features (14 Feb 2026)
+
+### Implementation
+Added 3 new rolling window features computed over the last 6 timesteps (6 hours):
+- **Rolling mean** — recent average (more responsive than cumulative mean)
+- **Rolling std** — recent variability (captures acute instability)
+- **Rolling linear trend** — least-squares slope over the window (direction of change)
+
+These complement the existing cumulative statistics by capturing *recent* dynamics that get diluted in cumulative stats as time progresses.
+
+### A/B Test Results (single fold 0)
+
+| Configuration | Features | AUPRC | AUROC |
+|---|---|---|---|
+| Lag only | 825 | 0.0897 | 0.8061 |
+| Rolling only | 928 | 0.0935 | **0.8226** |
+| **Lag + Rolling** | **1134** | **0.1008** | 0.8200 |
+
+### Impact
+- **Lag + Rolling** achieves AUPRC=0.1008 — a **+12.4%** improvement over lag-only (0.0897) and **+90%** over the original baseline (0.053)
+- Rolling features alone achieve the best AUROC (0.8226), suggesting they provide strong discriminative signal
+- Combining lag + rolling gives the best AUPRC, indicating the features are complementary
+- Computation overhead is minimal (~9s per fold for rolling trend)
+
+---
+
+## Key Findings
+
+### What improves AUPRC
+1. **Rolling window features** — AUPRC +12.4% over lag-only, +90% over original baseline
+2. **Lag features (t-2, t-3)** — AUPRC +5.8%, AUROC +0.9%. Both metrics improve.
+3. **Feature engineering (std, diff, timestep)** — AUPRC +27.5% vs original baseline (0.053→0.068 median 5-fold)
+4. **Lower learning rate with lag** — lr=0.03 beats lr=0.064 when lag features are enabled
+5. **scale_pos_weight=10-25** — optimal range; too low (5) or too high (45+) hurts
+6. **Focal loss gamma=1.0** — consistent mild benefit in A/B testing (+2-4% AUPRC), but not confirmed in cluster hyperopt
+
+### What doesn't matter
+- **n_estimators** — dart booster ignores it (100/200/500 give identical results)
+- **grow_policy** — depthwise and lossguide produce identical results
+- **max_delta_step** — no consistent effect
+- **colsample_bylevel** — no effect at 1.0
+
+### What hurts
+- **depth >= 6** — severe overfitting, -25% AUPRC
+- **gbtree booster** — 10x faster but -15-17% AUPRC vs dart
+- **High learning rate (0.10) with lag** — -15% AUPRC
+- **Very low scale_pos_weight (5)** — hurts AUPRC
+
+### Interactions (optimal settings differ with/without lag)
+| Parameter | Best without lag | Best with lag |
+|---|---|---|
+| scale_pos_weight | 25 | 10 |
+| learning_rate | 0.064 | **0.03** |
+| regularisation | low (λ=1, α=0) | high (λ=50, α=10) |
+| colsample_bytree | 1.0 | 0.8 |
+| subsample | 0.8 | 0.5 |
+
+More features → need more regularisation and slower learning.
+
+### AUROC vs AUPRC trade-off
+- Shallower trees (depth 2-3) boost AUROC but sacrifice AUPRC
+- Lower scale_pos_weight boosts AUROC but hurts AUPRC
+- Rolling features improve both metrics simultaneously
+- Multi-objective Optuna can find Pareto-optimal configurations
+
+---
+
+## Current Best Results
+
+### Single fold 0 (lag + rolling)
+- **AUPRC = 0.1008** — +90% vs original baseline (0.053)
+- **AUROC = 0.8200** — +4.6% vs original baseline (0.784)
+
+### 5-fold CV median (lag only, cluster hyperopt)
+- **AUPRC = 0.0693** — +31% vs original baseline
+- **AUROC = 0.7957** — +1.5% vs original baseline
 
 ---
 
@@ -192,7 +264,7 @@ Two issues were found and fixed for SLURM cluster deployment:
 
 1. **`cluster/master_launcher.py`** — Study creation mismatch. The master launcher created single-objective studies (`direction='maximize'`), but XGBoost now returns two objectives (AUPRC, AUROC). Fixed: XGB now creates multi-objective study with `directions=['maximize', 'maximize']`.
 
-2. **`cluster/cluster_subprocess.py`** — Missing `add_lag_features`. The subprocess did not pass `add_lag_features` to `prepare_aggregate_dataset`, so lag features were always disabled on the cluster. Fixed: now reads `add_lag_features` from config and passes it through.
+2. **`cluster/cluster_subprocess.py`** — Missing feature flags. The subprocess did not pass `add_lag_features` or `add_rolling_features` to `prepare_aggregate_dataset`, so these features were always disabled on the cluster. Fixed: now reads both flags from config and passes them through.
 
 ---
 
@@ -203,16 +275,20 @@ Saved as `xgb_auprc_config.json`:
 ```json
 {
     "n_trials": 100,
+    "target_interval": 1,
+    "restrict_to_first_event": 0,
     "add_lag_features": true,
+    "add_rolling_features": true,
     "max_depth": [2, 5],
     "n_estimators": [200],
     "learning_rate": [0.02, 0.08],
     "reg_lambda": [10, 50, 75],
     "alpha": [1, 5, 10, 15, 25],
+    "early_stopping_rounds": [50],
     "scale_pos_weight": [5, 10, 25],
     "min_child_weight": [1, 5],
     "subsample": [0.3, 1.0],
-    "colsample_bytree": [0.8],
+    "colsample_bytree": [0.5, 0.8],
     "colsample_bylevel": [1.0],
     "booster": ["dart"],
     "grow_policy": ["lossguide"],
@@ -222,6 +298,12 @@ Saved as `xgb_auprc_config.json`:
     "focal_gamma": [0, 1.0]
 }
 ```
+
+### Key config changes for next run
+- **`add_rolling_features: true`** — enables rolling mean, std, trend (1134 features with lag+rolling)
+- **`n_trials: 100`** — increased from 50 for better coverage
+- **`subsample: [0.3, 1.0]`** — widened from [0.5, 1.0] to explore stronger dropout
+- **`colsample_bytree: [0.5, 0.8]`** — widened from [0.8] to explore more feature subsampling with the expanded feature set
 
 ### Recommended SLURM cluster settings
 - **10 subprocesses** (10 trials each, ~5 hours wall time)
@@ -234,21 +316,22 @@ Saved as `xgb_auprc_config.json`:
 
 | File | Changes |
 |---|---|
-| `gridsearch_aggregate_xgb.py` | Multi-objective Optuna, focal loss, search space, lag features support |
-| `prediction/utils/utils.py` | std, diff, timestep, lag features in `aggregate_features_over_time` |
-| `prediction/short_term_outcome_prediction/timeseries_decomposition.py` | `add_lag_features` parameter threading |
+| `gridsearch_aggregate_xgb.py` | Multi-objective Optuna, focal loss, search space, lag/rolling features support |
+| `prediction/utils/utils.py` | std, diff, timestep, lag, rolling (mean/std/trend) features in `aggregate_features_over_time` |
+| `prediction/short_term_outcome_prediction/timeseries_decomposition.py` | `add_lag_features` and `add_rolling_features` parameter threading |
 | `evaluation/xgb_evaluation.py` | Dynamic feature count (replaced `n_features*4`) |
 | `testing/compute_shap_explanations_over_time.py` | Dynamic feature count (replaced `n_features*4`) |
 | `cluster/master_launcher.py` | Multi-objective study creation for XGB |
-| `cluster/cluster_subprocess.py` | Pass `add_lag_features` to `prepare_aggregate_dataset` |
-| `xgb_auprc_config.json` | Refined hyperparameter search space |
+| `cluster/cluster_subprocess.py` | Pass `add_lag_features` and `add_rolling_features` to `prepare_aggregate_dataset` |
+| `xgb_auprc_config.json` | Refined hyperparameter search space with lag + rolling features |
 | `quick_eval_xgb.py` | A/B testing and combination testing script (new) |
 
 ---
 
 ## Next Steps
 
-1. Launch full hyperoptimisation on SLURM cluster (100 trials, 10 subprocesses)
+1. Launch full hyperoptimisation on SLURM cluster with rolling features (100 trials, 10 subprocesses)
 2. Analyse Pareto front from multi-objective results (AUPRC vs AUROC trade-off)
-3. Validate best config on held-out test set
-4. Update evaluation and SHAP pipelines to use `add_lag_features=True`
+3. Consider re-running combination testing with lag+rolling features to find optimal hyperparams for the expanded feature set
+4. Validate best config on held-out test set
+5. Update evaluation and SHAP pipelines to use `add_lag_features=True, add_rolling_features=True`

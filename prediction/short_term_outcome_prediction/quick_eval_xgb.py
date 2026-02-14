@@ -240,36 +240,43 @@ if __name__ == '__main__':
     parser.add_argument('--mode', choices=['ablation', 'combo', 'both'], default='both',
                         help='ablation=single-param, combo=combinations, both=all')
     parser.add_argument('--lag-only', action='store_true', help='Skip no-lag, run lag only')
+    parser.add_argument('--rolling', action='store_true', help='Add rolling window features (mean, std, trend)')
     args = parser.parse_args()
 
     splits = ch.load(args.data_splits_path)
 
-    def prepare(lag=False):
+    def prepare(lag=False, rolling=False):
         if args.all_folds:
-            print(f"Preparing ALL folds (lag={lag})...")
+            print(f"Preparing ALL folds (lag={lag}, rolling={rolling})...")
             return [prepare_aggregate_dataset(x, rescale=True, target_time_to_outcome=6,
                                               target_interval=1, restrict_to_first_event=0,
-                                              add_lag_features=lag) for x in splits]
+                                              add_lag_features=lag,
+                                              add_rolling_features=rolling) for x in splits]
         else:
-            print(f"Preparing fold {args.fold} only (lag={lag})...")
+            print(f"Preparing fold {args.fold} only (lag={lag}, rolling={rolling})...")
             return [prepare_aggregate_dataset(splits[args.fold], rescale=True, target_time_to_outcome=6,
                                               target_interval=1, restrict_to_first_event=0,
-                                              add_lag_features=lag)]
+                                              add_lag_features=lag,
+                                              add_rolling_features=rolling)]
+
+    rolling = args.rolling
 
     if not args.lag_only:
-        datasets = prepare(lag=False)
+        datasets = prepare(lag=False, rolling=rolling)
+        tag_suffix = " + ROLLING" if rolling else ""
         print(f"Data ready: {datasets[0][0].shape[1]} features, {len(datasets)} fold(s)\n")
 
         if args.mode in ('ablation', 'both'):
-            run_ablation(datasets, tag="ABLATION — NO LAG")
+            run_ablation(datasets, tag=f"ABLATION — NO LAG{tag_suffix}")
         if args.mode in ('combo', 'both'):
-            run_combinations(datasets, tag="COMBINATIONS — NO LAG")
+            run_combinations(datasets, tag=f"COMBINATIONS — NO LAG{tag_suffix}")
 
     if args.lag or args.lag_only:
-        datasets = prepare(lag=True)
+        datasets = prepare(lag=True, rolling=rolling)
+        tag_suffix = " + ROLLING" if rolling else ""
         print(f"Data ready: {datasets[0][0].shape[1]} features, {len(datasets)} fold(s)\n")
 
         if args.mode in ('ablation', 'both'):
-            run_ablation(datasets, tag="ABLATION — WITH LAG")
+            run_ablation(datasets, tag=f"ABLATION — WITH LAG{tag_suffix}")
         if args.mode in ('combo', 'both'):
-            run_combinations(datasets, tag="COMBINATIONS — WITH LAG")
+            run_combinations(datasets, tag=f"COMBINATIONS — WITH LAG{tag_suffix}")

@@ -155,7 +155,7 @@ def decompose_timeseries(timeseries: np.ndarray, target_timeseries_length: int =
 
 def aggregate_and_label_timeseries(timeseries, y_df, target_time_to_outcome=6,
                                    target_interval=True, restrict_to_first_event=False,
-                                   add_lag_features=False):
+                                   add_lag_features=False, add_rolling_features=False):
     all_subj_labels = []
     all_subj_data = []
     n_timepoints = timeseries.shape[1]
@@ -191,7 +191,8 @@ def aggregate_and_label_timeseries(timeseries, y_df, target_time_to_outcome=6,
             labels = np.array(labels)
 
         x_data, _ = aggregate_features_over_time(x_data, np.array([None]), moving_average=False,
-                                                    add_lag_features=add_lag_features)
+                                                    add_lag_features=add_lag_features,
+                                                    add_rolling_features=add_rolling_features)
         all_subj_labels.append(labels)
         all_subj_data.append(x_data)
 
@@ -441,7 +442,7 @@ def prepare_subsequence_dataset(scenario, rescale=True, target_time_to_outcome=6
 
 def prepare_aggregate_dataset(scenario, rescale=True, target_time_to_outcome=6,
                               target_interval=True, restrict_to_first_event=False,
-                              add_lag_features=False):
+                              add_lag_features=False, add_rolling_features=False):
     """
     Prepares the dataset as an aggregate dataset (one sample per timepoint) and returns the train and validation sets.
     (only used for XGB model)
@@ -457,10 +458,10 @@ def prepare_aggregate_dataset(scenario, rescale=True, target_time_to_outcome=6,
 
     train_data, train_labels = aggregate_and_label_timeseries(X_train, y_train, target_time_to_outcome,
                                                               target_interval=target_interval, restrict_to_first_event=restrict_to_first_event,
-                                                              add_lag_features=add_lag_features)
+                                                              add_lag_features=add_lag_features, add_rolling_features=add_rolling_features)
     val_data, val_labels = aggregate_and_label_timeseries(X_val, y_val, target_time_to_outcome,
                                                           target_interval=target_interval, restrict_to_first_event=restrict_to_first_event,
-                                                          add_lag_features=add_lag_features)
+                                                          add_lag_features=add_lag_features, add_rolling_features=add_rolling_features)
 
     train_data = np.concatenate(train_data)
     train_labels = np.concatenate(train_labels)

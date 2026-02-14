@@ -54,10 +54,12 @@ def subprocess_cluster_gridsearch(data_splits_path:str, output_folder:str, trial
         
     elif use_xgb:
         add_lag_features = gridsearch_config.get('add_lag_features', False)
+        add_rolling_features = gridsearch_config.get('add_rolling_features', False)
         all_datasets = [prepare_aggregate_dataset(x, rescale=True, target_time_to_outcome=6,
                                                 target_interval=gridsearch_config['target_interval'],
                                                 restrict_to_first_event=gridsearch_config['restrict_to_first_event'],
                                                 add_lag_features=add_lag_features,
+                                                add_rolling_features=add_rolling_features,
                                               ) for x in splits]
         study.optimize(partial(get_score_xgb, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
                             gridsearch_config=gridsearch_config, outcome=outcome),

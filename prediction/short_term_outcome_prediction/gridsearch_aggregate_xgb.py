@@ -89,10 +89,12 @@ def launch_gridsearch_xgb(data_splits_path:str, output_folder:str, gridsearch_co
     splits = ch.load(path.join(data_splits_path))
 
     add_lag_features = gridsearch_config.get('add_lag_features', False)
+    add_rolling_features = gridsearch_config.get('add_rolling_features', False)
     all_datasets = [prepare_aggregate_dataset(x, rescale=True, target_time_to_outcome=6,
                                                 target_interval=gridsearch_config['target_interval'],
                                                 restrict_to_first_event=gridsearch_config['restrict_to_first_event'],
                                                 add_lag_features=add_lag_features,
+                                                add_rolling_features=add_rolling_features,
                                               ) for x in splits]
 
 
@@ -210,6 +212,9 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
         run_performance_df['max_delta_step'] = max_delta_step
         run_performance_df['focal_gamma'] = focal_gamma
         run_performance_df['moving_average'] = False
+        run_performance_df['add_lag_features'] = gridsearch_config.get('add_lag_features', False)
+        run_performance_df['add_rolling_features'] = gridsearch_config.get('add_rolling_features', False)
+        run_performance_df['n_features'] = fold_X_train.shape[1]
         run_performance_df['outcome'] = outcome
 
         run_performance_df['auc_train'] = model_auc_train
@@ -241,6 +246,9 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
     d["n_trials"] = gridsearch_config['n_trials']
     d['target_interval'] = gridsearch_config['target_interval']
     d['restrict_to_first_event'] = gridsearch_config['restrict_to_first_event']
+    d['add_lag_features'] = gridsearch_config.get('add_lag_features', False)
+    d['add_rolling_features'] = gridsearch_config.get('add_rolling_features', False)
+    d['n_features'] = int(ds[0][0].shape[1])
     d['median_val_auprc'] = float(np.median(val_auprc))
     d['median_val_auc'] = float(np.median(val_auroc))
 

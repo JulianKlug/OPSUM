@@ -56,7 +56,63 @@ def moving_time_average(a, n=3):
     return ret[:, n - 1:] / n
 
 
-def aggregate_features_over_time(features, labels, moving_average=False, n=3, add_lag_features=False):
+def _rolling_mean(features, w):
+    """Rolling mean over last w timesteps. For t < w, uses all available timesteps."""
+    n_samples, n_ts, n_feat = features.shape
+    cumsum = np.cumsum(features, axis=1)
+    rolling = np.empty_like(features)
+    # For t < w: cumulative mean (use all available)
+    for t in range(min(w, n_ts)):
+        rolling[:, t, :] = cumsum[:, t, :] / (t + 1)
+    # For t >= w: mean of last w values
+    if w < n_ts:
+        rolling[:, w:, :] = (cumsum[:, w:, :] - cumsum[:, :-w, :]) / w
+    return rolling
+
+
+def _rolling_std(features, rolling_mean, w):
+    """Rolling std over last w timesteps. For t < w, uses all available timesteps."""
+    n_samples, n_ts, n_feat = features.shape
+    cumsum_sq = np.cumsum(features ** 2, axis=1)
+    rolling_var = np.empty_like(features)
+    for t in range(min(w, n_ts)):
+        mean_sq = cumsum_sq[:, t, :] / (t + 1)
+        rolling_var[:, t, :] = mean_sq - rolling_mean[:, t, :] ** 2
+    if w < n_ts:
+        mean_sq = (cumsum_sq[:, w:, :] - cumsum_sq[:, :-w, :]) / w
+        rolling_var[:, w:, :] = mean_sq - rolling_mean[:, w:, :] ** 2
+    return np.sqrt(np.maximum(rolling_var, 0))
+
+
+def _rolling_trend(features, w):
+    """Linear trend (slope) over last w timesteps via least-squares.
+    For t < w, uses all available timesteps. Slope is normalized by window size."""
+    n_samples, n_ts, n_feat = features.shape
+    trend = np.zeros_like(features)
+    # Precompute: slope = (sum(t*x) - n*mean_t*mean_x) / (sum(t^2) - n*mean_t^2)
+    for t in range(1, n_ts):
+        ww = min(t + 1, w)
+        # indices 0..ww-1 within the window
+        idx = np.arange(ww, dtype=features.dtype)
+        sum_t = idx.sum()
+        sum_t2 = (idx ** 2).sum()
+        mean_t = sum_t / ww
+        denom = sum_t2 - ww * mean_t ** 2
+        if denom < 1e-10:
+            continue
+        # window of values: features[:, t-ww+1:t+1, :]
+        window = features[:, t - ww + 1:t + 1, :]  # (n_samples, ww, n_feat)
+        # sum(t * x) for each sample/feature
+        sum_tx = np.einsum('j,ijk->ik', idx, window)
+        mean_x = window.mean(axis=1)
+        slope = (sum_tx - ww * mean_t * mean_x) / denom
+        trend[:, t, :] = slope
+    return trend
+
+
+def aggregate_features_over_time(features, labels, moving_average=False, n=3,
+                                 add_lag_features=False, add_rolling_features=False,
+                                 rolling_window=6):
     """
     This function aggregates the features over time. Instead of having one row per case_admission_id and one column per feature over time,
     we have one row per case_admission_id and one column per feature aggregated over time (mean, min, max) for each timestep.
@@ -67,6 +123,8 @@ def aggregate_features_over_time(features, labels, moving_average=False, n=3, ad
     :param moving_average: if True, the moving average over the last n time steps is calculated
     :param n: the number of time steps for the moving average
     :param add_lag_features: if True, add lagged values at t-2 and t-3
+    :param add_rolling_features: if True, add rolling window mean, std, and trend
+    :param rolling_window: window size in timesteps for rolling features (default: 6 hours)
     """
     avg_features = np.cumsum(features, 1) / (np.arange(1, features.shape[1] + 1)[None, :, None])
     if moving_average:
@@ -98,6 +156,13 @@ def aggregate_features_over_time(features, labels, moving_average=False, n=3, ad
         lag3 = np.zeros_like(features)
         lag3[:, 3:, :] = features[:, :-3, :]
         feature_list.extend([lag2, lag3])
+
+    if add_rolling_features:
+        w = rolling_window
+        roll_mean = _rolling_mean(features, w)
+        roll_std = _rolling_std(features, roll_mean, w)
+        roll_trend = _rolling_trend(features, w)
+        feature_list.extend([roll_mean, roll_std, roll_trend])
 
     all_features = np.concatenate(feature_list, 2)
     all_features = all_features.reshape(-1, all_features.shape[-1])
