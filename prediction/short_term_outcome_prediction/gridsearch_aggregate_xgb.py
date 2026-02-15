@@ -9,7 +9,7 @@ import pandas as pd
 import json
 
 import pickle
-from sklearn.metrics import accuracy_score, roc_auc_score, matthews_corrcoef, average_precision_score
+from sklearn.metrics import accuracy_score, roc_auc_score, matthews_corrcoef, average_precision_score, fbeta_score
 from sklearn.preprocessing import StandardScaler
 import xgboost as xgb
 
@@ -397,6 +397,230 @@ def retrain_on_all_data(data_splits_path: str, config: dict, output_dir: str):
     return model, scaler
 
 
+def _optimal_thresholds(y_true, y_prob, thresholds=None):
+    """Find optimal decision thresholds for multiple metrics.
+
+    Args:
+        y_true: true binary labels
+        y_prob: predicted probabilities (continuous)
+        thresholds: array of thresholds to sweep (default: 0.01-0.50 in 0.005 steps)
+
+    Returns:
+        dict mapping metric name -> {threshold, value}
+    """
+    if thresholds is None:
+        thresholds = np.arange(0.01, 0.505, 0.005)
+
+    best = {
+        'youden_j': {'threshold': 0.5, 'value': -1},
+        'f1': {'threshold': 0.5, 'value': -1},
+        'f2': {'threshold': 0.5, 'value': -1},
+        'mcc': {'threshold': 0.5, 'value': -2},
+    }
+
+    for t in thresholds:
+        y_pred = (y_prob >= t).astype('float32')
+
+        if y_pred.sum() == 0 or y_pred.sum() == len(y_pred):
+            continue
+
+        sn = recall(y_true, y_pred).numpy()
+        sp = specificity(y_true, y_pred).numpy()
+        j = float(sn + sp - 1)
+        if j > best['youden_j']['value']:
+            best['youden_j'] = {'threshold': float(t), 'value': j}
+
+        f1 = float(fbeta_score(y_true, y_pred, beta=1, zero_division=0))
+        if f1 > best['f1']['value']:
+            best['f1'] = {'threshold': float(t), 'value': f1}
+
+        f2 = float(fbeta_score(y_true, y_pred, beta=2, zero_division=0))
+        if f2 > best['f2']['value']:
+            best['f2'] = {'threshold': float(t), 'value': f2}
+
+        mcc = float(matthews_corrcoef(y_true, y_pred))
+        if mcc > best['mcc']['value']:
+            best['mcc'] = {'threshold': float(t), 'value': mcc}
+
+    return best
+
+
+def _metrics_at_threshold(y_true, y_prob, threshold):
+    """Compute all metrics at a given threshold."""
+    y_pred = (y_prob >= threshold).astype('float32')
+    return {
+        'auroc': float(roc_auc_score(y_true, y_prob)),
+        'auprc': float(average_precision_score(y_true, y_prob)),
+        'accuracy': float(accuracy_score(y_true, y_pred)),
+        'precision': float(precision(y_true, y_pred.astype(float)).numpy()),
+        'recall': float(recall(y_true, y_pred).numpy()),
+        'specificity': float(specificity(y_true, y_pred).numpy()),
+        'mcc': float(matthews_corrcoef(y_true, y_pred)),
+        'f1': float(fbeta_score(y_true, y_pred, beta=1, zero_division=0)),
+        'f2': float(fbeta_score(y_true, y_pred, beta=2, zero_division=0)),
+        'youden_j': float(recall(y_true, y_pred).numpy() + specificity(y_true, y_pred).numpy() - 1),
+    }
+
+
+def evaluate_with_threshold_tuning(data_splits_path: str, config: dict, output_dir: str):
+    """Run 5-fold CV with threshold optimization for the best XGB config.
+
+    For each fold:
+      - Train XGB with the given config
+      - Sweep thresholds on validation predictions
+      - Record optimal threshold per metric (Youden's J, F1, F2, MCC)
+
+    Saves:
+      - threshold_tuning_results.json: per-fold optimal thresholds + median thresholds
+      - threshold_tuning_cv.csv: per-fold metrics at each optimal threshold
+
+    Args:
+        data_splits_path: path to .pth file with CV data splits
+        config: dict with scalar hyperparameter values
+        output_dir: directory to save results
+    """
+    range_keys = [k for k in ('max_depth', 'n_estimators', 'learning_rate', 'reg_lambda',
+                               'alpha', 'scale_pos_weight', 'min_child_weight', 'subsample',
+                               'colsample_bytree')
+                  if k in config and isinstance(config[k], list)]
+    if range_keys:
+        raise ValueError(
+            f"Config contains list values for {range_keys}. "
+            "evaluate_with_threshold_tuning expects a fixed config with scalar values."
+        )
+
+    ensure_dir(output_dir)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    splits = ch.load(data_splits_path)
+    outcome = '_'.join(os.path.basename(data_splits_path).split('_')[3:6])
+
+    add_lag_features = config.get('add_lag_features', False)
+    add_rolling_features = config.get('add_rolling_features', False)
+    target_interval = config.get('target_interval', 1)
+    restrict_to_first_event = config.get('restrict_to_first_event', 0)
+
+    print(f"Preparing data (lag={add_lag_features}, rolling={add_rolling_features})...")
+    all_datasets = [prepare_aggregate_dataset(x, rescale=True, target_time_to_outcome=6,
+                                               target_interval=target_interval,
+                                               restrict_to_first_event=restrict_to_first_event,
+                                               add_lag_features=add_lag_features,
+                                               add_rolling_features=add_rolling_features)
+                    for x in splits]
+
+    device = "cuda" if ch.cuda.is_available() else "cpu"
+    focal_gamma = config.get('focal_gamma', 0)
+    scale_pos_weight = config.get('scale_pos_weight', 10)
+
+    xgb_params = dict(
+        learning_rate=config['learning_rate'],
+        max_depth=int(config['max_depth']),
+        n_estimators=int(config['n_estimators']),
+        reg_lambda=config['reg_lambda'],
+        reg_alpha=config.get('alpha', config.get('reg_alpha', 1)),
+        min_child_weight=config['min_child_weight'],
+        subsample=config['subsample'],
+        colsample_bytree=config['colsample_bytree'],
+        colsample_bylevel=config.get('colsample_bylevel', 1.0),
+        booster=config.get('booster', 'dart'),
+        grow_policy=config.get('grow_policy', 'lossguide'),
+        gamma=config.get('gamma', 0.5),
+        max_delta_step=config.get('max_delta_step', 0),
+        device=device,
+    )
+
+    if focal_gamma > 0:
+        xgb_params['objective'] = partial(focal_loss_objective,
+                                          gamma_fl=focal_gamma,
+                                          pos_weight=scale_pos_weight)
+        xgb_params['scale_pos_weight'] = 1
+    else:
+        xgb_params['scale_pos_weight'] = scale_pos_weight
+
+    early_stopping_rounds = config.get('early_stopping_rounds', 50)
+    metric_names = ['youden_j', 'f1', 'f2', 'mcc']
+    per_fold_thresholds = {m: [] for m in metric_names}
+    per_fold_results = []
+
+    for i, (fold_X_train, fold_X_val, fold_y_train, fold_y_val) in enumerate(all_datasets):
+        print(f"\n--- Fold {i} ---")
+        print(f"  Train: {len(fold_y_train)} samples, {int(fold_y_train.sum())} positive ({fold_y_train.sum()/len(fold_y_train)*100:.2f}%)")
+        print(f"  Val:   {len(fold_y_val)} samples, {int(fold_y_val.sum())} positive ({fold_y_val.sum()/len(fold_y_val)*100:.2f}%)")
+
+        model = xgb.XGBClassifier(**xgb_params)
+        model.fit(fold_X_train, fold_y_train,
+                  early_stopping_rounds=early_stopping_rounds,
+                  eval_metric=["auc", "aucpr"],
+                  eval_set=[(fold_X_train, fold_y_train), (fold_X_val, fold_y_val)],
+                  verbose=False)
+
+        y_prob_val = model.predict_proba(fold_X_val)[:, 1].astype('float32')
+
+        # Find optimal thresholds
+        opt = _optimal_thresholds(fold_y_val, y_prob_val)
+
+        fold_result = {
+            'fold': i,
+            'best_iteration': int(model.best_iteration),
+            'n_val_samples': len(fold_y_val),
+            'n_val_positive': int(fold_y_val.sum()),
+        }
+
+        # Metrics at default 0.5 threshold
+        fold_result['default_0.5'] = _metrics_at_threshold(fold_y_val, y_prob_val, 0.5)
+
+        # Metrics at each optimal threshold
+        for m in metric_names:
+            t = opt[m]['threshold']
+            per_fold_thresholds[m].append(t)
+            fold_result[m] = {
+                'optimal_threshold': t,
+                'optimized_value': opt[m]['value'],
+                'metrics_at_threshold': _metrics_at_threshold(fold_y_val, y_prob_val, t),
+            }
+
+        per_fold_results.append(fold_result)
+
+        print(f"  AUROC: {fold_result['default_0.5']['auroc']:.4f}, AUPRC: {fold_result['default_0.5']['auprc']:.4f}")
+        for m in metric_names:
+            print(f"  Best {m}: threshold={opt[m]['threshold']:.3f}, value={opt[m]['value']:.4f}")
+
+    # Compute median thresholds across folds
+    median_thresholds = {}
+    for m in metric_names:
+        thresholds = per_fold_thresholds[m]
+        median_thresholds[m] = {
+            'median_threshold': float(np.median(thresholds)),
+            'per_fold_thresholds': [float(t) for t in thresholds],
+            'median_optimized_value': float(np.median([r[m]['optimized_value'] for r in per_fold_results])),
+        }
+
+    results = {
+        'timestamp': timestamp,
+        'config': {k: v for k, v in config.items() if not callable(v)},
+        'data_splits_path': data_splits_path,
+        'outcome': outcome,
+        'n_folds': len(splits),
+        'n_features': int(all_datasets[0][0].shape[1]),
+        'median_thresholds': median_thresholds,
+        'per_fold': per_fold_results,
+    }
+
+    results_path = os.path.join(output_dir, f'threshold_tuning_results_{timestamp}.json')
+    with open(results_path, 'w') as f:
+        json.dump(results, f, indent=2)
+    print(f"\nResults saved to {results_path}")
+
+    # Print summary
+    print(f"\n=== Threshold Tuning Summary ===")
+    print(f"{'Metric':<12} {'Median Threshold':>18} {'Median Value':>14}")
+    for m in metric_names:
+        mt = median_thresholds[m]
+        print(f"{m:<12} {mt['median_threshold']:>18.3f} {mt['median_optimized_value']:>14.4f}")
+
+    return results
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
@@ -406,6 +630,8 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--config', type=str, required=False, default=None)
     parser.add_argument('--retrain', action='store_true',
                         help='Retrain on all CV data with a fixed config (requires -c)')
+    parser.add_argument('--threshold_tuning', action='store_true',
+                        help='Run 5-fold CV with threshold optimization (requires -c)')
 
     parser.add_argument('-spwd', '--storage_pwd', type=str, required=False, default=None)
     parser.add_argument('-sport', '--storage_port', type=int, required=False, default=None)
@@ -424,6 +650,12 @@ if __name__ == '__main__':
         retrain_on_all_data(data_splits_path=args.data_splits_path,
                             config=gridsearch_config,
                             output_dir=args.output_folder)
+    elif args.threshold_tuning:
+        if gridsearch_config is None:
+            parser.error("--threshold_tuning requires -c/--config with a fixed hyperparameter config")
+        evaluate_with_threshold_tuning(data_splits_path=args.data_splits_path,
+                                       config=gridsearch_config,
+                                       output_dir=args.output_folder)
     else:
         launch_gridsearch_xgb(data_splits_path=args.data_splits_path, output_folder=args.output_folder,
                               gridsearch_config=gridsearch_config,
