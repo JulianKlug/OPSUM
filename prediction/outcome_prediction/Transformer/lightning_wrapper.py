@@ -426,3 +426,84 @@ class LitEncoderRegressionModel(pl.LightningModule):
                 'frequency': 1
             }
         ]
+
+
+class LitSelfSupervisedModel(pl.LightningModule):
+    """Self-supervised next-step prediction wrapper.
+
+    The model predicts features[t+1] from position t using causal masking.
+    Loss = MSE(output[:, :-1, :], input[:, 1:, :]).
+    """
+
+    def __init__(self, model, lr, wd, train_noise, lr_warmup_steps=0, scheduler='exponential'):
+        super().__init__()
+        self.model = model
+        self.lr = lr
+        self.lr_warmup_steps = lr_warmup_steps
+        self.wd = wd
+        self.train_noise = train_noise
+        self.scheduler = scheduler
+
+        self.criterion = ch.nn.MSELoss()
+        self.val_cos_sim = CosineSimilarity(reduction='mean')
+
+    def _compute_loss(self, x):
+        """Forward pass and shifted-target MSE loss."""
+        predictions = self.model(x)  # (batch, T, input_dim)
+        # Predict next step: output at t predicts input at t+1
+        # Skip if sequence length is 1 (no shifted target available)
+        if x.shape[1] < 2:
+            return ch.tensor(0.0, device=x.device, requires_grad=True), predictions
+        loss = self.criterion(predictions[:, :-1, :], x[:, 1:, :])
+        return loss, predictions
+
+    def training_step(self, batch, batch_idx):
+        x, _ = batch  # labels are unused
+        if self.train_noise != 0:
+            x = x + ch.randn(x.shape[0], x.shape[1], device=x.device)[:, :, None].repeat(1, 1, x.shape[2]) * self.train_noise
+        loss, _ = self._compute_loss(x)
+        self.log('train_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        x, _ = batch
+        loss, predictions = self._compute_loss(x)
+
+        if x.shape[1] >= 2:
+            # Per-feature correlation as additional monitoring metric
+            pred_flat = predictions[:, :-1, :].reshape(-1, predictions.shape[-1])
+            target_flat = x[:, 1:, :].reshape(-1, x.shape[-1])
+            self.val_cos_sim(pred_flat, target_flat)
+
+        self.log_dict({
+            'val_loss': loss,
+            'val_cos_sim': self.val_cos_sim,
+        }, on_step=False, on_epoch=True, prog_bar=True)
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.wd)
+
+        if self.scheduler == 'exponential':
+            train_scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.99)
+        elif self.scheduler == 'cosine':
+            train_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)
+
+        if self.lr_warmup_steps == 0:
+            return [optimizer], [train_scheduler]
+
+        def warmup(current_step: int):
+            return 1 / (10 ** (float(self.lr_warmup_steps - current_step)))
+
+        warmup_scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup)
+
+        ss_scheduler = optim.lr_scheduler.SequentialLR(optimizer, [warmup_scheduler, train_scheduler],
+                                                        [self.lr_warmup_steps])
+
+        return [optimizer], [
+            {
+                'scheduler': ss_scheduler,
+                'interval': 'step',
+                'frequency': 1
+            }
+        ]

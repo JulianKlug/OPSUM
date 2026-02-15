@@ -68,12 +68,16 @@ class SublayerConnection(nn.Module):
         return x + self.dropout(sublayer(self.norm(x)))
 
 
-def attention(query, key, value, dropout=None):
+def attention(query, key, value, dropout=None, causal=False):
     "Compute 'Scaled Dot Product Attention'"
     d_k = query.size(-1)
     scores = torch.matmul(query, key.transpose(-2, -1)) \
              / math.sqrt(d_k)
-    scores = scores.tril()
+    if causal:
+        mask = torch.triu(torch.ones(scores.size(-2), scores.size(-1), device=scores.device, dtype=torch.bool), diagonal=1)
+        scores = scores.masked_fill(mask, float('-inf'))
+    else:
+        scores = scores.tril()
     p_attn = F.softmax(scores, dim = -1)
     if dropout is not None:
         p_attn = dropout(p_attn)
@@ -96,7 +100,7 @@ class EncoderLayer(nn.Module):
 
 
 class MultiHeadedAttention(nn.Module):
-    def __init__(self, h, d_model, dropout=0.1):
+    def __init__(self, h, d_model, dropout=0.1, causal=False):
         "Take in model size and number of heads."
         super(MultiHeadedAttention, self).__init__()
         assert d_model % h == 0
@@ -106,20 +110,21 @@ class MultiHeadedAttention(nn.Module):
         self.linears = clones(nn.Linear(d_model, d_model), 4)
         self.attn = None
         self.dropout = nn.Dropout(p=dropout)
-        
+        self.causal = causal
+
     def forward(self, query, key, value):
         "Implements Figure 2"
         nbatches = query.size(0)
-        
-        # 1) Do all the linear projections in batch from d_model => h x d_k 
+
+        # 1) Do all the linear projections in batch from d_model => h x d_k
         query, key, value = \
             [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
              for l, x in zip(self.linears, (query, key, value))]
-        
-        # 2) Apply attention on all the projected vectors in batch. 
-        x, self.attn = attention(query, key, value, dropout=self.dropout)
-        
-        # 3) "Concat" using a view and apply a final linear. 
+
+        # 2) Apply attention on all the projected vectors in batch.
+        x, self.attn = attention(query, key, value, dropout=self.dropout, causal=self.causal)
+
+        # 3) "Concat" using a view and apply a final linear.
         x = x.transpose(1, 2).contiguous() \
              .view(nbatches, -1, self.h * self.d_k)
         return self.linears[-1](x)                   
@@ -150,27 +155,36 @@ class FinalClassification(nn.Module):
 
 
 class OPSUMTransformer(nn.Module):
-    
+
     def __init__(self, input_dim, num_layers, model_dim, ff_dim,
                  num_heads, dropout, num_classes=1, pos_encode_factor=0.1,
-                 max_dim=5000, enforce_non_negative=False):
+                 max_dim=5000, enforce_non_negative=False, causal=False):
         super().__init__()
         self.embedder = nn.Linear(input_dim, model_dim)
         self.pe = PositionalEncoding(model_dim, dropout, max_dim, factor=pos_encode_factor)
         model_dim *= 2
         ff = PositionwiseFeedForward(model_dim, ff_dim, dropout)
-        attn = MultiHeadedAttention(num_heads, model_dim)
+        attn = MultiHeadedAttention(num_heads, model_dim, causal=causal)
         c = copy.deepcopy
         self.encoder = Encoder(EncoderLayer(model_dim, c(attn), c(ff), dropout), num_layers)
         self.classifier = FinalClassification(model_dim, num_classes)
         self.enforce_non_negative = enforce_non_negative
 
-    def forward(self, x):
+    def encode(self, x):
+        """Return encoder hidden states before the classifier/projector head.
+
+        Returns:
+            Tensor of shape (batch, T, 2*model_dim)
+        """
         bs, t, f = x.shape
         x = self.embedder(x.reshape(-1, f))
         x = x.reshape(bs, t, -1)
         x = self.pe(x)
         x = self.encoder(x)
+        return x
+
+    def forward(self, x):
+        x = self.encode(x)
         x = self.classifier(x)
 
         # for time to event prediction

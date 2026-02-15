@@ -18,6 +18,23 @@ from prediction.utils.scoring import precision, recall, specificity
 from prediction.utils.utils import ensure_dir
 
 
+def load_encoder_representations(repr_path, fold_idx):
+    """Load extracted encoder representations for a given fold.
+
+    Args:
+        repr_path: base directory containing fold_0/, fold_1/, etc.
+        fold_idx: which CV fold to load
+
+    Returns:
+        train_reprs: numpy array of shape (n_train_samples, hidden_dim)
+        val_reprs: numpy array of shape (n_val_samples, hidden_dim)
+    """
+    fold_dir = os.path.join(repr_path, f'fold_{fold_idx}')
+    train_data = ch.load(os.path.join(fold_dir, 'train_representations.pth'))
+    val_data = ch.load(os.path.join(fold_dir, 'val_representations.pth'))
+    return train_data['representations'], val_data['representations']
+
+
 def focal_loss_objective(y_true, y_pred, gamma_fl=2.0, pos_weight=1.0):
     """Focal loss custom objective for XGBoost.
 
@@ -100,12 +117,18 @@ def launch_gridsearch_xgb(data_splits_path:str, output_folder:str, gridsearch_co
                                               ) for x in splits]
 
 
+    # Load encoder representations if configured
+    encoder_repr_path = gridsearch_config.get('encoder_repr_path', None)
+    use_encoder_repr = gridsearch_config.get('use_encoder_repr', False)
+
     study.optimize(partial(get_score_xgb, ds=all_datasets, data_splits_path=data_splits_path, output_folder=output_folder,
-                            gridsearch_config=gridsearch_config, outcome=outcome),
+                            gridsearch_config=gridsearch_config, outcome=outcome,
+                            use_encoder_repr=use_encoder_repr, encoder_repr_path=encoder_repr_path),
                             n_trials=gridsearch_config['n_trials'])
 
 
-def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG):
+def get_score_xgb(trial, ds, data_splits_path, output_folder, outcome, gridsearch_config:dict=DEFAULT_GRIDEARCH_CONFIG,
+                   use_encoder_repr=False, encoder_repr_path=None):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     if gridsearch_config is None:
@@ -136,6 +159,14 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
     best_epochs = []
     model_df = pd.DataFrame()
     for i, (fold_X_train, fold_X_val, fold_y_train, fold_y_val) in enumerate(ds):
+        # Concatenate encoder representations if available
+        if use_encoder_repr and encoder_repr_path is not None:
+            train_reprs, val_reprs = load_encoder_representations(encoder_repr_path, i)
+            assert train_reprs.shape[0] == fold_X_train.shape[0], \
+                f"Repr/feature count mismatch: {train_reprs.shape[0]} vs {fold_X_train.shape[0]}"
+            fold_X_train = np.concatenate([fold_X_train, train_reprs], axis=1)
+            fold_X_val = np.concatenate([fold_X_val, val_reprs], axis=1)
+
         checkpoint_dir = os.path.join(output_folder, f'checkpoints_short_opsum_xgb_{timestamp}_cv_{i}')
         ensure_dir(checkpoint_dir)
 
@@ -216,6 +247,7 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
         run_performance_df['moving_average'] = False
         run_performance_df['add_lag_features'] = gridsearch_config.get('add_lag_features', False)
         run_performance_df['add_rolling_features'] = gridsearch_config.get('add_rolling_features', False)
+        run_performance_df['use_encoder_repr'] = use_encoder_repr
         run_performance_df['n_features'] = fold_X_train.shape[1]
         run_performance_df['outcome'] = outcome
 
@@ -250,6 +282,9 @@ def get_score_xgb(trial, ds, data_splits_path, output_folder,outcome, gridsearch
     d['restrict_to_first_event'] = gridsearch_config['restrict_to_first_event']
     d['add_lag_features'] = gridsearch_config.get('add_lag_features', False)
     d['add_rolling_features'] = gridsearch_config.get('add_rolling_features', False)
+    d['use_encoder_repr'] = use_encoder_repr
+    if encoder_repr_path:
+        d['encoder_repr_path'] = encoder_repr_path
     d['n_features'] = int(ds[0][0].shape[1])
     d['median_val_auprc'] = float(np.median(val_auprc))
     d['median_val_auc'] = float(np.median(val_auroc))
