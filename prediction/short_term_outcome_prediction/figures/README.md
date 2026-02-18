@@ -48,6 +48,43 @@ PYTHONPATH=/home/klug/opsum python prediction/short_term_outcome_prediction/figu
     --xgb_dir $XGB_DIR --lr_dir $LR_DIR -o $OUT_DIR
 ```
 
+### SHAP Beeswarm Plot
+
+Requires SHAP values computed beforehand (see [SHAP Computation](#shap-computation) below).
+
+```bash
+MODEL_DIR=/mnt/data1/klug/output/opsum/short_term_outcomes/end_with_imaging/ss_xgb_eval/
+SHAP_DIR=$MODEL_DIR/shap_explanations_over_time
+TEST_DATA=/mnt/data1/klug/datasets/opsum/short_term_outcomes/with_imaging/gsu_Extraction_20220815_prepro_30012026_154047/test_data_early_neurological_deterioration_ts0.8_rs42_ns5.pth
+CAT_ENC=/mnt/data1/klug/datasets/opsum/short_term_outcomes/with_imaging/gsu_Extraction_20220815_prepro_30012026_154047/logs_30012026_154047/categorical_variable_encoding.csv
+FEAT_NAMES=/home/klug/opsum/preprocessing/preprocessing_tools/feature_name_to_english_name_correspondence.xlsx
+
+PYTHONPATH=/home/klug/opsum python prediction/short_term_outcome_prediction/figures/plot_shap_beeswarm.py \
+    --shap_path $SHAP_DIR/tree_explainer_shap_values_over_ts.pkl \
+    --test_data_path $TEST_DATA \
+    --cat_encoding_path $CAT_ENC \
+    --feature_names_path $FEAT_NAMES \
+    --n_top_features 10 \
+    --add_lag_features --add_rolling_features \
+    -o $OUT_DIR
+```
+
+## SHAP Computation
+
+Compute SHAP explanations over time for the final XGBoost model:
+
+```bash
+PYTHONPATH=/home/klug/opsum python prediction/short_term_outcome_prediction/testing/compute_shap_explanations_over_time.py \
+    --final \
+    -d $TEST_DATA \
+    -m $MODEL_DIR \
+    -o $SHAP_DIR
+```
+
+This produces:
+- `tree_explainer_shap_values_over_ts.pkl` — SHAP values per timestep
+- `shap_feature_names.pkl` — ordered list of aggregated feature names
+
 ## Embedding in Combined Figures
 
 Each script exposes a reusable plotting function that accepts a matplotlib `Axes` object, for use in multi-panel publication figures:
