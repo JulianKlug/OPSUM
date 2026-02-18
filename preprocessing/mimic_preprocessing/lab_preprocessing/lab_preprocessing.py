@@ -132,7 +132,8 @@ def preprocess_labs(lab_df: pd.DataFrame, log_dir:str = '', verbose: bool = True
     ## RESTRICT TO PLAUSSIBLE RANGE
     plausible_restricted_lab_df = restricted_lab_df.copy()
 
-    possible_value_ranges_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(''))),
+    # possible_value_ranges_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(''))),
+    possible_value_ranges_file = os.path.join(os.path.abspath(''), 'preprocessing',
                                               'geneva_stroke_unit_preprocessing/possible_ranges_for_variables.xlsx')
     possible_value_ranges = pd.read_excel(possible_value_ranges_file)
     plausible_restricted_lab_df['out_of_range'] = False
