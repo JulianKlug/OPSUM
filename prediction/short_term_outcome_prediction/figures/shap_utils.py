@@ -222,6 +222,143 @@ def select_top_features(df, n_top_features=10):
     return selected_df, top_features
 
 
+# ─── Prefix stripping for feature pooling ────────────────────────────────────
+
+HOURLY_PREFIXES = ['median_', 'min_', 'max_']
+BP_PREFIXES = ['systolic_', 'diastolic_', 'mean_']
+
+
+def strip_agg_prefix(name):
+    """Strip the leading aggregation prefix to recover the raw feature name."""
+    for p in ALL_PREFIXES:
+        if name.startswith(p):
+            return name[len(p):]
+    return name
+
+
+def strip_to_base_name(name):
+    """Strip all prefixes (aggregation + hourly + BP) sequentially.
+
+    Matches the logic in top_predictors_selection.py for pooling features
+    across aggregation types, hourly sub-measurements, and BP types.
+    """
+    for p in ALL_PREFIXES + HOURLY_PREFIXES + BP_PREFIXES:
+        if name.startswith(p):
+            name = name[len(p):]
+    return name
+
+
+def select_top_predictors(shap_values, feature_names, n_top=10):
+    """Select top features by total |SHAP| across all subjects and timesteps.
+
+    Pools features by stripping all prefixes (aggregation, hourly, BP),
+    then ranks by summed absolute SHAP.
+    """
+    total_abs_shap = np.abs(shap_values).sum(axis=(0, 1))
+    all_names = feature_names + ['base_value']
+
+    df = pd.DataFrame({'feature': all_names, 'abs_shap': total_abs_shap})
+    df = df[~df.feature.isin(['timestep_idx', 'base_value'])]
+    df['feature'] = df['feature'].apply(strip_to_base_name)
+    df = df.groupby('feature')['abs_shap'].sum().reset_index()
+
+    return (df.sort_values('abs_shap', ascending=False)
+              .head(n_top)
+              .feature.values)
+
+
+def prepare_individual_obs_df(shap_values, X_test_raw, feature_names,
+                              top_features, peak_per_subject=False):
+    """Build per-observation SHAP DataFrame for selected features.
+
+    Each row is one subject x timestep x aggregation variant.
+    Features are pooled by base name (all aggregation/hourly/BP variants
+    map to the same name). Feature values are the raw values from
+    X_test_raw at each timestep.
+
+    Args:
+        peak_per_subject: if True, keep only the observation with the
+            highest |SHAP| per subject per base feature (one dot per
+            subject per feature).
+
+    Returns DataFrame with columns: feature, shap_value, feature_value.
+    """
+    n_subj, n_ts, _ = shap_values.shape
+    raw_features = list(X_test_raw[0, 0, :, 2])
+    raw_feature_idx = {f: i for i, f in enumerate(raw_features)}
+    test_X_np = X_test_raw[:, :, :, -1].astype('float32')
+
+    all_names = feature_names + ['base_value']
+    top_set = set(top_features)
+
+    selected_indices = []
+    display_names_list = []
+    raw_idx_list = []
+
+    for i, name in enumerate(all_names):
+        if name in ('timestep_idx', 'base_value'):
+            continue
+        raw_name = strip_agg_prefix(name)
+        display_name = strip_to_base_name(name)
+        if display_name not in top_set:
+            continue
+        selected_indices.append(i)
+        display_names_list.append(display_name)
+        raw_idx_list.append(raw_feature_idx.get(raw_name))
+
+    n_selected = len(selected_indices)
+
+    # SHAP values for selected features: (n_subj, n_ts, n_selected) → flat
+    shap_flat = shap_values[:, :, selected_indices].reshape(-1)
+
+    # Tiled display names (same order repeats for each subject × timestep)
+    feature_flat = np.tile(np.array(display_names_list), n_subj * n_ts)
+
+    # Raw feature values at each (subject, timestep)
+    feat_vals = np.full(n_subj * n_ts * n_selected, np.nan, dtype=np.float32)
+    for j, raw_idx in enumerate(raw_idx_list):
+        if raw_idx is not None:
+            feat_vals[j::n_selected] = test_X_np[:, :, raw_idx].reshape(-1)
+
+    # Subject index: each subject has n_ts * n_selected entries
+    subject_flat = np.repeat(np.arange(n_subj), n_ts * n_selected)
+
+    df = pd.DataFrame({
+        'subject': subject_flat,
+        'feature': feature_flat,
+        'shap_value': shap_flat,
+        'feature_value': feat_vals,
+    })
+
+    if peak_per_subject:
+        df['abs_shap'] = np.abs(df['shap_value'])
+        idx = df.groupby(['subject', 'feature'])['abs_shap'].idxmax()
+        df = df.loc[idx].drop(columns=['abs_shap'])
+
+    return df.drop(columns=['subject']).reset_index(drop=True)
+
+
+def format_feature_name(name, feature_names_path=None, _correspondence=None):
+    """Format a base feature name for display.
+
+    Applies English name mapping if available, otherwise capitalises
+    and replaces underscores with spaces.
+    """
+    if _correspondence is not None:
+        if name in _correspondence.feature_name.values:
+            return _correspondence[
+                _correspondence.feature_name == name].english_name.values[0]
+    elif feature_names_path is not None:
+        correspondence = pd.read_excel(feature_names_path)
+        if name in correspondence.feature_name.values:
+            return correspondence[
+                correspondence.feature_name == name].english_name.values[0]
+    formatted = name.replace('_', ' ')
+    if formatted and formatted[0].islower():
+        formatted = formatted[0].upper() + formatted[1:]
+    return formatted
+
+
 # ─── High-level pipelines ───────────────────────────────────────────────────
 
 def prepare_pooled_df(shap_path, test_data_path, cat_encoding_path,
