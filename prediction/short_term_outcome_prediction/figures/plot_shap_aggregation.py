@@ -87,24 +87,27 @@ def plot_shap_aggregation_bar(ax, shap_path, test_data_path,
 
     # Bar chart
     y_pos = np.arange(len(means))
-    ax.barh(y_pos, means.values, color=bar_color, alpha=0.35, height=0.6, zorder=2)
+    ax.barh(y_pos, means.values, color=bar_color, alpha=0.35, height=0.6, zorder=2,
+            label='Mean')
 
     # Strip plot (individual subjects)
     for i, agg_type in enumerate(means.index):
         vals = agg_df[agg_df.agg_type == agg_type]['mean_abs_shap'].values
         jitter = np.random.default_rng(42).uniform(-0.2, 0.2, size=len(vals))
         ax.scatter(vals, i + jitter, color=bar_color, alpha=0.4, s=4,
-                   zorder=3, rasterized=len(vals) > 300)
+                   zorder=3, rasterized=len(vals) > 300,
+                   label='Per-patient mean' if i == 0 else None)
 
     # Formatting
     ax.set_yticks(y_pos)
     ax.set_yticklabels(means.index, fontsize=label_size)
-    ax.set_xlabel('Mean |SHAP| per feature', fontsize=label_size)
+    ax.set_xlabel('Mean absolute SHAP per feature', fontsize=label_size)
     ax.tick_params('x', labelsize=tick_size)
     ax.tick_params('y', labelsize=tick_size)
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
     ax.set_ylim(-0.6, len(means) - 0.4)
+    ax.legend(fontsize=tick_size, loc='lower right')
 
     return ax
 
@@ -141,7 +144,7 @@ def plot_shap_aggregation_violin(ax, shap_path, test_data_path,
     # Formatting
     ax.set_yticks(np.arange(len(order_reversed)))
     ax.set_yticklabels(order_reversed, fontsize=label_size)
-    ax.set_xlabel('Mean |SHAP| per feature', fontsize=label_size)
+    ax.set_xlabel('Mean absolute SHAP per feature', fontsize=label_size)
     ax.tick_params('x', labelsize=tick_size)
     ax.tick_params('y', labelsize=tick_size)
     ax.spines['right'].set_visible(False)
@@ -179,7 +182,6 @@ def main():
     if args.type in ('bar', 'both'):
         fig_bar, ax_bar = plt.subplots(figsize=(12, 8))
         plot_shap_aggregation_bar(ax_bar, **common_kw)
-        ax_bar.set_title('Importance by aggregation type', fontsize=STANDALONE_LABEL)
         fig_bar.tight_layout()
         save_figure(fig_bar, args.output_dir, 'shap_aggregation_bar')
         plt.close(fig_bar)

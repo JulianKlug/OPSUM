@@ -10,7 +10,6 @@ import pandas as pd
 from colormath.color_objects import LabColor
 from matplotlib.colors import ListedColormap
 from matplotlib.legend_handler import HandlerTuple
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from plot_config import (
     STANDALONE_TICK, STANDALONE_LABEL,
@@ -89,25 +88,18 @@ def _plot_beeswarm(ax, selected_df, selected_features,
                    c=cvals, alpha=point_alpha, linewidth=0,
                    zorder=3, rasterized=len(shaps) > 500)
 
-    # Colorbar
+    # Colorbar (placed outside the plot area)
     if plot_colorbar:
         m = cm.ScalarMappable(cmap=ListedColormap(palette))
         m.set_array([0, 1])
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes('right', size='5%', pad=0.5)
         fig = ax.get_figure()
-        cb = fig.colorbar(m, ticks=[0, 1], aspect=10, shrink=0.2, ax=cax)
+        cb = fig.colorbar(m, ax=ax, ticks=[0, 1], aspect=10, shrink=0.3,
+                          pad=0.05, location='right')
         cb.set_ticklabels(['Low', 'High'])
         cb.ax.tick_params(labelsize=tick_size, length=0)
-        cb.set_label('Feature value', size=label_size, backgroundcolor="white")
+        cb.set_label('Feature value', size=label_size)
         cb.ax.yaxis.set_label_position('left')
-        cb.set_alpha(1)
         cb.outline.set_visible(False)
-        cax.grid(False)
-        for spine in cax.spines.values():
-            spine.set_visible(False)
-        cax.set_xticks([])
-        cax.set_yticks([])
 
     # Legend
     if plot_legend:
