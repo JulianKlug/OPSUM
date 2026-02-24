@@ -111,7 +111,10 @@ def impute_missing_values(df:pd.DataFrame, reference_population_imputation_path:
     imputation_parameters_columns = ['variable', 'imputed_value', 'imputation_method', 'imputation_range']
     imputation_parameters_df = pd.DataFrame(columns=imputation_parameters_columns)
 
-    for sample_label in tqdm(imputed_missing_df.sample_label.unique()):
+    # parameter space should be the union of parameters in imputation_parameters_df and imputed_missing_df
+    parameter_space = set(imputed_missing_df.sample_label.unique()).union(set(reference_population_imputation_df.variable.unique()) if reference_population_imputation_path != '' else set())
+
+    for sample_label in tqdm(parameter_space):
         # find case_admission_ids with no value for sample_label in first timebin
         patients_with_no_sample_label_tp0 = set(imputed_missing_df.case_admission_id.unique()).difference(set(
             imputed_missing_df[(imputed_missing_df.sample_label == sample_label) & (
@@ -128,17 +131,11 @@ def impute_missing_values(df:pd.DataFrame, reference_population_imputation_path:
 
         elif (n_missing_cids_overall > 2/3 * df.case_admission_id.nunique()) & (reference_population_imputation_path != ''):
         #  if sample label has a lot of missing values (~50%), then use mean/median of the reference population
-            if sample_label in categorical_vars:
-                # not implemented
-                raise NotImplementedError('Imputation from reference population of categorical variables is not implemented.')
-            else:
-                # use median
-                imputed_tp0_value = reference_population_imputation_df[
-                                        (reference_population_imputation_df.variable == sample_label)
-                                        & (reference_population_imputation_df.imputation_method == 'median')]\
-                                        ['imputed_value'].iloc[0]
+            imputed_tp0_value = reference_population_imputation_df[
+                            (reference_population_imputation_df.variable == sample_label)]\
+                            ['imputed_value'].iloc[0]
+            imputation_method = reference_population_imputation_df[reference_population_imputation_df.variable == sample_label]['imputation_method'].iloc[0]
             labels_imputed_from_reference_population.append([sample_label, imputed_tp0_value, len(patients_with_no_sample_label_tp0)])
-            imputation_method = 'reference_population_median'
             imputation_range = 'reference_population'
         elif sample_label in categorical_vars:
             # for categorical vars, impute with mode
@@ -168,8 +165,11 @@ def impute_missing_values(df:pd.DataFrame, reference_population_imputation_path:
             print(
                 f'{len(patients_with_no_sample_label_tp0)} patients with no {sample_label} in first timebin for which {imputed_tp0_value} was imputed')
 
-        sample_label_original_source = \
-            imputed_missing_df[imputed_missing_df.sample_label == sample_label].source.mode(dropna=True)[0]
+        if len(imputed_missing_df[imputed_missing_df.sample_label == sample_label].source.mode(dropna=True)) > 0:
+            sample_label_original_source = \
+                imputed_missing_df[imputed_missing_df.sample_label == sample_label].source.mode(dropna=True)[0]
+        else:
+            sample_label_original_source = 'missing'
 
         imputed_sample_label = pd.DataFrame({'case_admission_id': list(patients_with_no_sample_label_tp0),
                                              'sample_label': sample_label,

@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 
-def apply_further_exclusion_criteria(patient_selection: list, admission_table_path:str, log_dir:str) -> set:
+def apply_further_exclusion_criteria(patient_selection: list, admission_table_path:str, admission_notes_path:str, log_dir:str) -> set:
     """
     Applies further exclusion criteria:
         - Exclude patients with time of death during surveillance period
@@ -16,6 +16,9 @@ def apply_further_exclusion_criteria(patient_selection: list, admission_table_pa
     admission_table_path : str
         path to admission table
 
+    admission_notes_path : str
+        path to admission notes
+
     log_dir : str
         path to log directory
 
@@ -27,6 +30,12 @@ def apply_further_exclusion_criteria(patient_selection: list, admission_table_pa
     # Exclude patients with time of death during surveillance period
     # (i.e. death in the ICU within 72 hours of admission)
     admission_table = pd.read_csv(admission_table_path)
+
+        # if admisttime not a column in admission_table_df, get it from admission_notes data
+    if 'admittime' not in admission_table.columns:
+        admission_data_df = pd.read_excel(admission_notes_path)
+        admission_table = admission_table.merge(admission_data_df[['hadm_id', 'icustay_id', 'admittime']], on=['hadm_id', 'icustay_id'], how='left')
+
     admission_table['case_admission_id'] = admission_table['hadm_id'].astype(str) + '_' + admission_table[
         'icustay_id'].astype(str)
     admission_table = admission_table[admission_table['case_admission_id'].isin(patient_selection)]
