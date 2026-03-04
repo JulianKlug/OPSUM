@@ -72,7 +72,8 @@ def xgb_validation_evaluation(data_path:str, model_config_path:str, model_path:s
         X_val = scaler.transform(val_data)
 
         # reshape X val into (n_subj, n_time_steps, n_features)
-        X_val = X_val.reshape((-1, n_time_steps, n_features*4))
+        n_aggregated_features = X_val.shape[1] // n_time_steps
+        X_val = X_val.reshape((-1, n_time_steps, n_aggregated_features))
         # val_labels = val_labels.reshape((-1, n_time_steps))
 
         # if predictions are precomputed, load them
