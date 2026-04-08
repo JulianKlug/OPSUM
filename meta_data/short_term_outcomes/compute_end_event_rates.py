@@ -119,20 +119,28 @@ def main():
     y_deriv = pd.concat([y_train, y_val], ignore_index=True)
     del train_splits, X_train, X_val, y_train, y_val
 
-    print('Computing derivation event rates...')
-    deriv_metrics = compute_event_rates(X_deriv, y_deriv, 'Derivation')
-    del X_deriv, y_deriv
-
     # --- Test set ---
     print('Loading test data...')
     X_test, y_test = torch.load(TEST_PATH, map_location='cpu')
+
+    # --- Overall (derivation + test) ---
+    X_all = np.concatenate([X_deriv, X_test], axis=0)
+    y_all = pd.concat([y_deriv, y_test], ignore_index=True)
+
+    print('Computing overall event rates...')
+    overall_metrics = compute_event_rates(X_all, y_all, 'Overall')
+    del X_all, y_all
+
+    print('Computing derivation event rates...')
+    deriv_metrics = compute_event_rates(X_deriv, y_deriv, 'Derivation')
+    del X_deriv, y_deriv
 
     print('Computing test event rates...')
     test_metrics = compute_event_rates(X_test, y_test, 'Test')
     del X_test, y_test
 
     # --- Summary ---
-    results = pd.DataFrame([deriv_metrics, test_metrics])
+    results = pd.DataFrame([overall_metrics, deriv_metrics, test_metrics])
 
     print('\n' + '=' * 80)
     print(f'END Event Rates Summary (95% CI from {N_BOOTSTRAP} bootstrap iterations)')
