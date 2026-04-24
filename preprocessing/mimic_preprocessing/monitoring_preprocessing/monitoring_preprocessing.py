@@ -11,8 +11,9 @@ from preprocessing.geneva_stroke_unit_preprocessing.utils import restrict_variab
 
 def preprocess_monitoring(monitoring_df: pd.DataFrame, mimic_admission_nihss_db_path:str, verbose:bool = False):
 
-    possible_value_ranges_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(''))),
-                                              'geneva_stroke_unit_preprocessing/possible_ranges_for_variables.xlsx')
+    # possible_value_ranges_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(''))),
+    possible_value_ranges_file = os.path.join(os.path.abspath(''), 'preprocessing',
+                                               'geneva_stroke_unit_preprocessing/possible_ranges_for_variables.xlsx')
     possible_value_ranges = pd.read_excel(possible_value_ranges_file)
 
     ## FIO2 PROCESSING
