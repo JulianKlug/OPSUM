@@ -51,12 +51,26 @@ def load_inference_raw_inputs(
     test_X_np = X_test[:, :, :, -1].astype("float32")
 
     features = X_test[0, 0, :, 2]
-    avg_features = [f"avg_{i}" for i in features]
-    min_features = [f"min_{i}" for i in features]
-    max_features = [f"max_{i}" for i in features]
-    aggregated_feature_names = (
-        features.tolist() + avg_features + min_features + max_features + ["base_value"]
+
+    # Auto-detect feature names: newer models save shap_feature_names.pkl
+    shap_feature_names_path = os.path.join(
+        os.path.dirname(shap_values_path), "shap_feature_names.pkl"
     )
+    if os.path.exists(shap_feature_names_path):
+        with open(shap_feature_names_path, "rb") as handle:
+            saved_feature_names = pickle.load(handle)
+        aggregated_feature_names = saved_feature_names + ["base_value"]
+    else:
+        # Legacy fallback: old models only had raw + avg + min + max
+        avg_features = [f"avg_{i}" for i in features]
+        min_features = [f"min_{i}" for i in features]
+        max_features = [f"max_{i}" for i in features]
+        aggregated_feature_names = (
+            features.tolist() + avg_features + min_features + max_features + ["base_value"]
+        )
+
+    all_case_admission_ids = X_test[:, 0, 0, 0]
+    cid_to_idx = {cid: i for i, cid in enumerate(all_case_admission_ids)}
 
     return {
         "shap_values": shap_values,
@@ -68,6 +82,8 @@ def load_inference_raw_inputs(
         "predictions_over_time": predictions_over_time,
         "normalisation_parameters_df": normalisation_parameters_df,
         "cat_encoding_path": cat_encoding_path,
+        "case_admission_ids": all_case_admission_ids,
+        "cid_to_idx": cid_to_idx,
     }
 
 
@@ -282,7 +298,7 @@ def build_inference_plot_inputs(
 
 
 def load_preprocess_and_plot_subjects(
-    subjects,
+    case_admission_ids,
     shap_values_path,
     test_data_path,
     cat_encoding_path,
@@ -324,10 +340,17 @@ def load_preprocess_and_plot_subjects(
         feature_to_english_name_correspondence_path=feature_to_english_name_correspondence_path,
     )
 
+    cid_to_idx = raw_inputs["cid_to_idx"]
     figures_by_subject = {}
-    for subj in subjects:
+    for cid in case_admission_ids:
+        if cid not in cid_to_idx:
+            raise ValueError(
+                f"case_admission_id '{cid}' not found in test data. "
+                f"Available IDs: {list(cid_to_idx.keys())[:5]}..."
+            )
+        subj_idx = cid_to_idx[cid]
         fig = plot_joint_subject_explanation(
-            subj=subj,
+            subj=subj_idx,
             predictions_over_time=prepared["predictions_over_time"],
             gt_over_time=prepared["gt_over_time"],
             feature_values_df=prepared["feature_values_df"],
@@ -337,7 +360,7 @@ def load_preprocess_and_plot_subjects(
             use_simplified_shap_values=use_simplified_shap_values,
             **plot_kwargs,
         )
-        figures_by_subject[subj] = fig
+        figures_by_subject[cid] = fig
 
     return {
         "figures_by_subject": figures_by_subject,
@@ -853,11 +876,11 @@ def _build_arg_parser():
         help="Path to predictions pickle (gt, pred).",
     )
     parser.add_argument(
-        "--subjects",
+        "--case-admission-ids",
         nargs="+",
-        type=int,
+        type=str,
         required=True,
-        help="Subject indices to plot (e.g. --subjects 3 10 42).",
+        help="Case admission IDs to plot (e.g. --case-admission-ids 'id1' 'id2').",
     )
     parser.add_argument("--n-time-steps", type=int, default=72)
     parser.add_argument("--only-last-timestep", action="store_true")
@@ -956,7 +979,7 @@ def main():
     }
 
     result = load_preprocess_and_plot_subjects(
-        subjects=args.subjects,
+        case_admission_ids=args.case_admission_ids,
         shap_values_path=args.shap_values_path,
         test_data_path=args.test_data_path,
         cat_encoding_path=args.cat_encoding_path,
@@ -978,8 +1001,8 @@ def main():
 
     if args.output_dir:
         os.makedirs(args.output_dir, exist_ok=True)
-        for subj, fig in figures_by_subject.items():
-            out_path = os.path.join(args.output_dir, f"subject_{subj}_inference_plot.png")
+        for cid, fig in figures_by_subject.items():
+            out_path = os.path.join(args.output_dir, f"{cid}_inference_plot.png")
             fig.savefig(out_path, bbox_inches="tight", dpi=args.dpi)
             print(f"Saved: {out_path}")
 
