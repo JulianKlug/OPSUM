@@ -36,7 +36,7 @@ def assemble_variable_database(extracted_tables_path: str, admission_notes_data_
     admission_data_df = admission_data_df[target_columns]
 
     # Apply further exclusion criteria
-    hadm_ids_to_exclude = apply_further_exclusion_criteria(admission_data_df['case_admission_id'].unique(), admission_table_path, log_dir=log_dir)
+    hadm_ids_to_exclude = apply_further_exclusion_criteria(admission_data_df['case_admission_id'].unique(), admission_table_path, admission_notes_data_path, log_dir=log_dir)
     admission_data_df = admission_data_df[~admission_data_df['case_admission_id'].isin(hadm_ids_to_exclude)]
 
     # Deduce patient selection from admission data
@@ -55,12 +55,20 @@ def assemble_variable_database(extracted_tables_path: str, admission_notes_data_
     lab_data_df = lab_data_df[target_columns]
 
     # Preprocess monitoring data
-    if preproccessed_monitoring_data_path != '':
+    if preproccessed_monitoring_data_path != '' and not preproccessed_monitoring_data_path is None:
         monitoring_data_df = pd.read_csv(preproccessed_monitoring_data_path)
     else:
         if mimic_admission_nihss_db_path == '':
             raise ValueError('Please provide a path to the MIMIC admission nihss database.')
         monitoring_df = pd.read_csv(os.path.join(extracted_tables_path, 'monitoring_df.csv'))
+
+        if 'admittime' not in monitoring_df.columns:
+            admission_notes_df = pd.read_excel(admission_notes_data_path)
+            if 'admittime' not in admission_notes_df.columns:
+                raise ValueError('admittime not found in either admission_table_df or admission_data_df')
+            else:
+                monitoring_df = monitoring_df.merge(admission_notes_df[['hadm_id', 'icustay_id', 'admittime']], on=['hadm_id', 'icustay_id'], how='left')        
+
         monitoring_data_df = preprocess_monitoring(monitoring_df, mimic_admission_nihss_db_path, verbose)
 
     monitoring_data_df['case_admission_id'] = monitoring_data_df['hadm_id'].astype(int).astype(str) + '_' + monitoring_data_df['icustay_id'].astype(int).astype(str)

@@ -22,13 +22,15 @@ def assert_selected_variables_presence(df: pd.DataFrame, selected_variables: lis
     return True
 
 
-def variable_presence_verification(normalised_df: pd.DataFrame, target_feature_path: str = '',
+def variable_presence_verification(normalised_df: pd.DataFrame, selected_variables_path:str = '', target_feature_path: str = '',
                                    desired_time_range:int=72) -> bool:
 
     # Verifying presence of all selected variables
     all_variables_present = []
     all_features_present = []
-    selected_variables_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'geneva_stroke_unit_preprocessing/variable_assembly/selected_variables.xlsx')
+    if selected_variables_path == '':
+        selected_variables_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'geneva_stroke_unit_preprocessing/variable_assembly/selected_variables.xlsx')
+    
     selected_variables = pd.read_excel(selected_variables_path)['included']
 
     if target_feature_path == '':
@@ -46,6 +48,10 @@ def variable_presence_verification(normalised_df: pd.DataFrame, target_feature_p
                                                    selected_variables))
             # check if all target features are present (ie a variable can be encoded into multiple features)
             all_features_present.append(set(temp_cid_df[temp_cid_df.relative_sample_date_hourly_cat == time_bin].sample_label.unique()) == set(target_features))
+            if not all(all_features_present):
+                print(f'Difference in features for case {cid} at time bin {time_bin}')
+                print(f'Excess features: {set(temp_cid_df[temp_cid_df.relative_sample_date_hourly_cat == time_bin].sample_label.unique()) - set(target_features)}')
+                print(f'Missing features: {set(target_features) - set(temp_cid_df[temp_cid_df.relative_sample_date_hourly_cat == time_bin].sample_label.unique())}')
     assert all(all_variables_present), 'Not all selected variables are present in the final dataset'
     assert all(all_features_present), f'Not all target features are present in the final dataset, as defined in {target_feature_path}'
 

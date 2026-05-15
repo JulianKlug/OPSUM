@@ -34,14 +34,24 @@ def preprocess_admission(admission_notes_data_path:str, admission_table_path:str
 
 
     """
-    possible_value_ranges_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(''))),
+    # possible_value_ranges_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(''))),
+    possible_value_ranges_file = os.path.join(os.path.abspath(''), 'preprocessing', 
                                               'geneva_stroke_unit_preprocessing/possible_ranges_for_variables.xlsx')
     possible_value_ranges = pd.read_excel(possible_value_ranges_file)
 
+    # load data
+    admission_data_df = pd.read_excel(admission_notes_data_path)
+    admission_table_df = pd.read_csv(admission_table_path)
 
     # Preprocessing admission table data
-    admission_table_df = pd.read_csv(admission_table_path)
-    admission_table_df = admission_table_df[['subject_id', 'hadm_id', 'icustay_id', 'dob', 'admittime', 'age', 'gender', 'admission_location']]
+    # if admisttime not a column in admission_table_df, get it from admission_notes data
+    if 'admittime' not in admission_table_df.columns:
+        if 'admittime' not in admission_data_df.columns:
+            raise ValueError('admittime not found in either admission_table_df or admission_data_df')
+        else:
+            admission_table_df = admission_table_df.merge(admission_data_df[['hadm_id', 'icustay_id', 'admittime']], on=['hadm_id', 'icustay_id'], how='left')
+
+    admission_table_df = admission_table_df[['subject_id', 'hadm_id', 'icustay_id', 'admittime', 'age', 'gender', 'admission_location']]
     admission_table_df.drop_duplicates(inplace=True)
 
     if verbose:
@@ -76,8 +86,6 @@ def preprocess_admission(admission_notes_data_path:str, admission_table_path:str
                                 var_name='sample_label')
 
     # Preprocessing admission notes data
-    admission_data_df = pd.read_excel(admission_notes_data_path)
-
     # restrict to patients admitted to ICU with stroke as primary reason and with onset to admission < 7 d
     admission_data_df = admission_data_df[admission_data_df['admitted to ICU for stroke'] == 'y']
     admission_data_df = admission_data_df[admission_data_df['onset to ICU admission > 7d'] == 'n']

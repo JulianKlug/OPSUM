@@ -22,7 +22,7 @@ ch.set_float32_matmul_precision('high')
 
 
 
-def get_score(trial, all_ds):
+def get_score(trial, all_ds, use_gpu=True):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     ds_ub, ds_b, ds_a = all_ds
     bs = trial.suggest_categorical("batch_size", choices=[16])
@@ -50,6 +50,8 @@ def get_score(trial, all_ds):
     ds = ds_a if is_aggregated else ds
 
     input_dim = 84 * 4 if is_aggregated else 84
+
+    accelerator = 'gpu' if use_gpu else 'cpu'
     
     for i, (train_dataset, val_dataset) in enumerate(ds):
         checkpoint_dir = os.path.join(OUTPUT_FOLDER, f'checkpoints_opsum_transformer_{timestamp}_cv_{i}')
@@ -79,7 +81,7 @@ def get_score(trial, all_ds):
         )
 
         module = LitModel(model, lr, wd, train_noise, lr_warmup_steps=n_lr_warm_up_steps)
-        trainer = pl.Trainer(accelerator='gpu', devices=1, max_epochs=1000, logger=logger,
+        trainer = pl.Trainer(accelerator=accelerator, devices=1, max_epochs=1, logger=logger,
                              log_every_n_steps = 25, enable_checkpointing=True,
                              callbacks=[MyEarlyStopping(step_limit=early_stopping_step_limit), checkpoint_callback], gradient_clip_val=grad_clip)
         trainer.fit(model=module, train_dataloaders=train_loader, val_dataloaders=val_loader)
@@ -113,6 +115,8 @@ def get_score(trial, all_ds):
 if __name__ == '__main__':
     INPUT_FOLDER = '/home/gl/gsu_prepro_01012023_233050/data_splits'
     SPLIT_FILE = 'train_data_splits_3M_Death_ts0.8_rs42_ns5.pth'
+    use_gpu = True
+
     outcome = '_'.join(SPLIT_FILE.split('_')[3:6])
     if outcome.startswith('3M_Death'):
         outcome = '3M_Death'
@@ -125,9 +129,13 @@ if __name__ == '__main__':
     OUTPUT_FOLDER = path.join(OUTPUT_FOLDER, f'transformer_gs_{datetime.now().strftime("%Y%m%d_%H%M%S")}')
 
     study = optuna.create_study(direction='maximize')
-    scenarios = ch.load(path.join(INPUT_FOLDER, SPLIT_FILE))
-    all_datasets = [prepare_dataset(x) for x in scenarios]
-    all_datasets_balanced = [prepare_dataset(x, True) for x in scenarios]
-    all_datasets_aggregated = [prepare_dataset(x, False, True) for x in scenarios]
-    study.optimize(partial(get_score, all_ds=(all_datasets, all_datasets_balanced, all_datasets_aggregated)), n_trials=1000)
+    if use_gpu:
+        scenarios = ch.load(path.join(INPUT_FOLDER, SPLIT_FILE))
+    else:
+        scenarios = ch.load(path.join(INPUT_FOLDER, SPLIT_FILE), map_location='cpu')
+    all_datasets = [prepare_dataset(x, use_gpu=use_gpu) for x in scenarios]
+    all_datasets_balanced = [prepare_dataset(x, True, use_gpu=use_gpu) for x in scenarios]
+    all_datasets_aggregated = [prepare_dataset(x, False, True, use_gpu=use_gpu) for x in scenarios]
+    study.optimize(partial(get_score, all_ds=(all_datasets, all_datasets_balanced, all_datasets_aggregated),
+                           use_gpu=use_gpu), n_trials=1000)
 
