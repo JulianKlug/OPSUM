@@ -1,3 +1,14 @@
+# python version: 3.9
+
+# for install under MAC ARM
+# create an x86_64 env (osx-64 = Intel wheels via Rosetta)
+# CONDA_SUBDIR=osx-64 conda create -n opsum python=3.9 -y
+# conda activate opsum
+# conda config --env --set subdir osx-64   # pin this env to x86_64
+
+# # verify — should print x86_64, not arm64
+# python -c "import platform; print(platform.machine())"
+
 h5py==3.6.0
 keras==2.8.0
 Keras-Preprocessing==1.1.2
@@ -31,5 +42,5 @@ redis
 
 # Cave: also install - cudatoolkit=11.2 (conda install -c conda-forge cudatoolkit=11.2)
 
-modun @ git+git://github.com/Jimmy2027/MODUN@b106ed60d97bcab0dc629030447c73011d06a3f9
+modun @ git+https://github.com/Jimmy2027/MODUN@b106ed60d97bcab0dc629030447c73011d06a3f9
 
