@@ -35,6 +35,7 @@
 
 5. Transform timestamps to relative timestamps from first measure
    - Path: ./variable_assembly/relative_timestamps.py
+   - Reference time point (t0) per case is logged under: 'reference_first_sample_dates.csv'
 
 6. Exclude patients with data sampled in a time window < 12h
    - Excluded patients are logged under: 'excluded_patients_with_sampling_range_too_short.tsv' 

@@ -92,6 +92,10 @@ def transform_to_relative_timestamps(df: pd.DataFrame, drop_old_columns: bool = 
     df['case_admission_id'] = df['case_admission_id'].astype(str)
     merged_first_sample_dates_df['case_admission_id'] = merged_first_sample_dates_df['case_admission_id'].astype(str)
     merged_first_sample_dates_df.rename(columns={'reference_first_sample_date': 'first_sample_date'}, inplace=True)
+
+    # Save t0 (reference first sample date) per case: relative timestamps can be mapped back to absolute time
+    if log_dir != '':
+        merged_first_sample_dates_df.to_csv(os.path.join(log_dir, 'reference_first_sample_dates.csv'), index=False)
     df = df.merge(merged_first_sample_dates_df, on='case_admission_id')
     df['relative_sample_date'] = (pd.to_datetime(df['sample_date'], format=datatime_format)
                                   - pd.to_datetime(df['first_sample_date'], format=datatime_format)) / np.timedelta64(1,
