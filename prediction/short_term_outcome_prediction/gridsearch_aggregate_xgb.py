@@ -1,4 +1,5 @@
 import os
+from enum import Enum
 from functools import partial
 from datetime import datetime
 import optuna
@@ -397,6 +398,16 @@ def retrain_on_all_data(data_splits_path: str, config: dict, output_dir: str):
     return model, scaler
 
 
+VALIDATION_PREDICTIONS_FILE_PATTERN = 'validation_predictions_fold_{fold}.pkl'
+
+
+class FoldTraining(Enum):
+    """How fold models are trained during threshold tuning."""
+    EARLY_STOPPING = 'early_stopping'
+    # All n_estimators rounds, as in retrain_on_all_data: fold scores are on the same scale as the final model's
+    AS_FINAL_MODEL = 'as_final_model'
+
+
 def _optimal_thresholds(y_true, y_prob, thresholds=None):
     """Find optimal decision thresholds for multiple metrics.
 
@@ -462,7 +473,8 @@ def _metrics_at_threshold(y_true, y_prob, threshold):
     }
 
 
-def evaluate_with_threshold_tuning(data_splits_path: str, config: dict, output_dir: str):
+def evaluate_with_threshold_tuning(data_splits_path: str, config: dict, output_dir: str,
+                                   fold_training: FoldTraining = FoldTraining.EARLY_STOPPING):
     """Run 5-fold CV with threshold optimization for the best XGB config.
 
     For each fold:
@@ -478,6 +490,7 @@ def evaluate_with_threshold_tuning(data_splits_path: str, config: dict, output_d
         data_splits_path: path to .pth file with CV data splits
         config: dict with scalar hyperparameter values
         output_dir: directory to save results
+        fold_training: whether fold models stop early, or are trained as the final model
     """
     range_keys = [k for k in ('max_depth', 'n_estimators', 'learning_rate', 'reg_lambda',
                                'alpha', 'scale_pos_weight', 'min_child_weight', 'subsample',
@@ -538,6 +551,8 @@ def evaluate_with_threshold_tuning(data_splits_path: str, config: dict, output_d
         xgb_params['scale_pos_weight'] = scale_pos_weight
 
     early_stopping_rounds = config.get('early_stopping_rounds', 50)
+    if fold_training is FoldTraining.AS_FINAL_MODEL:
+        early_stopping_rounds = None
     metric_names = ['youden_j', 'f1', 'f2', 'mcc']
     per_fold_thresholds = {m: [] for m in metric_names}
     per_fold_results = []
@@ -556,12 +571,16 @@ def evaluate_with_threshold_tuning(data_splits_path: str, config: dict, output_d
 
         y_prob_val = model.predict_proba(fold_X_val)[:, 1].astype('float32')
 
+        # Save out-of-fold predictions: alarm policy is selected on them, keeping the test set untouched
+        with open(os.path.join(output_dir, VALIDATION_PREDICTIONS_FILE_PATTERN.format(fold=i)), 'wb') as f:
+            pickle.dump((fold_y_val, y_prob_val), f)
+
         # Find optimal thresholds
         opt = _optimal_thresholds(fold_y_val, y_prob_val)
 
         fold_result = {
             'fold': i,
-            'best_iteration': int(model.best_iteration),
+            'best_iteration': int(getattr(model, 'best_iteration', xgb_params['n_estimators'])),
             'n_val_samples': len(fold_y_val),
             'n_val_positive': int(fold_y_val.sum()),
         }
@@ -632,6 +651,9 @@ if __name__ == '__main__':
                         help='Retrain on all CV data with a fixed config (requires -c)')
     parser.add_argument('--threshold_tuning', action='store_true',
                         help='Run 5-fold CV with threshold optimization (requires -c)')
+    parser.add_argument('--fold_training', type=str, default=FoldTraining.EARLY_STOPPING.value,
+                        choices=[fold_training.value for fold_training in FoldTraining],
+                        help='With --threshold_tuning: train fold models with early stopping or as the final model')
 
     parser.add_argument('-spwd', '--storage_pwd', type=str, required=False, default=None)
     parser.add_argument('-sport', '--storage_port', type=int, required=False, default=None)
@@ -655,7 +677,8 @@ if __name__ == '__main__':
             parser.error("--threshold_tuning requires -c/--config with a fixed hyperparameter config")
         evaluate_with_threshold_tuning(data_splits_path=args.data_splits_path,
                                        config=gridsearch_config,
-                                       output_dir=args.output_folder)
+                                       output_dir=args.output_folder,
+                                       fold_training=FoldTraining(args.fold_training))
     else:
         launch_gridsearch_xgb(data_splits_path=args.data_splits_path, output_folder=args.output_folder,
                               gridsearch_config=gridsearch_config,
